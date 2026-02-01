@@ -22,6 +22,7 @@ export enum NodeType {
   CONDITION = 'CONDITION',
   WEBHOOK = 'WEBHOOK',
   DELAY = 'DELAY',
+  EMAIL = 'EMAIL',
 }
 
 // Trigger Types

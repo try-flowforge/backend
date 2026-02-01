@@ -1,6 +1,7 @@
 import { NodeType } from '../../../types';
 import { INodeProcessor, INodeProcessorFactory } from '../interfaces/INodeProcessor';
 import { SwapNodeProcessor } from './SwapNodeProcessor';
+import { EmailNodeProcessor } from './EmailNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -23,6 +24,9 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
     try {
       // Register swap processor
       this.registerProcessor(new SwapNodeProcessor());
+
+      // Register email processor
+      this.registerProcessor(new EmailNodeProcessor());
 
       // TODO: Add other processors as needed
       // this.registerProcessor(new TriggerNodeProcessor());
@@ -83,4 +87,3 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
 
 // Export singleton instance
 export const nodeProcessorFactory = new NodeProcessorFactory();
-
