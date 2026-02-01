@@ -8,6 +8,7 @@ import {
   updateSlackWebhookSchema,
   testSlackWebhookSchema,
   sendSlackMessageSchema,
+  updateSlackOAuthChannelSchema,
 } from '../../models/slack';
 
 const router = Router();
@@ -83,6 +84,18 @@ router.get(
   '/connections/:connectionId/channels',
   (req: Request, res: Response, next: NextFunction) => {
     slackOAuthController.listChannels(req as AuthenticatedRequest, res).catch(next);
+  }
+);
+
+/**
+ * PUT /api/v1/integrations/slack/connections/:connectionId/channel
+ * Update the channel for an OAuth connection
+ */
+router.put(
+  '/connections/:connectionId/channel',
+  validateBody(updateSlackOAuthChannelSchema),
+  (req: Request, res: Response, next: NextFunction) => {
+    slackOAuthController.updateConnectionChannel(req as AuthenticatedRequest, res).catch(next);
   }
 );
 

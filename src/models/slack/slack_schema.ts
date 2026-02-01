@@ -72,3 +72,17 @@ export const slackOAuthCallbackSchema = Joi.object({
   state: Joi.string().optional(),
   error: Joi.string().optional(),
 });
+
+/**
+ * Validation schema for updating OAuth connection channel
+ */
+export const updateSlackOAuthChannelSchema = Joi.object({
+  channelId: Joi.string().required().messages({
+    'string.empty': 'Channel ID is required',
+    'any.required': 'Channel ID is required',
+  }),
+  channelName: Joi.string().required().messages({
+    'string.empty': 'Channel name is required',
+    'any.required': 'Channel name is required',
+  }),
+});

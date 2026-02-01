@@ -5,6 +5,17 @@ import { ApiResponse } from "../types";
 import { AppError } from "../middleware/error-handler";
 import { logger } from "../utils/logger";
 
+function paramString(
+  params: Record<string, string | string[] | undefined>,
+  key: string
+): string {
+  const v = params[key];
+  const s = Array.isArray(v) ? v[0] : v;
+  if (s == null || s === "")
+    throw new AppError(400, `Missing or invalid parameter: ${key}`, "INVALID_PARAM");
+  return s;
+}
+
 /**
  * POST /api/v1/integrations/slack/test
  * Test a webhook URL without saving (for verification before saving)
@@ -166,7 +177,7 @@ export const sendMessage = async (
         "MISSING_WEBHOOK_URL"
       );
     }
-    
+
     // Send message to Slack
     const slackResponse = await fetch(connection.webhook_url, {
       method: "POST",
@@ -261,10 +272,15 @@ export const getConnections = async (
 
     const connections = await SlackConnectionModel.findByUserId(userId);
 
-    // Map to safe format (exclude webhook URLs from list response)
+    // Map to safe format (exclude webhook URLs and access tokens from list response)
     const safeConnections = connections.map((conn) => ({
       id: conn.id,
       name: conn.name,
+      connectionType: conn.connection_type,
+      teamId: conn.team_id,
+      teamName: conn.team_name,
+      channelId: conn.channel_id,
+      channelName: conn.channel_name,
       createdAt: conn.created_at,
     }));
 
@@ -298,8 +314,7 @@ export const updateConnection = async (
 ): Promise<void> => {
   try {
     const userId = req.userId;
-    const connectionId = (Array.isArray(req.params.connectionId) ? req.params.connectionId[0] : req.params.connectionId) ?? '';
-    if (!connectionId) throw new AppError(400, 'Invalid connection ID', 'INVALID_INPUT');
+    const connectionId = paramString(req.params, "connectionId");
     const { webhookUrl, name } = req.body;
 
     const connection = await SlackConnectionModel.update(connectionId, userId, {
@@ -347,8 +362,7 @@ export const deleteConnection = async (
 ): Promise<void> => {
   try {
     const userId = req.userId;
-    const connectionId = (Array.isArray(req.params.connectionId) ? req.params.connectionId[0] : req.params.connectionId) ?? '';
-    if (!connectionId) throw new AppError(400, 'Invalid connection ID', 'INVALID_INPUT');
+    const connectionId = paramString(req.params, "connectionId");
 
     const deleted = await SlackConnectionModel.delete(connectionId, userId);
 

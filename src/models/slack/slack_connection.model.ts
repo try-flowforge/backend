@@ -208,7 +208,7 @@ export class SlackConnectionModel {
   static async update(
     connectionId: string,
     userId: string,
-    updates: { name?: string; webhookUrl?: string }
+    updates: { name?: string; webhookUrl?: string; channelId?: string; channelName?: string }
   ): Promise<SlackConnection | null> {
     const fields: string[] = [];
     const values: any[] = [];
@@ -227,6 +227,18 @@ export class SlackConnectionModel {
       paramCount++;
     }
 
+    if (updates.channelId !== undefined) {
+      fields.push(`channel_id = $${paramCount}`);
+      values.push(updates.channelId || null);
+      paramCount++;
+    }
+
+    if (updates.channelName !== undefined) {
+      fields.push(`channel_name = $${paramCount}`);
+      values.push(updates.channelName || null);
+      paramCount++;
+    }
+
     if (fields.length === 0) {
       // No updates provided
       return await this.findByIdAndUser(connectionId, userId);
@@ -238,7 +250,8 @@ export class SlackConnectionModel {
       UPDATE slack_connections
       SET ${fields.join(', ')}
       WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
-      RETURNING id, user_id, name, webhook_url, created_at
+      RETURNING id, user_id, name, webhook_url, access_token, team_id, team_name, 
+                channel_id, channel_name, scope, connection_type, created_at
     `;
 
     try {
@@ -248,10 +261,12 @@ export class SlackConnectionModel {
       }
       logger.info({ connectionId, userId }, 'Slack connection updated');
 
-      // Decrypt webhook URL before returning
+      const row = result.rows[0];
+      // Decrypt sensitive fields based on connection type
       return {
-        ...result.rows[0],
-        webhook_url: decrypt(result.rows[0].webhook_url),
+        ...row,
+        webhook_url: row.webhook_url ? decrypt(row.webhook_url) : undefined,
+        access_token: row.access_token ? decrypt(row.access_token) : undefined,
       };
     } catch (error) {
       logger.error({ error, connectionId, userId }, 'Failed to update Slack connection');
