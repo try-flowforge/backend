@@ -200,4 +200,3 @@ export const getRelayerService = (): RelayerService => {
   }
   return relayerServiceInstance;
 };
-
