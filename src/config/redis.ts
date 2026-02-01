@@ -1,18 +1,13 @@
 import { createClient } from 'redis';
 import { logger } from '../utils/logger';
-
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD || undefined,
-};
+import { config } from './config';
 
 export const redisClient = createClient({
   socket: {
-    host: redisConfig.host,
-    port: redisConfig.port,
+    host: config.redis.host,
+    port: config.redis.port,
   },
-  password: redisConfig.password,
+  password: config.redis.password || undefined,
 });
 
 redisClient.on('connect', () => {

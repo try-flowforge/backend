@@ -5,6 +5,7 @@ A powerful workflow automation backend supporting both Web2 and Web3 workflows. 
 ## 🏗️ Architecture Overview
 
 This backend treats every workflow as a JSON-defined directed acyclic graph (DAG) with:
+
 - **Nodes**: Units of execution
 - **Edges**: Connections defining execution order and data flow
 - **Data-driven**: Workflows are replayable and deterministic
@@ -36,35 +37,41 @@ This backend treats every workflow as a JSON-defined directed acyclic graph (DAG
 ### Local Development
 
 1. **Clone the repository**
+
 ```bash
 git clone <repository-url>
 cd agentic-backend
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 ```
 
 3. **Set up environment variables**
+
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 4. **Start PostgreSQL and Redis** (if not using Docker)
+
 ```bash
 # Using Docker for databases only
 docker-compose up -d postgres redis
 ```
 
 5. **Run database migrations**
+
 ```bash
 npm run build
 npm run migrate up
 ```
 
 6. **Start the development server**
+
 ```bash
 npm run dev
 ```
@@ -74,16 +81,19 @@ The API will be available at `http://localhost:3000`
 ### Docker Development
 
 1. **Start all services**
+
 ```bash
 docker-compose up -d
 ```
 
 2. **Run migrations**
+
 ```bash
 docker-compose exec api npm run migrate up
 ```
 
 3. **View logs**
+
 ```bash
 docker-compose logs -f api
 ```
@@ -91,13 +101,15 @@ docker-compose logs -f api
 ## 📚 API Documentation
 
 ### Base URL
-```
+
+```bash
 http://localhost:3000/api/v1
 ```
 
 ### Endpoints
 
 #### Health Check
+
 ```http
 GET /api/v1/health
 ```
@@ -105,6 +117,7 @@ GET /api/v1/health
 #### Users
 
 **Create User**
+
 ```http
 POST /api/v1/users
 Content-Type: application/json
@@ -118,21 +131,25 @@ Content-Type: application/json
 ```
 
 **Get All Users**
+
 ```http
 GET /api/v1/users?limit=50&offset=0
 ```
 
 **Get User by ID**
+
 ```http
 GET /api/v1/users/:id
 ```
 
 **Get User by Address**
+
 ```http
 GET /api/v1/users/address/:address
 ```
 
 **Update User**
+
 ```http
 PUT /api/v1/users/:id
 Content-Type: application/json
@@ -144,6 +161,7 @@ Content-Type: application/json
 ```
 
 **Delete User**
+
 ```http
 DELETE /api/v1/users/:id
 ```
@@ -153,6 +171,7 @@ DELETE /api/v1/users/:id
 All API responses follow this structure:
 
 **Success Response**
+
 ```json
 {
   "success": true,
@@ -164,6 +183,7 @@ All API responses follow this structure:
 ```
 
 **Error Response**
+
 ```json
 {
   "success": false,
@@ -180,7 +200,7 @@ All API responses follow this structure:
 
 ## 🗂️ Project Structure
 
-```
+```bash
 agentic-backend/
 ├── src/
 │   ├── config/           # Configuration files (database, redis)
@@ -209,7 +229,7 @@ agentic-backend/
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `NODE_ENV` | Environment (development/production) | development |
 | `PORT` | Server port | 3000 |
 | `API_VERSION` | API version | v1 |
@@ -231,11 +251,13 @@ npm test
 ## 📝 Database Migrations
 
 **Run migrations**
+
 ```bash
 npm run migrate up
 ```
 
 **Rollback last migration**
+
 ```bash
 npm run migrate down
 ```
@@ -243,26 +265,31 @@ npm run migrate down
 ## 🐳 Docker Commands
 
 **Start all services**
+
 ```bash
 docker-compose up -d
 ```
 
 **Stop all services**
+
 ```bash
 docker-compose down
 ```
 
 **View logs**
+
 ```bash
 docker-compose logs -f [service-name]
 ```
 
 **Rebuild containers**
+
 ```bash
 docker-compose up -d --build
 ```
 
 **Start with workers**
+
 ```bash
 docker-compose --profile workers up -d
 ```
@@ -270,24 +297,28 @@ docker-compose --profile workers up -d
 ## 🔮 Future Roadmap
 
 ### Phase 1: Core Workflow Engine (Current)
+
 - ✅ User management
 - ⏳ Workflow definition and storage
 - ⏳ Node execution engine
 - ⏳ DAG resolution and validation
 
 ### Phase 2: Execution & Queue System
+
 - ⏳ BullMQ worker implementation
 - ⏳ Node execution context
 - ⏳ Retry and error handling
 - ⏳ Execution state persistence
 
 ### Phase 3: Web3 Integration
+
 - ⏳ Wallet management
 - ⏳ On-chain read operations
 - ⏳ Transaction execution
 - ⏳ Gas estimation
 
 ### Phase 4: Node Library
+
 - ⏳ Trigger nodes
 - ⏳ Web2 API nodes
 - ⏳ Web3 nodes
@@ -295,6 +326,7 @@ docker-compose --profile workers up -d
 - ⏳ AI/LLM nodes
 
 ### Phase 5: Advanced Features
+
 - ⏳ Secrets management
 - ⏳ Webhook triggers
 - ⏳ Scheduled workflows

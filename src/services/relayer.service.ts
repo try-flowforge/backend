@@ -1,0 +1,203 @@
+import { ethers } from "ethers";
+import { logger } from "../utils/logger";
+import { config, getChainConfig, SupportedChainId } from "../config/config";
+
+/**
+ * Direct EOA relayer service
+ * Supports multiple chains with separate providers and wallets per chain
+ */
+export class RelayerService {
+  private providers: Map<SupportedChainId, ethers.JsonRpcProvider> = new Map();
+  private wallets: Map<SupportedChainId, ethers.Wallet> = new Map();
+  private privateKey: string;
+
+  constructor() {
+    this.privateKey = config.relayer.relayerPrivateKey;
+
+    // Initialize providers and wallets for all supported chains
+    for (const chainConfig of Object.values(config.chains)) {
+      const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+
+      this.providers.set(chainConfig.chainId, provider);
+      this.wallets.set(chainConfig.chainId, wallet);
+
+      logger.info(
+        {
+          relayerAddress: wallet.address,
+          chainId: chainConfig.chainId,
+          chainName: chainConfig.name,
+        },
+        "Relayer service initialized for chain"
+      );
+    }
+  }
+
+  /**
+   * Get relayer wallet address (same for all chains)
+   */
+  getAddress(chainId: SupportedChainId): string {
+    const wallet = this.wallets.get(chainId);
+    if (!wallet) {
+      throw new Error(`Relayer not initialized for chain ${chainId}`);
+    }
+    return wallet.address;
+  }
+
+  /**
+   * Get current balance for a specific chain
+   */
+  async getBalance(chainId: SupportedChainId): Promise<string> {
+    const wallet = this.wallets.get(chainId);
+    const provider = this.providers.get(chainId);
+
+    if (!wallet || !provider) {
+      throw new Error(`Relayer not initialized for chain ${chainId}`);
+    }
+
+    const balance = await provider.getBalance(wallet.address);
+    return ethers.formatEther(balance);
+  }
+
+  /**
+   * Send a transaction and wait for confirmation on a specific chain
+   */
+  async sendTransaction(
+    chainId: SupportedChainId,
+    to: string,
+    data: string,
+    value: bigint = 0n
+  ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
+    const wallet = this.wallets.get(chainId);
+    const provider = this.providers.get(chainId);
+
+    if (!wallet || !provider) {
+      throw new Error(`Relayer not initialized for chain ${chainId}`);
+    }
+
+    try {
+      const chainConfig = getChainConfig(chainId);
+
+      logger.info(
+        {
+          chainId,
+          chainName: chainConfig.name,
+          to,
+          dataLength: data.length,
+          value: value.toString(),
+          from: wallet.address,
+        },
+        "Sending transaction via relayer"
+      );
+
+      // Estimate gas
+      const gasEstimate = await provider.estimateGas({
+        from: wallet.address,
+        to,
+        data,
+        value,
+      });
+
+      // Get current gas price
+      const feeData = await provider.getFeeData();
+      const maxFeePerGas = feeData.maxFeePerGas;
+      const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+
+      logger.info(
+        {
+          chainId,
+          gasEstimate: gasEstimate.toString(),
+          maxFeePerGas: maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: maxPriorityFeePerGas?.toString(),
+        },
+        "Gas estimation complete"
+      );
+
+      // Send transaction
+      const tx = await wallet.sendTransaction({
+        to,
+        data,
+        value,
+        gasLimit: (gasEstimate * 120n) / 100n, // Add 20% buffer
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      });
+
+      logger.info(
+        {
+          chainId,
+          txHash: tx.hash,
+          nonce: tx.nonce,
+        },
+        "Transaction sent, waiting for confirmation"
+      );
+
+      // Wait for confirmation
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new Error("Transaction receipt not available");
+      }
+
+      if (receipt.status === 0) {
+        throw new Error("Transaction reverted");
+      }
+
+      logger.info(
+        {
+          chainId,
+          txHash: receipt.hash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed.toString(),
+          status: receipt.status,
+        },
+        "Transaction confirmed"
+      );
+
+      return {
+        txHash: receipt.hash,
+        receipt,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      logger.error(
+        {
+          error: errorMessage,
+          chainId,
+          to,
+          from: wallet.address,
+        },
+        "Failed to send transaction"
+      );
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get provider for a specific chain (for reading contract state)
+   */
+  getProvider(chainId: SupportedChainId): ethers.JsonRpcProvider {
+    const provider = this.providers.get(chainId);
+    if (!provider) {
+      throw new Error(`Provider not initialized for chain ${chainId}`);
+    }
+    return provider;
+  }
+}
+
+// Singleton instance
+let relayerServiceInstance: RelayerService | undefined;
+
+/**
+ * Get or initialize relayer service
+ */
+export const getRelayerService = (): RelayerService => {
+  if (!relayerServiceInstance) {
+    relayerServiceInstance = new RelayerService();
+  }
+  return relayerServiceInstance;
+};
+

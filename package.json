@@ -13,8 +13,10 @@
   "license": "ISC",
   "description": "Workflow automation backend supporting Web2 and Web3",
   "dependencies": {
+    "@privy-io/server-auth": "^1.16.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "ethers": "^6.14.4",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "joi": "^18.0.2",

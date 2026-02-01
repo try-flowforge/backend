@@ -1,5 +1,5 @@
 import { query } from '../../config/database';
-import { User, CreateUserInput, UpdateUserInput } from '../../types';
+import { User, CreateUserInput } from '../../types';
 import { logger } from '../../utils/logger';
 
 export class UserModel {

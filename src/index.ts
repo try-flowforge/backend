@@ -1,14 +1,10 @@
-import * as dotenv from 'dotenv';
+// Load config first (this loads dotenv and validates)
+import './config/config';
 import { createApp } from './app';
 import { testConnection } from './config/database';
 import { connectRedis } from './config/redis';
 import { logger } from './utils/logger';
-
-// Load environment variables
-dotenv.config();
-
-const PORT = parseInt(process.env.PORT || '3000');
-const NODE_ENV = process.env.NODE_ENV || 'development';
+import { config } from './config/config';
 
 const startServer = async () => {
   try {
@@ -27,12 +23,12 @@ const startServer = async () => {
     const app = createApp();
 
     // Start server
-    const server = app.listen(PORT, () => {
+    const server = app.listen(config.server.port, () => {
       logger.info(
         {
-          port: PORT,
-          env: NODE_ENV,
-          apiVersion: process.env.API_VERSION || 'v1',
+          port: config.server.port,
+          env: config.server.nodeEnv,
+          apiVersion: config.server.apiVersion,
         },
         'Server started successfully'
       );
