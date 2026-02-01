@@ -8,7 +8,7 @@ export const up = async (pool: Pool): Promise<void> => {
     await pool.query(`
     CREATE TABLE IF NOT EXISTS telegram_connections (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name VARCHAR(255),
       chat_id VARCHAR(255) NOT NULL,
       chat_title VARCHAR(255),

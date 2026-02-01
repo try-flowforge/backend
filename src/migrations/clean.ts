@@ -4,6 +4,16 @@ import { logger } from '../utils/logger';
 import * as migration001 from './001_create_users_table';
 import * as migration002 from './002_create_slack_connections_table';
 import * as migration003 from './003_encrypt_existing_webhooks';
+import * as migration004 from './004_create_workflows_tables';
+import * as migration005 from './005_create_workflow_nodes_table';
+import * as migration006 from './006_create_workflow_edges_table';
+import * as migration007 from './007_create_workflow_executions_table';
+import * as migration008 from './008_create_node_executions_table';
+import * as migration009 from './009_create_swap_executions_table';
+import * as migration010 from './010_create_managed_wallets_table';
+import * as migration011 from './011_add_foreign_key_to_workflows';
+import * as migration012 from './012_add_slack_oauth_fields';
+import * as migration013 from './013_create_telegram_connections_table';
 
 // Load environment variables
 dotenv.config();
@@ -85,6 +95,16 @@ const resetDatabase = async (): Promise<void> => {
     await migration001.up(pool);
     await migration002.up(pool);
     await migration003.up(pool);
+    await migration004.up(pool);
+    await migration005.up(pool);
+    await migration006.up(pool);
+    await migration007.up(pool);
+    await migration008.up(pool);
+    await migration009.up(pool);
+    await migration010.up(pool);
+    await migration011.up(pool);
+    await migration012.up(pool);
+    await migration013.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -105,6 +125,46 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
       3,
       '003_encrypt_existing_webhooks',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      4,
+      '004_create_workflows_tables',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      5,
+      '005_create_workflow_nodes_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      6,
+      '006_create_workflow_edges_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      7,
+      '007_create_workflow_executions_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      8,
+      '008_create_node_executions_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      9,
+      '009_create_swap_executions_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      10,
+      '010_create_managed_wallets_table',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      11,
+      '011_add_foreign_key_to_workflows',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      12,
+      '012_add_slack_oauth_fields',
+    ]);
+    await pool.query('INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [
+      13,
+      '013_create_telegram_connections_table',
     ]);
 
     logger.info('Database reset completed successfully');
