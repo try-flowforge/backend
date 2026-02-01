@@ -2,7 +2,7 @@
 
 A powerful workflow automation backend supporting both Web2 and Web3 workflows. Built with Node.js, TypeScript, Express, PostgreSQL, Redis, and BullMQ.
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 This backend treats every workflow as a JSON-defined directed acyclic graph (DAG) with:
 
@@ -11,28 +11,28 @@ This backend treats every workflow as a JSON-defined directed acyclic graph (DAG
 - **Data-driven**: Workflows are replayable and deterministic
 - **Extensible**: Plug-and-play node types
 
-## 🚀 Features
+## Features
 
-- ✅ User management with PostgreSQL
-- ✅ RESTful API with Express
-- ✅ Redis for caching and job queues
-- ✅ BullMQ for job orchestration (ready for workers)
-- ✅ Docker containerization
-- ✅ TypeScript for type safety
-- ✅ Comprehensive error handling
-- ✅ Request validation with Joi
-- ✅ Structured logging with Pino
-- ✅ Database migrations
-- ✅ Graceful shutdown handling
+- User management with PostgreSQL
+- RESTful API with Express
+- Redis for caching and job queues
+- BullMQ for job orchestration (ready for workers)
+- Docker containerization
+- TypeScript for type safety
+- Comprehensive error handling
+- Request validation with Joi
+- Structured logging with Pino
+- Database migrations
+- Graceful shutdown handling
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Node.js 20+
 - PostgreSQL 16+
 - Redis 7+
 - Docker & Docker Compose (optional)
 
-## 🛠️ Installation
+## Installation
 
 ### Local Development
 
@@ -98,11 +98,11 @@ docker-compose exec api npm run migrate up
 docker-compose logs -f api
 ```
 
-## 📚 API Documentation
+## API Documentation
 
 ### Base URL
 
-```bash
+```http
 http://localhost:3000/api/v1
 ```
 
@@ -198,7 +198,7 @@ All API responses follow this structure:
 }
 ```
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```bash
 agentic-backend/
@@ -224,7 +224,7 @@ agentic-backend/
 └── README.md
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -242,13 +242,13 @@ agentic-backend/
 | `REDIS_PORT` | Redis port | 6379 |
 | `LOG_LEVEL` | Logging level | info |
 
-## 🧪 Testing
+## Testing
 
 ```bash
 npm test
 ```
 
-## 📝 Database Migrations
+## Database Migrations
 
 **Run migrations**
 
@@ -262,7 +262,7 @@ npm run migrate up
 npm run migrate down
 ```
 
-## 🐳 Docker Commands
+## Docker Commands
 
 **Start all services**
 
@@ -294,45 +294,45 @@ docker-compose up -d --build
 docker-compose --profile workers up -d
 ```
 
-## 🔮 Future Roadmap
+## Future Roadmap
 
 ### Phase 1: Core Workflow Engine (Current)
 
-- ✅ User management
-- ⏳ Workflow definition and storage
-- ⏳ Node execution engine
-- ⏳ DAG resolution and validation
+- User management (Complete)
+- Workflow definition and storage (In Progress)
+- Node execution engine (In Progress)
+- DAG resolution and validation (In Progress)
 
 ### Phase 2: Execution & Queue System
 
-- ⏳ BullMQ worker implementation
-- ⏳ Node execution context
-- ⏳ Retry and error handling
-- ⏳ Execution state persistence
+- BullMQ worker implementation
+- Node execution context
+- Retry and error handling
+- Execution state persistence
 
 ### Phase 3: Web3 Integration
 
-- ⏳ Wallet management
-- ⏳ On-chain read operations
-- ⏳ Transaction execution
-- ⏳ Gas estimation
+- Wallet management
+- On-chain read operations
+- Transaction execution
+- Gas estimation
 
 ### Phase 4: Node Library
 
-- ⏳ Trigger nodes
-- ⏳ Web2 API nodes
-- ⏳ Web3 nodes
-- ⏳ Logic & flow control nodes
-- ⏳ AI/LLM nodes
+- Trigger nodes
+- Web2 API nodes
+- Web3 nodes
+- Logic & flow control nodes
+- AI/LLM nodes
 
 ### Phase 5: Advanced Features
 
-- ⏳ Secrets management
-- ⏳ Webhook triggers
-- ⏳ Scheduled workflows
-- ⏳ Workflow versioning
+- Secrets management
+- Webhook triggers
+- Scheduled workflows
+- Workflow versioning
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please follow these steps:
 
@@ -342,14 +342,10 @@ Contributions are welcome! Please follow these steps:
 4. Push to the branch
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 ISC
 
-## 🆘 Support
+## Support
 
 For issues and questions, please open an issue on GitHub.
-
----
-
-Built with ❤️ for the future of workflow automation

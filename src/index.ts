@@ -3,6 +3,8 @@ import './config/config';
 import { createApp } from './app';
 import { testConnection } from './config/database';
 import { connectRedis } from './config/redis';
+import { initializeQueues } from './config/queues';
+import { initializeWorkers } from './services/workers';
 import { logger } from './utils/logger';
 import { config } from './config/config';
 
@@ -18,6 +20,15 @@ const startServer = async () => {
     // Connect to Redis
     logger.info('Connecting to Redis...');
     await connectRedis();
+
+    // Initialize BullMQ queues
+    logger.info('Initializing queues...');
+    await initializeQueues();
+
+    // Initialize workers
+    logger.info('Initializing workers...');
+    const workers = initializeWorkers();
+    logger.info('Workers initialized successfully');
 
     // Create Express app
     const app = createApp();
@@ -46,6 +57,16 @@ const startServer = async () => {
           const { pool } = await import('./config/database');
           await pool.end();
           logger.info('Database connections closed');
+
+          // Close workers
+          const { closeWorkers } = await import('./services/workers');
+          await closeWorkers(workers);
+          logger.info('Workers closed');
+
+          // Close queues
+          const { closeQueues } = await import('./config/queues');
+          await closeQueues();
+          logger.info('Queues closed');
 
           // Close Redis connection
           const { disconnectRedis } = await import('./config/redis');

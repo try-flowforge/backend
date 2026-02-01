@@ -2,6 +2,8 @@ import { Router } from 'express';
 import userRoutes from './user.routes';
 import relayRoutes from './relay.routes';
 import slackRoutes from './integrations/slack.routes';
+import workflowRoutes from './workflow.routes';
+import swapRoutes from './swap.routes';
 
 const router = Router();
 
@@ -21,5 +23,7 @@ router.get('/health', (_req, res) => {
 router.use('/users', userRoutes);
 router.use('/relay', relayRoutes);
 router.use('/integrations/slack', slackRoutes);
+router.use('/workflows', workflowRoutes);
+router.use('/swaps', swapRoutes);
 
 export default router;

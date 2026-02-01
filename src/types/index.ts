@@ -25,52 +25,12 @@ export interface ApiResponse<T = any> {
   meta?: {
     timestamp: string;
     requestId?: string;
+    total?: number;
+    page?: number;
+    limit?: number;
   };
 }
 
-// Workflow Types (for future use)
-export interface WorkflowNode {
-  id: string;
-  type: string;
-  params: Record<string, any>;
-}
+// Re-export all swap-related types
+export * from './swap.types';
 
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-}
-
-export interface Workflow {
-  id: string;
-  user_id: string;
-  name: string;
-  description?: string;
-  trigger_node_id: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// Execution Types (for future use)
-export interface ExecutionItem {
-  json: Record<string, any>;
-  binary?: Record<string, any>;
-}
-
-export interface NodeExecutionResult {
-  success: boolean;
-  output: ExecutionItem[] | ExecutionItem[][];
-  error?: Error;
-}
-
-export interface ExecutionContext {
-  workflowId: string;
-  executionId: string;
-  nodeId: string;
-  params: Record<string, any>;
-  secrets: Record<string, string>;
-  input: ExecutionItem[];
-}

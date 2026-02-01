@@ -1,0 +1,64 @@
+{
+  "name": "Example: Automated USDC to WETH Swap on Arbitrum",
+  "description": "This workflow demonstrates a complete swap workflow using Uniswap on Arbitrum",
+  "category": "Swaps",
+  "tags": ["swap", "uniswap", "arbitrum", "defi"],
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "type": "TRIGGER",
+      "name": "Cron Trigger - Every Hour",
+      "description": "Triggers the workflow every hour",
+      "config": {
+        "triggerType": "CRON",
+        "cronExpression": "0 * * * *",
+        "timezone": "UTC"
+      },
+      "position": {
+        "x": 100,
+        "y": 100
+      }
+    },
+    {
+      "id": "swap-1",
+      "type": "SWAP",
+      "name": "Swap 10 USDC to WETH",
+      "description": "Swaps 10 USDC for WETH using Uniswap on Arbitrum",
+      "config": {
+        "provider": "UNISWAP",
+        "chain": "ARBITRUM",
+        "inputConfig": {
+          "sourceToken": {
+            "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+            "symbol": "USDC",
+            "decimals": 6
+          },
+          "destinationToken": {
+            "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "symbol": "WETH",
+            "decimals": 18
+          },
+          "amount": "10000000",
+          "swapType": "EXACT_INPUT",
+          "walletAddress": "0xYourWalletAddressHere",
+          "slippageTolerance": 0.5
+        },
+        "simulateFirst": true,
+        "autoRetryOnFailure": true,
+        "maxRetries": 3
+      },
+      "position": {
+        "x": 400,
+        "y": 100
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "sourceNodeId": "trigger-1",
+      "targetNodeId": "swap-1"
+    }
+  ],
+  "triggerNodeId": "trigger-1"
+}
