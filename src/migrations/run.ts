@@ -4,6 +4,14 @@ import { logger } from '../utils/logger';
 import * as migration001 from './001_create_users_table';
 import * as migration002 from './002_create_slack_connections_table';
 import * as migration003 from './003_encrypt_existing_webhooks';
+import * as migration004 from './004_create_workflows_tables';
+import * as migration005 from './005_create_workflow_nodes_table';
+import * as migration006 from './006_create_workflow_edges_table';
+import * as migration007 from './007_create_workflow_executions_table';
+import * as migration008 from './008_create_node_executions_table';
+import * as migration009 from './009_create_swap_executions_table';
+import * as migration010 from './010_create_managed_wallets_table';
+import * as migration011 from './011_add_foreign_key_to_workflows';
 import * as migration012 from './012_add_slack_oauth_fields';
 
 // Load environment variables
@@ -42,6 +50,54 @@ const migrations: Migration[] = [
     name: '003_encrypt_existing_webhooks',
     up: migration003.up,
     down: migration003.down,
+  },
+  {
+    id: 4,
+    name: '004_create_workflows_tables',
+    up: migration004.up,
+    down: migration004.down,
+  },
+  {
+    id: 5,
+    name: '005_create_workflow_nodes_table',
+    up: migration005.up,
+    down: migration005.down,
+  },
+  {
+    id: 6,
+    name: '006_create_workflow_edges_table',
+    up: migration006.up,
+    down: migration006.down,
+  },
+  {
+    id: 7,
+    name: '007_create_workflow_executions_table',
+    up: migration007.up,
+    down: migration007.down,
+  },
+  {
+    id: 8,
+    name: '008_create_node_executions_table',
+    up: migration008.up,
+    down: migration008.down,
+  },
+  {
+    id: 9,
+    name: '009_create_swap_executions_table',
+    up: migration009.up,
+    down: migration009.down,
+  },
+  {
+    id: 10,
+    name: '010_create_managed_wallets_table',
+    up: migration010.up,
+    down: migration010.down,
+  },
+  {
+    id: 11,
+    name: '011_add_foreign_key_to_workflows',
+    up: migration011.up,
+    down: migration011.down,
   },
   {
     id: 12,
@@ -150,3 +206,4 @@ if (command === 'up') {
   logger.info('Usage: node run.js [up|down]');
   process.exit(1);
 }
+
