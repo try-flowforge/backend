@@ -101,4 +101,33 @@ router.post(
     }
 );
 
+// ============================================
+// VERIFICATION CODE ROUTES
+// ============================================
+
+/**
+ * Generate a verification code for adding a new chat
+ * POST /verification/generate
+ */
+router.post('/verification/generate', (req: Request, res: Response, next: NextFunction) => {
+    telegramController.generateVerificationCode(req as AuthenticatedRequest, res, next);
+});
+
+/**
+ * Check verification code status
+ * GET /verification/status
+ */
+router.get('/verification/status', (req: Request, res: Response, next: NextFunction) => {
+    telegramController.getVerificationStatus(req as AuthenticatedRequest, res, next);
+});
+
+/**
+ * Cancel a pending verification code
+ * POST /verification/cancel
+ */
+router.post('/verification/cancel', (req: Request, res: Response, next: NextFunction) => {
+    telegramController.cancelVerificationCode(req as AuthenticatedRequest, res, next);
+});
+
 export default router;
+

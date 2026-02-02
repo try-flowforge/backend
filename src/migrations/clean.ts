@@ -17,6 +17,8 @@ import * as migration013 from "./013_create_telegram_connections_table";
 import * as migration014 from "./014_add_edge_handles";
 import * as migration015 from "./015_add_safe_wallet_to_users";
 import * as migration016 from "./016_update_node_type_constraint";
+import * as migration017 from "./017_create_telegram_verification_codes_table";
+import * as migration018 from "./018_cleanup_demo_users";
 
 // Load environment variables
 dotenv.config();
@@ -111,6 +113,8 @@ const resetDatabase = async (): Promise<void> => {
     await migration014.up();
     await migration015.up(pool);
     await migration016.up();
+    await migration017.up();
+    await migration018.up();
 
     // Record migrations
     await pool.query(`
@@ -183,6 +187,14 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [16, "016_update_node_type_constraint"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [17, "017_create_telegram_verification_codes_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [18, "018_cleanup_demo_users"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {

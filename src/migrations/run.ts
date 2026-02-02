@@ -17,6 +17,8 @@ import * as migration013 from "./013_create_telegram_connections_table";
 import * as migration014 from "./014_add_edge_handles";
 import * as migration015 from "./015_add_safe_wallet_to_users";
 import * as migration016 from "./016_update_node_type_constraint";
+import * as migration017 from "./017_create_telegram_verification_codes_table";
+import * as migration018 from "./018_cleanup_demo_users";
 
 // Load environment variables
 dotenv.config();
@@ -132,6 +134,18 @@ const migrations: Migration[] = [
     name: "016_update_node_type_constraint",
     up: migration016.up,
     down: migration016.down,
+  },
+  {
+    id: 17,
+    name: "017_create_telegram_verification_codes_table",
+    up: migration017.up,
+    down: migration017.down,
+  },
+  {
+    id: 18,
+    name: "018_cleanup_demo_users",
+    up: migration018.up,
+    down: migration018.down,
   },
 ];
 

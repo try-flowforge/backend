@@ -11,6 +11,8 @@ import {
   SUPPORTED_CHAINS,
   SupportedChainId,
 } from "../config/config";
+import { UserModel } from "../models/users";
+import { PrivyClient } from "@privy-io/server-auth";
 
 // In-memory rate limiting (for production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -35,6 +37,67 @@ const checkRateLimit = (
   record.count++;
   return true;
 };
+
+/**
+ * Ensure user exists in database and update their Safe wallet address
+ * Creates user if they don't exist, then updates the Safe address for the chain
+ */
+async function ensureUserExistsAndUpdateSafe(
+  userId: string,
+  walletAddress: string,
+  safeAddress: string,
+  chainId: SupportedChainId
+): Promise<void> {
+  try {
+    // Check if user exists
+    let user = await UserModel.findById(userId);
+
+    if (!user) {
+      // User doesn't exist, create them
+      logger.info({ userId, walletAddress }, 'Creating new user in database');
+
+      // Try to get email from Privy
+      let email = `${userId}@privy.local`;
+      try {
+        const privyClient = new PrivyClient(config.privy.appId, config.privy.appSecret);
+        const privyUser = await privyClient.getUser(userId);
+        const emailAccount = privyUser.linkedAccounts?.find(
+          (account) => account.type === 'email'
+        );
+        if (emailAccount && 'address' in emailAccount) {
+          email = emailAccount.address;
+        }
+      } catch (privyError) {
+        logger.warn({ privyError, userId }, 'Could not fetch email from Privy, using fallback');
+      }
+
+      // Create user
+      user = await UserModel.findOrCreate({
+        id: userId,
+        address: walletAddress,
+        email: email,
+        onboarded_at: new Date(),
+      });
+
+      logger.info({ userId, email }, 'User created in database');
+    }
+
+    // Update the Safe wallet address for the appropriate chain
+    const isTestnet = chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA;
+
+    if (isTestnet) {
+      await UserModel.updateSafeWalletAddresses(userId, safeAddress, undefined);
+      logger.info({ userId, safeAddress, chain: 'testnet' }, 'Updated user Safe wallet address');
+    } else {
+      await UserModel.updateSafeWalletAddresses(userId, undefined, safeAddress);
+      logger.info({ userId, safeAddress, chain: 'mainnet' }, 'Updated user Safe wallet address');
+    }
+  } catch (error) {
+    logger.error({ error, userId, walletAddress, safeAddress }, 'Failed to ensure user exists and update Safe');
+    // Don't throw - we don't want to fail the Safe creation just because user update failed
+  }
+}
+
 
 /**
  * POST /api/v1/relay/create-safe
@@ -103,6 +166,9 @@ export const createSafe = async (
         },
         "User already has a Safe wallet, returning existing address"
       );
+
+      // Ensure user exists in DB and has their Safe address recorded
+      await ensureUserExistsAndUpdateSafe(userId, userAddress, existingSafeAddress, supportedChainId);
 
       res.json({
         success: true,
@@ -191,6 +257,9 @@ export const createSafe = async (
       },
       "Safe wallet created successfully"
     );
+
+    // Ensure user exists in DB and has their Safe address recorded
+    await ensureUserExistsAndUpdateSafe(userId, userAddress, safeAddress, supportedChainId);
 
     res.json({
       success: true,

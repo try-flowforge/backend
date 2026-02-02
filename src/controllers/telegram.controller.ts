@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/privy-auth';
-import { TelegramConnectionModel } from '../models/telegram';
+import { TelegramConnectionModel, TelegramVerificationCodeModel } from '../models/telegram';
 import { UserModel } from '../models/users';
 import { AppError } from '../middleware/error-handler';
 import { logger } from '../utils/logger';
@@ -136,7 +136,10 @@ async function verifyChatAccess(chatId: string): Promise<TelegramChat | null> {
  * Get available chats where the bot has been added
  * GET /api/v1/integrations/telegram/chats
  * 
- * Verifies each chat is still accessible (bot not removed)
+ * Uses discovered chats from webhook events. If webhooks aren't set up,
+ * falls back to getUpdates API (only works when webhooks are disabled).
+ * 
+ * Note: Telegram's getUpdates doesn't work when webhooks are active.
  */
 export const getAvailableChats = async (
     _req: AuthenticatedRequest,
@@ -144,65 +147,133 @@ export const getAvailableChats = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        // Use getUpdates to find chats the bot has interacted with
-        const updates = await callTelegramApi<TelegramUpdate[]>('getUpdates', {
-            limit: 100,
-            allowed_updates: ['message', 'channel_post', 'my_chat_member'],
-        });
+        // Import the getDiscoveredChats function from webhook controller
+        const { getDiscoveredChats } = await import('./telegram-webhook.controller');
 
-        // Extract unique chat IDs
-        const chatIds = new Set<string>();
+        // First, check if we have chats discovered via webhooks
+        const webhookChats = getDiscoveredChats();
 
-        for (const update of updates) {
-            let chat: TelegramChat | undefined;
+        if (webhookChats.length > 0) {
+            // Verify each chat is still accessible (bot not removed)
+            const verifiedChats: Array<{
+                id: string;
+                title: string;
+                username?: string;
+                type: string;
+            }> = [];
 
-            if (update.message?.chat) {
-                chat = update.message.chat;
-            } else if (update.channel_post?.chat) {
-                chat = update.channel_post.chat;
-            } else if (update.my_chat_member?.chat) {
-                chat = update.my_chat_member.chat;
+            // Check each chat in parallel for speed
+            const verificationPromises = webhookChats.map(async (chat) => {
+                const verifiedChat = await verifyChatAccess(chat.id);
+                if (verifiedChat) {
+                    return {
+                        id: chat.id,
+                        title: chat.title,
+                        username: chat.username,
+                        type: chat.type,
+                    };
+                }
+                return null;
+            });
+
+            const results = await Promise.all(verificationPromises);
+
+            for (const result of results) {
+                if (result) {
+                    verifiedChats.push(result);
+                }
             }
 
-            if (chat) {
-                chatIds.add(String(chat.id));
-            }
+            res.json({
+                success: true,
+                data: {
+                    chats: verifiedChats,
+                    source: 'webhook', // Indicates chats came from webhook discovery
+                },
+            });
+            return;
         }
 
-        // Verify each chat is still accessible (bot not removed)
-        const verifiedChats: Array<{
-            id: string;
-            title: string;
-            username?: string;
-            type: string;
-        }> = [];
+        // Fallback: Try getUpdates (only works when webhooks are NOT configured)
+        try {
+            const updates = await callTelegramApi<TelegramUpdate[]>('getUpdates', {
+                limit: 100,
+                allowed_updates: ['message', 'channel_post', 'my_chat_member'],
+            });
 
-        // Check each chat in parallel for speed
-        const verificationPromises = Array.from(chatIds).map(async (chatId) => {
-            const chat = await verifyChatAccess(chatId);
-            if (chat) {
-                return {
-                    id: String(chat.id),
-                    title: chat.title || chat.first_name || chat.username || 'Unknown',
-                    username: chat.username,
-                    type: chat.type,
-                };
+            // Extract unique chat IDs
+            const chatIds = new Set<string>();
+
+            for (const update of updates) {
+                let chat: TelegramChat | undefined;
+
+                if (update.message?.chat) {
+                    chat = update.message.chat;
+                } else if (update.channel_post?.chat) {
+                    chat = update.channel_post.chat;
+                } else if (update.my_chat_member?.chat) {
+                    chat = update.my_chat_member.chat;
+                }
+
+                if (chat) {
+                    chatIds.add(String(chat.id));
+                }
             }
-            return null;
-        });
 
-        const results = await Promise.all(verificationPromises);
+            // Verify each chat is still accessible (bot not removed)
+            const verifiedChats: Array<{
+                id: string;
+                title: string;
+                username?: string;
+                type: string;
+            }> = [];
 
-        for (const result of results) {
-            if (result) {
-                verifiedChats.push(result);
+            // Check each chat in parallel for speed
+            const verificationPromises = Array.from(chatIds).map(async (chatId) => {
+                const chat = await verifyChatAccess(chatId);
+                if (chat) {
+                    return {
+                        id: String(chat.id),
+                        title: chat.title || chat.first_name || chat.username || 'Unknown',
+                        username: chat.username,
+                        type: chat.type,
+                    };
+                }
+                return null;
+            });
+
+            const results = await Promise.all(verificationPromises);
+
+            for (const result of results) {
+                if (result) {
+                    verifiedChats.push(result);
+                }
             }
+
+            res.json({
+                success: true,
+                data: {
+                    chats: verifiedChats,
+                    source: 'polling', // Indicates chats came from getUpdates
+                },
+            });
+        } catch (pollingError) {
+            // getUpdates failed (likely because webhook is active)
+            // Return empty list with helpful message
+            logger.warn(
+                { error: pollingError },
+                'getUpdates failed - this is expected when webhooks are active. Add bot to chats and send a message to discover them.'
+            );
+
+            res.json({
+                success: true,
+                data: {
+                    chats: [],
+                    source: 'none',
+                    message: 'No chats discovered yet. Add the bot to a chat/channel and send a message to discover it.',
+                },
+            });
         }
-
-        res.json({
-            success: true,
-            data: { chats: verifiedChats },
-        });
     } catch (error) {
         next(error);
     }
@@ -245,6 +316,7 @@ export const getConnections = async (
 
 /**
  * Ensure user exists in database (create if not exists)
+ * Throws an error if user cannot be created
  */
 async function ensureUserExists(userId: string, walletAddress: string): Promise<void> {
     try {
@@ -254,29 +326,46 @@ async function ensureUserExists(userId: string, walletAddress: string): Promise<
             return; // User already exists
         }
 
+        logger.info({ userId, walletAddress }, 'User not found, attempting to create...');
+
         // User doesn't exist, need to fetch email from Privy
         const privyClient = new PrivyClient(config.privy.appId, config.privy.appSecret);
-        const privyUser = await privyClient.getUser(userId);
 
-        // Get email from Privy user
-        const emailAccount = privyUser.linkedAccounts?.find(
-            (account) => account.type === 'email'
-        );
-        const email = emailAccount && 'address' in emailAccount ? emailAccount.address : `${userId}@privy.local`;
+        let email = `${userId}@privy.local`; // Default fallback email
+
+        try {
+            const privyUser = await privyClient.getUser(userId);
+            // Get email from Privy user
+            const emailAccount = privyUser.linkedAccounts?.find(
+                (account) => account.type === 'email'
+            );
+            if (emailAccount && 'address' in emailAccount) {
+                email = emailAccount.address;
+            }
+        } catch (privyError) {
+            logger.warn({ privyError, userId }, 'Could not fetch user from Privy, using fallback email');
+        }
 
         // Create user in database
-        await UserModel.findOrCreate({
+        const createdUser = await UserModel.findOrCreate({
             id: userId,
             address: walletAddress,
             email: email,
             onboarded_at: new Date(),
         });
 
+        if (!createdUser) {
+            throw new Error('Failed to create user in database');
+        }
+
         logger.info({ userId, email }, 'User created/ensured in database');
     } catch (error) {
-        logger.error({ error, userId }, 'Failed to ensure user exists');
-        // Don't throw - let the foreign key error surface if user creation fails
-        // This way we can see the actual error
+        logger.error({ error, userId, walletAddress }, 'Failed to ensure user exists');
+        throw new AppError(
+            500,
+            'Failed to create user account. Please try logging out and back in.',
+            'USER_CREATION_FAILED'
+        );
     }
 }
 
@@ -405,6 +494,151 @@ export const sendMessage = async (
                 chatId: connection.chat_id,
                 chatTitle: connection.chat_title,
             },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// ============================================
+// VERIFICATION CODE ENDPOINTS
+// ============================================
+
+/**
+ * Generate a verification code for adding a new chat
+ * POST /api/v1/integrations/telegram/verification/generate
+ * 
+ * Returns an existing pending code if one exists (prevents duplicate codes)
+ */
+export const generateVerificationCode = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const userId = req.userId;
+        const walletAddress = req.userWalletAddress;
+        if (!userId || !walletAddress) {
+            throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
+        }
+
+        // Ensure user exists in database
+        await ensureUserExists(userId, walletAddress);
+
+        // Generate or retrieve existing code
+        const codeRecord = await TelegramVerificationCodeModel.generateCode(userId);
+
+        // Calculate remaining time
+        const expiresAt = new Date(codeRecord.expires_at);
+        const remainingMs = expiresAt.getTime() - Date.now();
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+
+        res.json({
+            success: true,
+            data: {
+                code: codeRecord.code,
+                expiresAt: codeRecord.expires_at,
+                remainingMinutes,
+                status: codeRecord.status,
+                instructions: [
+                    '1. Add the bot to your Telegram group or channel',
+                    '2. Make sure the bot has permission to read messages',
+                    `3. Send this message in the chat: ${codeRecord.code}`,
+                    '4. Wait for the confirmation message from the bot',
+                    '5. Click "Refresh Connections" below to see your chat',
+                ],
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Check the status of a verification code
+ * GET /api/v1/integrations/telegram/verification/status
+ */
+export const getVerificationStatus = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const userId = req.userId;
+        if (!userId) {
+            throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
+        }
+
+        const codeRecord = await TelegramVerificationCodeModel.getLatestCodeStatus(userId);
+
+        if (!codeRecord) {
+            res.json({
+                success: true,
+                data: {
+                    hasCode: false,
+                    message: 'No verification code found. Generate a new code to add a chat.',
+                },
+            });
+            return;
+        }
+
+        // Check if expired
+        const now = new Date();
+        const isExpired = codeRecord.status === 'pending' && new Date(codeRecord.expires_at) < now;
+
+        res.json({
+            success: true,
+            data: {
+                hasCode: true,
+                code: codeRecord.code,
+                status: isExpired ? 'expired' : codeRecord.status,
+                expiresAt: codeRecord.expires_at,
+                verifiedAt: codeRecord.verified_at,
+                // If verified, include chat info
+                chat: codeRecord.status === 'verified' ? {
+                    id: codeRecord.chat_id,
+                    title: codeRecord.chat_title,
+                    type: codeRecord.chat_type,
+                } : null,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Cancel a pending verification code and allow generating a new one
+ * POST /api/v1/integrations/telegram/verification/cancel
+ */
+export const cancelVerificationCode = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const userId = req.userId;
+        if (!userId) {
+            throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
+        }
+
+        // Get the pending code
+        const pendingCode = await TelegramVerificationCodeModel.findPendingByUserId(userId);
+
+        if (!pendingCode) {
+            res.json({
+                success: true,
+                message: 'No pending verification code to cancel',
+            });
+            return;
+        }
+
+        // Cancel it
+        await TelegramVerificationCodeModel.cancelCode(pendingCode.id, userId);
+
+        res.json({
+            success: true,
+            message: 'Verification code cancelled. You can now generate a new code.',
         });
     } catch (error) {
         next(error);
