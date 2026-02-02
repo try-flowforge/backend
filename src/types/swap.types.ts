@@ -20,6 +20,7 @@ export enum NodeType {
   TRIGGER = 'TRIGGER',
   SWAP = 'SWAP',
   IF = 'IF',
+  SWITCH = 'SWITCH',
   CONDITION = 'CONDITION',
   WEBHOOK = 'WEBHOOK',
   DELAY = 'DELAY',
