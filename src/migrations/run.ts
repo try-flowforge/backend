@@ -14,6 +14,9 @@ import * as migration010 from "./010_create_managed_wallets_table";
 import * as migration011 from "./011_add_foreign_key_to_workflows";
 import * as migration012 from "./012_add_slack_oauth_fields";
 import * as migration013 from "./013_create_telegram_connections_table";
+import * as migration014 from "./014_add_edge_handles";
+import * as migration015 from "./015_add_safe_wallet_to_users";
+import * as migration016 from "./016_update_node_type_constraint";
 
 // Load environment variables
 dotenv.config();
@@ -111,6 +114,24 @@ const migrations: Migration[] = [
     name: "013_create_telegram_connections_table",
     up: migration013.up,
     down: migration013.down,
+  },
+  {
+    id: 14,
+    name: "014_add_edge_handles",
+    up: migration014.up,
+    down: migration014.down,
+  },
+  {
+    id: 15,
+    name: "015_add_safe_wallet_to_users",
+    up: migration015.up,
+    down: migration015.down,
+  },
+  {
+    id: 16,
+    name: "016_update_node_type_constraint",
+    up: migration016.up,
+    down: migration016.down,
   },
 ];
 
@@ -216,4 +237,3 @@ if (command === "up") {
   logger.info("Usage: node run.js [up|down]");
   process.exit(1);
 }
-

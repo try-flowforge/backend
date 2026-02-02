@@ -19,10 +19,10 @@ const redisConnection = {
 
 const defaultWorkerOptions = {
   connection: redisConnection,
-  concurrency: parseInt(process.env.WORKER_CONCURRENCY || '5'),
+  concurrency: parseInt(process.env.WORKER_CONCURRENCY || '10'),
   limiter: {
-    max: 100,
-    duration: 1000, // 100 jobs per second max
+    max: 200,
+    duration: 1000, // 200 jobs per second max
   },
 };
 import { ExecutionStatus, TriggerType } from '../../types';
@@ -43,7 +43,7 @@ export class WorkflowExecutionWorker {
       {
         ...defaultWorkerOptions,
         connection: redisConnection,
-        concurrency: parseInt(process.env.WORKFLOW_WORKER_CONCURRENCY || '3'),
+        concurrency: parseInt(process.env.WORKFLOW_WORKER_CONCURRENCY || '1'),
       }
     );
 

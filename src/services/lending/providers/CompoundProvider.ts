@@ -98,10 +98,10 @@ export class CompoundProvider implements ILendingProvider {
 
     // Get reserve data
     const reserveData = await this.getAssetReserveData(chain, config.asset.address);
-    
+
     // Get user account data
     const accountData = await this.getAccountData(chain, config.walletAddress);
-    
+
     // Get current position
     const currentPosition = await this.getPosition(chain, config.walletAddress, config.asset.address) as LendingPosition;
 
@@ -158,7 +158,7 @@ export class CompoundProvider implements ILendingProvider {
     const chainConfig = getChainConfig(chain);
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
-    
+
     let data: string;
     const to: string = compoundConfig.cometAddress;
     const value = '0';
@@ -252,7 +252,7 @@ export class CompoundProvider implements ILendingProvider {
   ): Promise<{ success: boolean; gasEstimate?: string; error?: string }> {
     try {
       const provider = getProvider(chain);
-      
+
       const gasEstimate = await provider.estimateGas({
         to: transaction.to,
         from: transaction.from,
@@ -312,8 +312,8 @@ export class CompoundProvider implements ILendingProvider {
       errors.push('Can only repay base asset (USDC) in Compound V3');
     }
 
-    if (config.operation === LendingOperation.ENABLE_COLLATERAL || 
-        config.operation === LendingOperation.DISABLE_COLLATERAL) {
+    if (config.operation === LendingOperation.ENABLE_COLLATERAL ||
+      config.operation === LendingOperation.DISABLE_COLLATERAL) {
       errors.push('Collateral management is automatic in Compound V3');
     }
 
@@ -341,7 +341,7 @@ export class CompoundProvider implements ILendingProvider {
         // Get base asset position (supply/borrow)
         const supplyBalance = await cometContract.balanceOf(walletAddress);
         const borrowBalance = await cometContract.borrowBalanceOf(walletAddress);
-        
+
         const utilization = await cometContract.getUtilization();
         const supplyRate = await cometContract.getSupplyRate(utilization);
         const borrowRate = await cometContract.getBorrowRate(utilization);
@@ -361,7 +361,7 @@ export class CompoundProvider implements ILendingProvider {
       } else {
         // Get collateral position
         const collateralBalance = await cometContract.collateralBalanceOf(walletAddress, asset);
-        
+
         return {
           asset: {
             address: asset,
@@ -378,7 +378,7 @@ export class CompoundProvider implements ILendingProvider {
     } else {
       // Get all positions
       const positions: LendingPosition[] = [];
-      
+
       // Get base asset position
       const basePosition = await this.getPosition(chain, walletAddress, compoundConfig.baseAsset) as LendingPosition;
       positions.push(basePosition);
@@ -389,7 +389,7 @@ export class CompoundProvider implements ILendingProvider {
         try {
           const assetInfo = await cometContract.getAssetInfo(i);
           const collateralBalance = await cometContract.collateralBalanceOf(walletAddress, assetInfo.asset);
-          
+
           if (collateralBalance > 0) {
             positions.push({
               asset: {
@@ -421,7 +421,7 @@ export class CompoundProvider implements ILendingProvider {
     const compoundConfig = this.COMPOUND_CONFIGS[chain];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
-    
+
     // Get supply and borrow balances
     // const supplyBalance = await cometContract.balanceOf(walletAddress); // For future use
     const borrowBalance = await cometContract.borrowBalanceOf(walletAddress);
@@ -429,7 +429,7 @@ export class CompoundProvider implements ILendingProvider {
     // Calculate collateral value (simplified - would need oracle prices)
     const numAssets = await cometContract.numAssets();
     let totalCollateral = BigInt(0);
-    
+
     for (let i = 0; i < numAssets; i++) {
       try {
         const assetInfo = await cometContract.getAssetInfo(i);
@@ -442,7 +442,7 @@ export class CompoundProvider implements ILendingProvider {
     }
 
     // Simplified health factor calculation
-    const healthFactor = borrowBalance > 0 
+    const healthFactor = borrowBalance > 0
       ? (Number(totalCollateral) / Number(borrowBalance)).toFixed(2)
       : '999999';
 
@@ -464,7 +464,7 @@ export class CompoundProvider implements ILendingProvider {
     const compoundConfig = this.COMPOUND_CONFIGS[chain];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
-    
+
     const isBaseAsset = asset.toLowerCase() === compoundConfig.baseAsset.toLowerCase();
 
     if (isBaseAsset) {
@@ -499,10 +499,10 @@ export class CompoundProvider implements ILendingProvider {
     } else {
       // Get collateral asset info
       const numAssets = await cometContract.numAssets();
-      
+
       for (let i = 0; i < numAssets; i++) {
         const assetInfo = await cometContract.getAssetInfo(i);
-        
+
         if (assetInfo.asset.toLowerCase() === asset.toLowerCase()) {
           const tokenContract = new Contract(asset, ERC20_ABI, provider);
           const symbol = await tokenContract.symbol();

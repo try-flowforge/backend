@@ -2,10 +2,13 @@ import { Request, Response } from 'express';
 import { UserModel } from '../models/users';
 import { CreateUserInput, ApiResponse } from '../types';
 import { AppError } from '../middleware';
+import { SafeWalletService } from '../services/safe-wallet.service';
+import { logger } from '../utils/logger';
 
 export class UserController {
   /**
    * Create a new user
+   * Also auto-provisions Safe wallets on both testnet and mainnet
    */
   static async createUser(req: Request, res: Response): Promise<void> {
     try {
@@ -29,7 +32,52 @@ export class UserController {
         throw new AppError(409, 'Email already in use', 'EMAIL_EXISTS');
       }
 
-      const user = await UserModel.create(userData);
+      // Create user first
+      let user = await UserModel.create(userData);
+
+      // Auto-provision Safe wallets on both chains
+      // This is done asynchronously and errors are logged but not thrown
+      // Missing wallets can be created later via the relay endpoint
+      try {
+        logger.info({ userId: user.id, userAddress: userData.address }, 'Auto-provisioning Safe wallets');
+
+        const safeResults = await SafeWalletService.createSafesForUserOnAllChains(userData.address);
+
+        // Update user with wallet addresses
+        const testnetAddress = safeResults.testnet?.success ? safeResults.testnet.safeAddress : undefined;
+        const mainnetAddress = safeResults.mainnet?.success ? safeResults.mainnet.safeAddress : undefined;
+
+        if (testnetAddress || mainnetAddress) {
+          const updatedUser = await UserModel.updateSafeWalletAddresses(
+            user.id,
+            testnetAddress,
+            mainnetAddress
+          );
+          if (updatedUser) {
+            user = updatedUser;
+          }
+        }
+
+        logger.info(
+          {
+            userId: user.id,
+            testnet: safeResults.testnet?.success ? 'success' : 'failed',
+            mainnet: safeResults.mainnet?.success ? 'success' : 'failed',
+            testnetAddress,
+            mainnetAddress,
+          },
+          'Safe wallet provisioning completed'
+        );
+      } catch (safeError) {
+        // Log error but don't fail user creation
+        logger.error(
+          {
+            error: safeError instanceof Error ? safeError.message : String(safeError),
+            userId: user.id,
+          },
+          'Failed to auto-provision Safe wallets, user created without wallets'
+        );
+      }
 
       const response: ApiResponse = {
         success: true,

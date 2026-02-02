@@ -4,53 +4,57 @@
 
 // Supported Chains
 export enum SupportedChain {
-  ARBITRUM = 'ARBITRUM',
-  ARBITRUM_SEPOLIA = 'ARBITRUM_SEPOLIA',
-  ETHEREUM_SEPOLIA = 'ETHEREUM_SEPOLIA',
+  ARBITRUM = "ARBITRUM",
+  ARBITRUM_SEPOLIA = "ARBITRUM_SEPOLIA",
+  ETHEREUM_SEPOLIA = "ETHEREUM_SEPOLIA",
 }
 
 // Supported Swap Providers
 export enum SwapProvider {
-  UNISWAP = 'UNISWAP',
-  RELAY = 'RELAY',
-  ONEINCH = 'ONEINCH',
+  UNISWAP = "UNISWAP",
+  RELAY = "RELAY",
+  ONEINCH = "ONEINCH",
 }
 
 // Node Types
 export enum NodeType {
-  TRIGGER = 'TRIGGER',
-  SWAP = 'SWAP',
+  TRIGGER = "TRIGGER",
+  START = "START",
+  SWAP = "SWAP",
+  IF = "IF",
+  SWITCH = "SWITCH",
   LENDING = 'LENDING',
-  IF = 'IF',
-  SWITCH = 'SWITCH',
-  CONDITION = 'CONDITION',
-  WEBHOOK = 'WEBHOOK',
-  DELAY = 'DELAY',
-  EMAIL = 'EMAIL',
+  CONDITION = "CONDITION",
+  WEBHOOK = "WEBHOOK",
+  DELAY = "DELAY",
+  EMAIL = "EMAIL",
+  SLACK = "SLACK",
+  TELEGRAM = "TELEGRAM",
+  WALLET = "WALLET",
 }
 
 // Trigger Types
 export enum TriggerType {
-  CRON = 'CRON',
-  WEBHOOK = 'WEBHOOK',
-  MANUAL = 'MANUAL',
-  EVENT = 'EVENT',
+  CRON = "CRON",
+  WEBHOOK = "WEBHOOK",
+  MANUAL = "MANUAL",
+  EVENT = "EVENT",
 }
 
 // Execution Status
 export enum ExecutionStatus {
-  PENDING = 'PENDING',
-  RUNNING = 'RUNNING',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  CANCELLED = 'CANCELLED',
-  RETRYING = 'RETRYING',
+  PENDING = "PENDING",
+  RUNNING = "RUNNING",
+  SUCCESS = "SUCCESS",
+  FAILED = "FAILED",
+  CANCELLED = "CANCELLED",
+  RETRYING = "RETRYING",
 }
 
 // Swap Type (exact in vs exact out)
 export enum SwapType {
-  EXACT_INPUT = 'EXACT_INPUT',
-  EXACT_OUTPUT = 'EXACT_OUTPUT',
+  EXACT_INPUT = "EXACT_INPUT",
+  EXACT_OUTPUT = "EXACT_OUTPUT",
 }
 
 // Chain Configuration
@@ -94,16 +98,16 @@ export interface SwapInputConfig {
   amount: string; // Wei/smallest unit as string to handle big numbers
   swapType: SwapType;
   walletAddress: string; // The wallet that will perform the swap
-  
+
   // Optional fields with defaults
   slippageTolerance?: number; // Default: 0.5 (0.5%)
   deadline?: number; // Unix timestamp, default: 20 minutes from now
-  
+
   // Gas preferences (optional)
   maxPriorityFeePerGas?: string;
   maxFeePerGas?: string;
   gasLimit?: string;
-  
+
   // Advanced options
   recipient?: string; // If different from walletAddress
   enablePartialFill?: boolean; // For 1inch
@@ -162,14 +166,29 @@ export interface SwapNodeConfig {
   provider: SwapProvider;
   chain: SupportedChain;
   inputConfig: SwapInputConfig;
-  
+
   // Execution preferences
   simulateFirst?: boolean; // Default: true
   autoRetryOnFailure?: boolean; // Default: true
   maxRetries?: number; // Default: 3
-  
+
   // Output mapping (for passing data to next nodes)
   outputMapping?: Record<string, string>;
+}
+
+// Slack Node Configuration
+export interface SlackNodeConfig {
+  connectionId: string;
+  message: string;  // Supports template variables: {{inputData.txHash}}
+  connectionType: 'webhook' | 'oauth';
+  channelId?: string;  // Required for OAuth connections
+}
+
+// Telegram Node Configuration
+export interface TelegramNodeConfig {
+  connectionId: string;
+  chatId: string;
+  message: string;  // Supports template variables
 }
 
 // Generic Workflow Node
@@ -178,13 +197,13 @@ export interface WorkflowNodeDefinition {
   type: NodeType;
   name: string;
   description?: string;
-  
+
   // Node-specific configuration
   config: SwapNodeConfig | TriggerNodeConfig | Record<string, any>;
-  
+
   // Position in UI (for visual editor)
   position?: { x: number; y: number };
-  
+
   // Metadata
   metadata?: {
     version?: string;
@@ -196,15 +215,15 @@ export interface WorkflowNodeDefinition {
 // Trigger Node Configuration
 export interface TriggerNodeConfig {
   triggerType: TriggerType;
-  
+
   // Cron-specific
   cronExpression?: string;
   timezone?: string;
-  
+
   // Webhook-specific
   webhookPath?: string;
-  webhookMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  
+  webhookMethod?: "GET" | "POST" | "PUT" | "DELETE";
+
   // Event-specific
   eventSource?: string;
   eventFilter?: Record<string, any>;
@@ -223,10 +242,10 @@ export interface WorkflowEdge {
   // Conditional routing
   condition?: {
     field: string;
-    operator: 'eq' | 'ne' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains';
+    operator: "eq" | "ne" | "gt" | "lt" | "gte" | "lte" | "contains";
     value: any;
   };
-  
+
   // Data transformation
   dataMapping?: Record<string, string>;
 }
@@ -238,25 +257,25 @@ export interface WorkflowDefinition {
   name: string;
   description?: string;
   version: number;
-  
+
   // Workflow structure
   nodes: WorkflowNodeDefinition[];
   edges: WorkflowEdge[];
   triggerNodeId: string;
-  
+
   // Status
   isActive: boolean;
   isDraft: boolean;
-  
+
   // Metadata
   createdAt: Date;
   updatedAt: Date;
   lastExecutedAt?: Date;
-  
+
   // Configuration
   maxConcurrentExecutions?: number;
   timeout?: number; // Milliseconds
-  
+
   // Tags and categorization
   tags?: string[];
   category?: string;
@@ -269,17 +288,17 @@ export interface WorkflowExecutionContext {
   userId: string;
   triggeredBy: TriggerType;
   triggeredAt: Date;
-  
+
   // Initial input data (from trigger)
   initialInput?: Record<string, any>;
-  
+
   // Accumulated output from all nodes
   nodeOutputs: Map<string, any>;
-  
+
   // Execution state
   currentNodeId?: string;
   status: ExecutionStatus;
-  
+
   // Error handling
   error?: {
     message: string;
@@ -287,7 +306,7 @@ export interface WorkflowExecutionContext {
     nodeId?: string;
     stack?: string;
   };
-  
+
   // Metadata
   startedAt: Date;
   completedAt?: Date;
@@ -299,13 +318,13 @@ export interface NodeExecutionInput {
   nodeId: string;
   nodeType: NodeType;
   nodeConfig: any;
-  
+
   // Input from previous nodes
   inputData: any;
-  
+
   // Context
   executionContext: WorkflowExecutionContext;
-  
+
   // User credentials/secrets
   secrets: Record<string, string>;
 }
@@ -468,4 +487,3 @@ export interface OneInchConfig {
   apiKey: string;
   apiUrl: string;
 }
-

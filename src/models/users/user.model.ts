@@ -13,7 +13,7 @@ export class UserModel {
     const text = `
       INSERT INTO users (id, address, email, onboarded_at)
       VALUES ($1, $2, $3, $4)
-      RETURNING id, address, email, onboarded_at
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
     `;
     const values = [id, address, email, onboardedDate];
 
@@ -37,7 +37,7 @@ export class UserModel {
    */
   static async findById(id: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
       FROM users
       WHERE id = $1
     `;
@@ -60,7 +60,7 @@ export class UserModel {
    */
   static async findByAddress(address: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
       FROM users
       WHERE address = $1
     `;
@@ -83,7 +83,7 @@ export class UserModel {
    */
   static async findByEmail(email: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
       FROM users
       WHERE email = $1
     `;
@@ -106,7 +106,7 @@ export class UserModel {
    */
   static async findAll(limit = 50, offset = 0): Promise<User[]> {
     const text = `
-      SELECT id, address, email, onboarded_at
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
       FROM users
       ORDER BY onboarded_at DESC
       LIMIT $1 OFFSET $2
@@ -158,6 +158,56 @@ export class UserModel {
       return parseInt(result.rows[0].count);
     } catch (error) {
       logger.error({ error }, 'Failed to count users');
+      throw error;
+    }
+  }
+
+  /**
+   * Update user's Safe wallet addresses
+   */
+  static async updateSafeWalletAddresses(
+    id: string,
+    testnetAddress?: string,
+    mainnetAddress?: string
+  ): Promise<User | null> {
+    const updates: string[] = [];
+    const values: (string | undefined)[] = [];
+    let paramIndex = 1;
+
+    if (testnetAddress !== undefined) {
+      updates.push(`safe_wallet_address_testnet = $${paramIndex}`);
+      values.push(testnetAddress);
+      paramIndex++;
+    }
+
+    if (mainnetAddress !== undefined) {
+      updates.push(`safe_wallet_address_mainnet = $${paramIndex}`);
+      values.push(mainnetAddress);
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return this.findById(id);
+    }
+
+    values.push(id);
+
+    const text = `
+      UPDATE users
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+    `;
+
+    try {
+      const result = await query(text, values);
+      if (result.rows.length === 0) {
+        return null;
+      }
+      logger.info({ userId: id }, 'User Safe wallet addresses updated');
+      return result.rows[0];
+    } catch (error) {
+      logger.error({ error, userId: id }, 'Failed to update Safe wallet addresses');
       throw error;
     }
   }

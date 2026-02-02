@@ -7,6 +7,8 @@ import {
   TriggerType,
   ApiResponse,
 } from '../types';
+import { AppError } from '../middleware/error-handler';
+import { UserModel } from '../models/users/user.model';
 import crypto from 'crypto';
 
 /**
@@ -30,7 +32,73 @@ export const createWorkflow = async (
       tags,
     } = req.body;
 
-    logger.info({ userId, name }, 'Creating workflow');
+    // Validate required fields
+    if (!userId) {
+      throw new AppError(400, 'User ID is required', 'VALIDATION_ERROR', {
+        field: 'userId',
+      });
+    }
+
+    if (!name) {
+      throw new AppError(400, 'Workflow name is required', 'VALIDATION_ERROR', {
+        field: 'name',
+      });
+    }
+
+    if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
+      throw new AppError(
+        400,
+        'At least one node is required',
+        'VALIDATION_ERROR',
+        { field: 'nodes' }
+      );
+    }
+
+    if (!edges || !Array.isArray(edges)) {
+      throw new AppError(400, 'Edges must be an array', 'VALIDATION_ERROR', {
+        field: 'edges',
+      });
+    }
+
+    logger.info({ userId, name, nodeCount: nodes.length, edgeCount: edges.length }, 'Creating workflow');
+
+    // In production, this should be handled by auth middleware
+    if (userId && userId.startsWith('demo-user-')) {
+      try {
+        await UserModel.findOrCreate({
+          id: userId,
+          address: `0x${crypto.randomBytes(20).toString('hex')}`,
+          email: `${userId}@demo.local`,
+          onboarded_at: new Date(),
+        });
+        logger.info({ userId }, 'Demo user auto-created or already exists');
+      } catch (error: any) {
+        // If user creation fails, check if user exists
+        const existingUser = await UserModel.findById(userId);
+        if (!existingUser) {
+          logger.error({ error, userId }, 'Failed to auto-create demo user');
+          throw new AppError(
+            500,
+            'Failed to create demo user',
+            'USER_CREATION_ERROR',
+            { userId, originalError: error.message }
+          );
+        }
+        // User exists, continue
+        logger.info({ userId }, 'Demo user already exists');
+      }
+    } else {
+      // For non-demo users, verify they exist
+      const existingUser = await UserModel.findById(userId);
+      if (!existingUser) {
+        throw new AppError(
+          404,
+          `User not found: ${userId}`,
+          'USER_NOT_FOUND',
+          { userId }
+        );
+      }
+    }
 
     const client = await pool.connect();
 
@@ -99,6 +167,25 @@ export const createWorkflow = async (
         const realSourceId = nodeIds.get(edge.sourceNodeId);
         const realTargetId = nodeIds.get(edge.targetNodeId);
 
+        // Validate that both source and target nodes exist
+        if (!realSourceId) {
+          throw new AppError(
+            400,
+            `Source node not found: ${edge.sourceNodeId}`,
+            'VALIDATION_ERROR',
+            { edge, sourceNodeId: edge.sourceNodeId }
+          );
+        }
+
+        if (!realTargetId) {
+          throw new AppError(
+            400,
+            `Target node not found: ${edge.targetNodeId}`,
+            'VALIDATION_ERROR',
+            { edge, targetNodeId: edge.targetNodeId }
+          );
+        }
+
         await client.query(
           `INSERT INTO workflow_edges (
             workflow_id,
@@ -139,11 +226,48 @@ export const createWorkflow = async (
       res.status(201).json(response);
     } catch (error) {
       await client.query('ROLLBACK');
+      logger.error({ error, userId, name }, 'Error creating workflow in transaction');
       throw error;
     } finally {
       client.release();
     }
   } catch (error) {
+    const userId = (req as any).user?.id || req.body?.userId;
+    logger.error({ error, userId, body: req.body }, 'Error in createWorkflow');
+    
+    // If it's already an AppError, just pass it along
+    if (error instanceof AppError) {
+      return next(error);
+    }
+    
+    // Handle database errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const dbError = error as any;
+      if (dbError.code === '23503') {
+        // Foreign key constraint violation
+        return next(
+          new AppError(
+            400,
+            'Invalid reference: node or workflow reference does not exist',
+            'DATABASE_ERROR',
+            { code: dbError.code, detail: dbError.detail }
+          )
+        );
+      }
+      if (dbError.code === '23505') {
+        // Unique constraint violation
+        return next(
+          new AppError(
+            409,
+            'Workflow with this name already exists',
+            'DUPLICATE_ERROR',
+            { code: dbError.code, detail: dbError.detail }
+          )
+        );
+      }
+    }
+    
+    // Generic error handling
     next(error);
   }
 };

@@ -14,6 +14,7 @@ import {
 import { nodeProcessorFactory } from './processors/NodeProcessorFactory';
 import { logger } from '../../utils/logger';
 import { pool } from '../../config/database';
+import { executionEventEmitter } from '../ExecutionEventEmitter';
 
 /**
  * Workflow Execution Engine
@@ -59,6 +60,15 @@ export class WorkflowExecutionEngine {
       // Load workflow definition
       const workflow = await this.loadWorkflow(workflowId);
 
+      // Emit execution started event
+      executionEventEmitter.emitExecutionEvent({
+        type: 'execution:started',
+        executionId,
+        workflowId,
+        status: ExecutionStatus.RUNNING,
+        timestamp: new Date(),
+      });
+
       // Execute workflow with branching support
       await this.executeWorkflowWithBranching(workflow, context);
 
@@ -89,6 +99,15 @@ export class WorkflowExecutionEngine {
         'Workflow execution completed'
       );
 
+      // Emit execution completed event
+      executionEventEmitter.emitExecutionEvent({
+        type: 'execution:completed',
+        executionId,
+        workflowId,
+        status: context.status,
+        timestamp: new Date(),
+      });
+
       return context;
     } catch (error) {
       logger.error({ error, executionId }, 'Workflow execution failed');
@@ -105,6 +124,16 @@ export class WorkflowExecutionEngine {
         ExecutionStatus.FAILED,
         context.error
       );
+
+      // Emit execution failed event
+      executionEventEmitter.emitExecutionEvent({
+        type: 'execution:failed',
+        executionId,
+        workflowId,
+        status: ExecutionStatus.FAILED,
+        error: context.error,
+        timestamp: new Date(),
+      });
 
       return context;
     }
@@ -210,7 +239,7 @@ export class WorkflowExecutionEngine {
       // Skip TRIGGER nodes
       if (node.type === NodeType.TRIGGER) {
         logger.debug({ nodeId: currentNodeId }, 'Skipping trigger node');
-        
+
         // Move to next node
         const nextEdges = workflow.edges.filter(e => e.sourceNodeId === currentNodeId);
         currentNodeId = nextEdges.length > 0 ? nextEdges[0].targetNodeId : null;
@@ -241,6 +270,18 @@ export class WorkflowExecutionEngine {
       };
 
       const processor = nodeProcessorFactory.getProcessor(node.type);
+
+      // Emit node started event
+      executionEventEmitter.emitExecutionEvent({
+        type: 'node:started',
+        executionId: context.executionId,
+        workflowId: context.workflowId,
+        nodeId: node.id,
+        nodeType: node.type,
+        status: ExecutionStatus.RUNNING,
+        timestamp: new Date(),
+      });
+
       const result = await processor.execute(nodeInput);
 
       // Update node execution record
@@ -250,10 +291,23 @@ export class WorkflowExecutionEngine {
       context.nodeOutputs.set(node.id, result.output);
       context.currentNodeId = node.id;
 
+      // Emit node completed/failed event
+      executionEventEmitter.emitExecutionEvent({
+        type: result.success ? 'node:completed' : 'node:failed',
+        executionId: context.executionId,
+        workflowId: context.workflowId,
+        nodeId: node.id,
+        nodeType: node.type,
+        status: result.success ? ExecutionStatus.SUCCESS : ExecutionStatus.FAILED,
+        output: result.output,
+        error: result.error,
+        timestamp: new Date(),
+      });
+
       // Handle IF nodes - store branch decision
       if (node.type === NodeType.IF && result.output?.branchToFollow) {
         branchDecisions.set(node.id, result.output.branchToFollow);
-        
+
         logger.info(
           {
             nodeId: node.id,
@@ -284,29 +338,29 @@ export class WorkflowExecutionEngine {
   }
 
   /**
- * Get next node to execute (handles IF node branching)
- */
+   * Get next node to execute (handles IF node branching)
+   */
   private getNextNode(
     currentNodeId: string,
     branchDecisions: Map<string, string>,
     workflow: WorkflowDefinition
   ): string | null {
     const currentNode = workflow.nodes.find(n => n.id === currentNodeId);
-    
+
     // If this is an IF node, follow the chosen branch
     if (currentNode?.type === NodeType.IF) {
       const chosenBranch = branchDecisions.get(currentNodeId);
-      
+
       if (chosenBranch) {
         // Find edge with matching sourceHandle
         const branchEdges = workflow.edges.filter(
           e => e.sourceNodeId === currentNodeId && e.sourceHandle === chosenBranch
         );
-        
+
         if (branchEdges.length > 0) {
           return branchEdges[0].targetNodeId;
         }
-        
+
         logger.warn(
           { nodeId: currentNodeId, branch: chosenBranch },
           'IF node: no edge found for chosen branch'
@@ -314,14 +368,14 @@ export class WorkflowExecutionEngine {
         return null;
       }
     }
-    
+
     // For regular nodes, follow the first outgoing edge
     const outgoingEdges = workflow.edges.filter(e => e.sourceNodeId === currentNodeId);
-    
+
     if (outgoingEdges.length > 0) {
       return outgoingEdges[0].targetNodeId;
     }
-    
+
     return null;
   }
 
@@ -545,4 +599,5 @@ export class WorkflowExecutionEngine {
 
 // Export singleton instance
 export const workflowExecutionEngine = new WorkflowExecutionEngine();
+
 

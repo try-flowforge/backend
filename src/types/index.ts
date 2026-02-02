@@ -4,6 +4,8 @@ export interface User {
   address: string;
   email: string;
   onboarded_at: Date;
+  safe_wallet_address_testnet?: string;
+  safe_wallet_address_mainnet?: string;
 }
 
 export interface CreateUserInput {

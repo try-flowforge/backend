@@ -86,10 +86,10 @@ export class AaveProvider implements ILendingProvider {
 
     // Get reserve data
     const reserveData = await this.getAssetReserveData(chain, config.asset.address);
-    
+
     // Get user account data
     const accountData = await this.getAccountData(chain, config.walletAddress);
-    
+
     // Get current position
     const currentPosition = await this.getPosition(chain, config.walletAddress, config.asset.address) as LendingPosition;
 
@@ -159,7 +159,7 @@ export class AaveProvider implements ILendingProvider {
     const chainConfig = getChainConfig(chain);
 
     const poolContract = new Contract(aaveConfig.poolAddress, AAVE_POOL_ABI, provider);
-    
+
     let data: string;
     let to: string = aaveConfig.poolAddress;
     let value = '0';
@@ -251,7 +251,7 @@ export class AaveProvider implements ILendingProvider {
   ): Promise<{ success: boolean; gasEstimate?: string; error?: string }> {
     try {
       const provider = getProvider(chain);
-      
+
       const gasEstimate = await provider.estimateGas({
         to: transaction.to,
         from: transaction.from,
@@ -304,7 +304,7 @@ export class AaveProvider implements ILendingProvider {
       try {
         const accountData = await this.getAccountData(chain, config.walletAddress);
         const healthFactor = parseFloat(accountData.healthFactor);
-        
+
         if (healthFactor < 1.5) {
           warnings.push('Health factor is low. Borrowing may increase liquidation risk.');
         }
@@ -321,7 +321,7 @@ export class AaveProvider implements ILendingProvider {
     if (config.operation === LendingOperation.WITHDRAW) {
       try {
         const position = await this.getPosition(chain, config.walletAddress, config.asset.address) as LendingPosition;
-        
+
         if (BigInt(position.availableToWithdraw) < BigInt(config.amount)) {
           errors.push('Insufficient balance to withdraw');
         }
@@ -400,7 +400,7 @@ export class AaveProvider implements ILendingProvider {
     const aaveConfig = this.AAVE_CONFIGS[chain];
 
     const poolContract = new Contract(aaveConfig.poolAddress, AAVE_POOL_ABI, provider);
-    
+
     const accountData = await poolContract.getUserAccountData(walletAddress);
 
     return {
@@ -433,13 +433,13 @@ export class AaveProvider implements ILendingProvider {
     const variableBorrowAPY = this.rayToAPY(reserveData.variableBorrowRate.toString());
     const stableBorrowAPY = this.rayToAPY(reserveData.stableBorrowRate.toString());
 
-    const totalSupplied = BigInt(reserveData.availableLiquidity) + 
-                         BigInt(reserveData.totalStableDebt) + 
-                         BigInt(reserveData.totalVariableDebt);
-    
+    const totalSupplied = BigInt(reserveData.availableLiquidity) +
+      BigInt(reserveData.totalStableDebt) +
+      BigInt(reserveData.totalVariableDebt);
+
     const totalBorrowed = BigInt(reserveData.totalStableDebt) + BigInt(reserveData.totalVariableDebt);
-    
-    const utilizationRate = totalSupplied > 0 
+
+    const utilizationRate = totalSupplied > 0
       ? ((Number(totalBorrowed) / Number(totalSupplied)) * 100).toFixed(2)
       : '0';
 
@@ -501,10 +501,10 @@ export class AaveProvider implements ILendingProvider {
   private rayToAPY(rayRate: string): string {
     const RAY = 1e27;
     const SECONDS_PER_YEAR = 31536000;
-    
+
     const rate = Number(rayRate) / RAY;
     const apy = (Math.pow(1 + rate / SECONDS_PER_YEAR, SECONDS_PER_YEAR) - 1) * 100;
-    
+
     return apy.toFixed(2);
   }
 

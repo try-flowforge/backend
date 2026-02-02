@@ -56,8 +56,8 @@ export const dbConfig = {
   database: getOptionalEnv("DB_NAME", "agentic"),
   user: getOptionalEnv("DB_USER", "postgres"),
   password: getOptionalEnv("DB_PASSWORD", "postgres"),
-  poolMin: getOptionalNumberEnv("DB_POOL_MIN", 2),
-  poolMax: getOptionalNumberEnv("DB_POOL_MAX", 10),
+  poolMin: getOptionalNumberEnv("DB_POOL_MIN", 1),
+  poolMax: getOptionalNumberEnv("DB_POOL_MAX", 5),
 } as const;
 
 /**
