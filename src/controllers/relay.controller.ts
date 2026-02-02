@@ -13,30 +13,8 @@ import {
 } from "../config/config";
 import { UserModel } from "../models/users";
 import { PrivyClient } from "@privy-io/server-auth";
-
-// In-memory rate limiting (for production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-const checkRateLimit = (
-  key: string,
-  maxRequests: number,
-  windowMs: number
-): boolean => {
-  const now = Date.now();
-  const record = rateLimitStore.get(key);
-
-  if (!record || now > record.resetTime) {
-    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
-    return true;
-  }
-
-  if (record.count >= maxRequests) {
-    return false;
-  }
-
-  record.count++;
-  return true;
-};
+import { checkRateLimit } from "../services/rate-limiter.service";
+import { RATE_LIMIT_CONSTANTS } from "../config/constants";
 
 /**
  * Ensure user exists in database and update their Safe wallet address
@@ -183,11 +161,17 @@ export const createSafe = async (
     // Rate limiting: max Safe creations per user per day
     // Only apply rate limit when actually creating a new Safe
     const rateLimitKey = `create-safe:${userId}`;
-    const maxRequestsPerDay = config.rateLimit.maxTxsPerUserPerDay;
-    if (!checkRateLimit(rateLimitKey, maxRequestsPerDay, 24 * 60 * 60 * 1000)) {
+    const rateLimitResult = await checkRateLimit(
+      rateLimitKey,
+      RATE_LIMIT_CONSTANTS.MAX_SAFE_CREATIONS_PER_DAY,
+      RATE_LIMIT_CONSTANTS.RATE_LIMIT_WINDOW_MS
+    );
+
+    if (!rateLimitResult.allowed) {
       res.status(429).json({
         success: false,
         error: "Rate limit exceeded. Please try again later.",
+        retryAfter: rateLimitResult.retryAfterMs,
       });
       return;
     }
@@ -325,11 +309,17 @@ export const enableModule = async (
 
     // Rate limiting: max module enable per user per day
     const rateLimitKey = `enable-module:${userId}`;
-    const maxRequestsPerDay = config.rateLimit.maxTxsPerUserPerDay;
-    if (!checkRateLimit(rateLimitKey, maxRequestsPerDay, 24 * 60 * 60 * 1000)) {
+    const rateLimitResult = await checkRateLimit(
+      rateLimitKey,
+      RATE_LIMIT_CONSTANTS.MAX_MODULE_ENABLES_PER_DAY,
+      RATE_LIMIT_CONSTANTS.RATE_LIMIT_WINDOW_MS
+    );
+
+    if (!rateLimitResult.allowed) {
       res.status(429).json({
         success: false,
         error: "Rate limit exceeded. Please try again later.",
+        retryAfter: rateLimitResult.retryAfterMs,
       });
       return;
     }

@@ -10,6 +10,7 @@ import {
 import { AppError } from '../middleware/error-handler';
 import { AuthenticatedRequest } from '../middleware/privy-auth';
 import crypto from 'crypto';
+import { generateSubscriptionToken } from '../services/subscription-token.service';
 
 /**
  * Create a new workflow
@@ -528,12 +529,16 @@ export const executeWorkflow = async (
       executionId,
     });
 
+    // Generate subscription token for SSE access
+    const subscriptionToken = await generateSubscriptionToken(executionId, userId);
+
     const response: ApiResponse = {
       success: true,
       data: {
         executionId,
         status: ExecutionStatus.PENDING,
         message: 'Workflow execution queued',
+        subscriptionToken, // Token for SSE subscription
       },
       meta: {
         timestamp: new Date().toISOString(),
@@ -637,4 +642,3 @@ export const getExecutionHistory = async (
     next(error);
   }
 };
-

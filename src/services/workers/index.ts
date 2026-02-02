@@ -228,8 +228,21 @@ export class SwapExecutionWorker {
     );
 
     try {
-      // TODO: Load wallet private key from secure storage
-      const privateKey = process.env.WALLET_PRIVATE_KEY || '';
+      // Validate wallet private key exists
+      const privateKey = process.env.WALLET_PRIVATE_KEY;
+
+      if (!privateKey) {
+        throw new Error(
+          'WALLET_PRIVATE_KEY environment variable is required for swap execution. ' +
+          'Please configure a wallet private key in your environment.'
+        );
+      }
+
+      if (!privateKey.startsWith('0x') || privateKey.length !== 66) {
+        throw new Error(
+          'Invalid WALLET_PRIVATE_KEY format. Must be a 66-character hex string starting with 0x.'
+        );
+      }
 
       const result = await swapExecutionService.executeSwap(
         nodeExecutionId,
@@ -323,4 +336,3 @@ export const closeWorkers = async (workers: {
 
   logger.info('BullMQ workers closed');
 };
-

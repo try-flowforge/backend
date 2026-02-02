@@ -15,6 +15,8 @@ import { nodeProcessorFactory } from './processors/NodeProcessorFactory';
 import { logger } from '../../utils/logger';
 import { pool } from '../../config/database';
 import { executionEventEmitter } from '../ExecutionEventEmitter';
+import { WORKFLOW_CONSTANTS } from '../../config/constants';
+import { invalidateExecutionTokens } from '../subscription-token.service';
 
 /**
  * Workflow Execution Engine
@@ -108,6 +110,9 @@ export class WorkflowExecutionEngine {
         timestamp: new Date(),
       });
 
+      // Invalidate subscription tokens for this execution
+      await invalidateExecutionTokens(executionId);
+
       return context;
     } catch (error) {
       logger.error({ error, executionId }, 'Workflow execution failed');
@@ -134,6 +139,9 @@ export class WorkflowExecutionEngine {
         error: context.error,
         timestamp: new Date(),
       });
+
+      // Invalidate subscription tokens for this execution
+      await invalidateExecutionTokens(executionId);
 
       return context;
     }
@@ -213,7 +221,7 @@ export class WorkflowExecutionEngine {
   ): Promise<void> {
     const visited = new Set<string>();
     const branchDecisions = new Map<string, string>();
-    const maxSteps = 100;
+    const maxSteps = WORKFLOW_CONSTANTS.MAX_STEPS_PER_EXECUTION;
     let stepCount = 0;
 
     // Start from trigger node
@@ -599,5 +607,3 @@ export class WorkflowExecutionEngine {
 
 // Export singleton instance
 export const workflowExecutionEngine = new WorkflowExecutionEngine();
-
-

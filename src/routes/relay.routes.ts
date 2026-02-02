@@ -4,6 +4,8 @@ import {
   AuthenticatedRequest,
 } from "../middleware/privy-auth";
 import * as relayController from "../controllers/relay.controller";
+import { validateBody } from "../middleware/validation";
+import { createSafeSchema, enableModuleSchema } from "../middleware/schemas";
 
 const router = Router();
 
@@ -17,6 +19,7 @@ router.use(verifyPrivyToken);
  */
 router.post(
   "/create-safe",
+  validateBody(createSafeSchema),
   (req: Request, res: Response, next: NextFunction) => {
     relayController.createSafe(req as AuthenticatedRequest, res).catch(next);
   }
@@ -27,6 +30,7 @@ router.post(
  */
 router.post(
   "/enable-module",
+  validateBody(enableModuleSchema),
   (req: Request, res: Response, next: NextFunction) => {
     relayController.enableModule(req as AuthenticatedRequest, res).catch(next);
   }

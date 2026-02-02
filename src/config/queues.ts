@@ -1,5 +1,6 @@
 import { Queue, QueueEvents, Job, QueueOptions } from 'bullmq';
 import { logger } from '../utils/logger';
+import { QUEUE_CONSTANTS } from './constants';
 
 // Queue Names
 export enum QueueName {
@@ -38,7 +39,7 @@ export interface SwapExecutionJobData {
   walletAddress: string;
 }
 
-// Queue Configuration
+// Queue Configuration - using centralized constants
 const defaultQueueOptions: QueueOptions = {
   connection: {
     host: process.env.REDIS_HOST || 'localhost',
@@ -47,17 +48,17 @@ const defaultQueueOptions: QueueOptions = {
   },
   defaultJobOptions: {
     removeOnComplete: {
-      count: 1000, // Keep last 1000 completed jobs
-      age: 24 * 3600, // Keep for 24 hours
+      count: QUEUE_CONSTANTS.MAX_COMPLETED_JOBS_RETENTION,
+      age: QUEUE_CONSTANTS.COMPLETED_JOBS_RETENTION_HOURS * 3600,
     },
     removeOnFail: {
-      count: 5000, // Keep last 5000 failed jobs
-      age: 7 * 24 * 3600, // Keep for 7 days
+      count: QUEUE_CONSTANTS.MAX_FAILED_JOBS_RETENTION,
+      age: QUEUE_CONSTANTS.FAILED_JOBS_RETENTION_DAYS * 24 * 3600,
     },
-    attempts: 3,
+    attempts: QUEUE_CONSTANTS.DEFAULT_RETRY_ATTEMPTS,
     backoff: {
       type: 'exponential',
-      delay: 2000,
+      delay: QUEUE_CONSTANTS.RETRY_BACKOFF_DELAY_MS,
     },
   },
 };
@@ -251,10 +252,10 @@ export const enqueueSwapExecution = async (
   data: SwapExecutionJobData
 ): Promise<Job<SwapExecutionJobData>> => {
   logger.info(
-    { 
-      provider: data.provider, 
+    {
+      provider: data.provider,
       chain: data.chain,
-      executionId: data.executionId 
+      executionId: data.executionId
     },
     'Enqueueing swap execution'
   );
@@ -302,10 +303,10 @@ export const scheduleWorkflowTrigger = async (
  */
 export const removeWorkflowTrigger = async (workflowId: string): Promise<void> => {
   logger.info({ workflowId }, 'Removing workflow trigger');
-  
+
   const jobId = `cron:${workflowId}`;
   const job = await workflowTriggerQueue.getJob(jobId);
-  
+
   if (job) {
     await job.remove();
   }
@@ -320,13 +321,13 @@ export const getJobStatus = async (
 ): Promise<any> => {
   const queue = getQueue(queueName);
   const job = await queue.getJob(jobId);
-  
+
   if (!job) {
     return null;
   }
 
   const state = await job.getState();
-  
+
   return {
     id: job.id,
     name: job.name,
@@ -344,7 +345,7 @@ export const getJobStatus = async (
  */
 export const getQueueMetrics = async (queueName: QueueName) => {
   const queue = getQueue(queueName);
-  
+
   const [waiting, active, completed, failed, delayed] = await Promise.all([
     queue.getWaitingCount(),
     queue.getActiveCount(),
@@ -414,4 +415,3 @@ export const closeQueues = async (): Promise<void> => {
     throw error;
   }
 };
-

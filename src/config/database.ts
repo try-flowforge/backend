@@ -1,6 +1,7 @@
 import { Pool, PoolConfig } from 'pg';
 import { logger } from '../utils/logger';
 import { config } from './config';
+import { DATABASE_CONSTANTS } from './constants';
 
 const poolConfig: PoolConfig = {
   host: config.database.host,
@@ -8,10 +9,14 @@ const poolConfig: PoolConfig = {
   database: config.database.database,
   user: config.database.user,
   password: config.database.password,
-  min: config.database.poolMin,
-  max: config.database.poolMax,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  // Pool size - use env vars if set, otherwise use constants
+  min: config.database.poolMin || DATABASE_CONSTANTS.POOL_MIN,
+  max: config.database.poolMax || DATABASE_CONSTANTS.POOL_MAX,
+  // Timeouts
+  idleTimeoutMillis: DATABASE_CONSTANTS.IDLE_TIMEOUT_MS,
+  connectionTimeoutMillis: DATABASE_CONSTANTS.CONNECTION_TIMEOUT_MS,
+  // Statement timeout for long-running queries
+  statement_timeout: DATABASE_CONSTANTS.STATEMENT_TIMEOUT_MS,
 };
 
 export const pool = new Pool(poolConfig);
@@ -47,7 +52,7 @@ export const getClient = async () => {
   const queryProxy = function (this: any, ...args: any[]): any {
     const start = Date.now();
     const result = originalQuery.apply(this, args as any) as any;
-    
+
     // Handle promise-based queries
     if (result && typeof result === 'object' && typeof result.then === 'function') {
       return result.then((queryResult: any) => {
