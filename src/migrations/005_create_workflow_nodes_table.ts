@@ -3,36 +3,49 @@ import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Creating workflow_nodes table...');
-    
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS workflow_nodes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-        type VARCHAR(50) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        config JSONB NOT NULL DEFAULT '{}',
-        position JSONB, -- {x, y} coordinates for UI
-        metadata JSONB, -- version, category, tags, etc.
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        CONSTRAINT valid_node_type CHECK (type IN ('TRIGGER', 'SWAP', 'CONDITION', 'WEBHOOK', 'DELAY'))
+
+    // Check if table exists
+    const tableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'workflow_nodes'
       );
     `);
-    
-    // Create indexes
+
+    if (!tableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE workflow_nodes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          config JSONB NOT NULL DEFAULT '{}',
+          position JSONB, -- {x, y} coordinates for UI
+          metadata JSONB, -- version, category, tags, etc.
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          CONSTRAINT valid_node_type CHECK (type IN ('TRIGGER', 'SWAP', 'CONDITION', 'WEBHOOK', 'DELAY'))
+        );
+      `);
+      logger.info('workflow_nodes table created');
+    } else {
+      logger.info('workflow_nodes table already exists, skipping creation');
+    }
+
+    // Create indexes (idempotent)
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_workflow_nodes_workflow_id ON workflow_nodes(workflow_id);
       CREATE INDEX IF NOT EXISTS idx_workflow_nodes_type ON workflow_nodes(type);
     `);
-    
-    logger.info('workflow_nodes table created successfully');
-    
+
+    logger.info('workflow_nodes table setup completed successfully');
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -45,13 +58,13 @@ export const up = async (pool: Pool): Promise<void> => {
 
 export const down = async (pool: Pool): Promise<void> => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Dropping workflow_nodes table...');
     await client.query('DROP TABLE IF EXISTS workflow_nodes CASCADE;');
-    
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

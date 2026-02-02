@@ -19,58 +19,75 @@ export async function up(): Promise<void> {
 
     await client.query("BEGIN");
 
-    // Drop the old constraint from workflow_nodes
+    // Drop the old constraint from workflow_nodes (idempotent)
     await client.query(`
       ALTER TABLE workflow_nodes
       DROP CONSTRAINT IF EXISTS valid_node_type;
     `);
 
-    // Add new constraint with all supported types
-    await client.query(`
-      ALTER TABLE workflow_nodes
-      ADD CONSTRAINT valid_node_type 
-      CHECK (type IN (
-        'TRIGGER', 
-        'SWAP', 
-        'LENDING', 
-        'CONDITION', 
-        'WEBHOOK', 
-        'DELAY',
-        'WALLET',
-        'START',
-        'IF',
-        'SWITCH',
-        'SLACK',
-        'TELEGRAM',
-        'EMAIL'
-      ));
+    // Check if constraint exists before adding
+    const constraintExists = await client.query(`
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'valid_node_type' 
+      AND conrelid = 'workflow_nodes'::regclass
     `);
 
-    // Also update node_executions table constraint
+    if (constraintExists.rows.length === 0) {
+      // Add new constraint with all supported types
+      await client.query(`
+        ALTER TABLE workflow_nodes
+        ADD CONSTRAINT valid_node_type 
+        CHECK (type IN (
+          'TRIGGER', 
+          'SWAP', 
+          'LENDING', 
+          'CONDITION', 
+          'WEBHOOK', 
+          'DELAY',
+          'WALLET',
+          'START',
+          'IF',
+          'SWITCH',
+          'SLACK',
+          'TELEGRAM',
+          'EMAIL'
+        ));
+      `);
+    }
+
+    // Also update node_executions table constraint (idempotent)
     await client.query(`
       ALTER TABLE node_executions
       DROP CONSTRAINT IF EXISTS valid_node_type;
     `);
 
-    await client.query(`
-      ALTER TABLE node_executions
-      ADD CONSTRAINT valid_node_type 
-      CHECK (node_type IN (
-        'TRIGGER', 
-        'SWAP', 
-        'LENDING', 
-        'CONDITION', 
-        'WEBHOOK', 
-        'DELAY',
-        'WALLET',
-        'START',
-        'IF',
-        'SWITCH',
-        'SLACK',
-        'TELEGRAM',
-        'EMAIL'
-      ));
+    const nodeExecConstraintExists = await client.query(`
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'valid_node_type' 
+      AND conrelid = 'node_executions'::regclass
     `);
+
+    if (nodeExecConstraintExists.rows.length === 0) {
+      await client.query(`
+        ALTER TABLE node_executions
+        ADD CONSTRAINT valid_node_type 
+        CHECK (node_type IN (
+          'TRIGGER', 
+          'SWAP', 
+          'LENDING', 
+          'CONDITION', 
+          'WEBHOOK', 
+          'DELAY',
+          'WALLET',
+          'START',
+          'IF',
+          'SWITCH',
+          'SLACK',
+          'TELEGRAM',
+          'EMAIL'
+        ));
+      `);
+    }
 
     await client.query("COMMIT");
 
@@ -127,3 +144,4 @@ export async function down(): Promise<void> {
     client.release();
   }
 }
+

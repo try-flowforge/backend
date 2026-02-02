@@ -3,32 +3,45 @@ import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Creating workflow_executions table...');
-    
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS workflow_executions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        triggered_by VARCHAR(50) NOT NULL,
-        triggered_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        initial_input JSONB, -- Initial data from trigger
-        status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-        error JSONB, -- Error details {message, code, nodeId, stack}
-        started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        completed_at TIMESTAMP WITH TIME ZONE,
-        retry_count INTEGER NOT NULL DEFAULT 0,
-        metadata JSONB, -- Additional execution metadata
-        CONSTRAINT valid_triggered_by CHECK (triggered_by IN ('CRON', 'WEBHOOK', 'MANUAL', 'EVENT')),
-        CONSTRAINT valid_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'))
+
+    // Check if table exists
+    const tableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'workflow_executions'
       );
     `);
-    
-    // Create indexes
+
+    if (!tableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE workflow_executions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+          user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          triggered_by VARCHAR(50) NOT NULL,
+          triggered_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          initial_input JSONB, -- Initial data from trigger
+          status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+          error JSONB, -- Error details {message, code, nodeId, stack}
+          started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          completed_at TIMESTAMP WITH TIME ZONE,
+          retry_count INTEGER NOT NULL DEFAULT 0,
+          metadata JSONB, -- Additional execution metadata
+          CONSTRAINT valid_triggered_by CHECK (triggered_by IN ('CRON', 'WEBHOOK', 'MANUAL', 'EVENT')),
+          CONSTRAINT valid_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'))
+        );
+      `);
+      logger.info('workflow_executions table created');
+    } else {
+      logger.info('workflow_executions table already exists, skipping creation');
+    }
+
+    // Create indexes (idempotent)
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow_id ON workflow_executions(workflow_id);
       CREATE INDEX IF NOT EXISTS idx_workflow_executions_user_id ON workflow_executions(user_id);
@@ -36,9 +49,9 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_workflow_executions_started_at ON workflow_executions(started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_workflow_executions_composite ON workflow_executions(workflow_id, status, started_at DESC);
     `);
-    
-    logger.info('workflow_executions table created successfully');
-    
+
+    logger.info('workflow_executions table setup completed successfully');
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -51,13 +64,13 @@ export const up = async (pool: Pool): Promise<void> => {
 
 export const down = async (pool: Pool): Promise<void> => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Dropping workflow_executions table...');
     await client.query('DROP TABLE IF EXISTS workflow_executions CASCADE;');
-    
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
