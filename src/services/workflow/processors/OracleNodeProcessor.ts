@@ -19,12 +19,12 @@ const AGGREGATOR_V3_ABI = [
 ];
 
 /**
- * Oracle Node Processor
+ * Chainlink Price Oracle Node Processor
  * Fetches data from Chainlink Data Feeds (AggregatorV3Interface)
  */
 export class OracleNodeProcessor implements INodeProcessor {
   getNodeType(): NodeType {
-    return NodeType.PRICE_ORACLE;
+    return NodeType.CHAINLINK_PRICE_ORACLE;
   }
 
   async execute(input: NodeExecutionInput): Promise<NodeExecutionOutput> {
@@ -127,7 +127,7 @@ export class OracleNodeProcessor implements INodeProcessor {
         output: null,
         error: {
           message: (error as Error).message,
-          code: 'PRICE_ORACLE_NODE_ERROR',
+          code: 'CHAINLINK_PRICE_ORACLE_NODE_ERROR',
           details: error,
         },
         metadata: {

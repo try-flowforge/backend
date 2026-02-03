@@ -29,12 +29,38 @@ export interface AuthenticatedRequest extends Request {
 
 /**
  * Middleware to verify Privy access token and extract user wallet address
+ * Can be bypassed for testing by setting DISABLE_AUTH=true
  */
 export const verifyPrivyToken = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  // ========================================
+  // TESTING MODE - BYPASS AUTHENTICATION
+  // ========================================
+  if (process.env.DISABLE_AUTH === 'true') {
+    const testUserId = process.env.TEST_USER_ID || "test-user-id";
+    const testWalletAddress = process.env.TEST_WALLET_ADDRESS || "0x742d35cc6634c0532925a3b844bc9e7595f0beb";
+    
+    (req as AuthenticatedRequest).userId = testUserId;
+    (req as AuthenticatedRequest).userWalletAddress = testWalletAddress.toLowerCase();
+    
+    logger.warn(
+      {
+        userId: testUserId,
+        walletAddress: testWalletAddress,
+      },
+      "⚠️  AUTHENTICATION DISABLED - Using test credentials"
+    );
+    
+    next();
+    return;
+  }
+
+  // ========================================
+  // PRODUCTION MODE - NORMAL AUTHENTICATION
+  // ========================================
   try {
     const client = getPrivyClient();
 

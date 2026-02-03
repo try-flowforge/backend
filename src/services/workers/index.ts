@@ -63,17 +63,23 @@ export class WorkflowExecutionWorker {
         workflowId,
         userId,
         triggeredBy as TriggerType,
-        initialInput
+        initialInput,
+        job.data.executionId || job.id as string // Use execution ID from job data or job ID as fallback
       );
 
       if (context.status === ExecutionStatus.FAILED) {
         throw new Error(context.error?.message || 'Workflow execution failed');
       }
 
+      // Convert node outputs to a format that can be serialized (handle BigInt)
+      const nodeOutputs = Array.from(context.nodeOutputs.entries()).map(([key, value]) => {
+        return [key, JSON.parse(JSON.stringify(value, (_k, v) => typeof v === 'bigint' ? v.toString() : v))];
+      });
+
       return {
         executionId: context.executionId,
         status: context.status,
-        nodeOutputs: Array.from(context.nodeOutputs.entries()),
+        nodeOutputs,
       };
     } catch (error) {
       logger.error(
@@ -336,3 +342,4 @@ export const closeWorkers = async (workers: {
 
   logger.info('BullMQ workers closed');
 };
+

@@ -30,7 +30,8 @@ export class WorkflowExecutionEngine {
     workflowId: string,
     userId: string,
     triggeredBy: TriggerType,
-    initialInput?: Record<string, any>
+    initialInput?: Record<string, any>,
+    providedExecutionId?: string
   ): Promise<WorkflowExecutionContext> {
     logger.info({ workflowId, userId, triggeredBy }, 'Starting workflow execution');
 
@@ -39,7 +40,8 @@ export class WorkflowExecutionEngine {
       workflowId,
       userId,
       triggeredBy,
-      initialInput
+      initialInput,
+      providedExecutionId
     );
 
     const context: WorkflowExecutionContext = {
@@ -461,27 +463,51 @@ export class WorkflowExecutionEngine {
     workflowId: string,
     userId: string,
     triggeredBy: TriggerType,
-    initialInput?: Record<string, any>
+    initialInput?: Record<string, any>,
+    providedExecutionId?: string
   ): Promise<string> {
-    const result = await pool.query<{ id: string }>(
-      `INSERT INTO workflow_executions (
-        workflow_id,
-        user_id,
-        triggered_by,
-        initial_input,
-        status
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING id`,
-      [
-        workflowId,
-        userId,
-        triggeredBy,
-        initialInput ? JSON.stringify(initialInput) : null,
-        ExecutionStatus.PENDING,
-      ]
-    );
-
-    return result.rows[0].id;
+    // If execution ID is provided, use it; otherwise let the database generate one
+    if (providedExecutionId) {
+      const result = await pool.query<{ id: string }>(
+        `INSERT INTO workflow_executions (
+          id,
+          workflow_id,
+          user_id,
+          triggered_by,
+          initial_input,
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id`,
+        [
+          providedExecutionId,
+          workflowId,
+          userId,
+          triggeredBy,
+          initialInput ? JSON.stringify(initialInput) : null,
+          ExecutionStatus.PENDING,
+        ]
+      );
+      return result.rows[0].id;
+    } else {
+      const result = await pool.query<{ id: string }>(
+        `INSERT INTO workflow_executions (
+          workflow_id,
+          user_id,
+          triggered_by,
+          initial_input,
+          status
+        ) VALUES ($1, $2, $3, $4, $5)
+        RETURNING id`,
+        [
+          workflowId,
+          userId,
+          triggeredBy,
+          initialInput ? JSON.stringify(initialInput) : null,
+          ExecutionStatus.PENDING,
+        ]
+      );
+      return result.rows[0].id;
+    }
   }
 
   /**
@@ -492,13 +518,18 @@ export class WorkflowExecutionEngine {
     status: ExecutionStatus,
     error?: any
   ): Promise<void> {
+    // Custom JSON replacer to handle BigInt values
+    const jsonReplacer = (_key: string, value: any) => {
+      return typeof value === 'bigint' ? value.toString() : value;
+    };
+
     const fields = ['status = $1'];
     const values: any[] = [status];
     let paramIndex = 2;
 
     if (error) {
       fields.push(`error = $${paramIndex}`);
-      values.push(JSON.stringify(error));
+      values.push(JSON.stringify(error, jsonReplacer));
       paramIndex++;
     }
 
@@ -551,6 +582,11 @@ export class WorkflowExecutionEngine {
     nodeExecutionId: string,
     result: any
   ): Promise<void> {
+    // Custom JSON replacer to handle BigInt values
+    const jsonReplacer = (_key: string, value: any) => {
+      return typeof value === 'bigint' ? value.toString() : value;
+    };
+
     await pool.query(
       `UPDATE node_executions SET
         output_data = $1,
@@ -560,9 +596,9 @@ export class WorkflowExecutionEngine {
         duration_ms = $5
       WHERE id = $6`,
       [
-        JSON.stringify(result.output),
+        JSON.stringify(result.output, jsonReplacer),
         result.success ? ExecutionStatus.SUCCESS : ExecutionStatus.FAILED,
-        result.error ? JSON.stringify(result.error) : null,
+        result.error ? JSON.stringify(result.error, jsonReplacer) : null,
         result.metadata.completedAt,
         result.metadata.duration,
         nodeExecutionId,
@@ -607,3 +643,5 @@ export class WorkflowExecutionEngine {
 
 // Export singleton instance
 export const workflowExecutionEngine = new WorkflowExecutionEngine();
+
+
