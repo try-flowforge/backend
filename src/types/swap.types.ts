@@ -6,6 +6,7 @@
 export enum SupportedChain {
   ARBITRUM = "ARBITRUM",
   ARBITRUM_SEPOLIA = "ARBITRUM_SEPOLIA",
+  ETHEREUM_SEPOLIA = "ETHEREUM_SEPOLIA",
 }
 
 // Supported Swap Providers
