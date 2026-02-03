@@ -21,6 +21,7 @@ import * as migration017 from "./017_create_telegram_verification_codes_table";
 import * as migration018 from "./018_cleanup_demo_users";
 import * as migration019 from "./019_create_lending_executions_table";
 import * as migration020 from "./020_add_lending_node_type";
+import * as migration021 from "./021_add_aave_compound_node_types";
 
 // Load environment variables
 dotenv.config();
@@ -160,6 +161,12 @@ const migrations: Migration[] = [
     name: "020_add_lending_node_type",
     up: migration020.up,
     down: migration020.down,
+  },
+  {
+    id: 21,
+    name: "021_create_flowforge_workflows_table",
+    up: migration021.up,
+    down: migration021.down,
   },
 ];
 
