@@ -40,3 +40,6 @@ export * from './swap.types';
 // Re-export all lending-related types
 export * from './lending.types';
 
+// Re-export all oracle-related types
+export * from './oracle.types';
+

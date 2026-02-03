@@ -6,7 +6,6 @@
 export enum SupportedChain {
   ARBITRUM = "ARBITRUM",
   ARBITRUM_SEPOLIA = "ARBITRUM_SEPOLIA",
-  ETHEREUM_SEPOLIA = "ETHEREUM_SEPOLIA",
 }
 
 // Supported Swap Providers
@@ -21,6 +20,7 @@ export enum NodeType {
   TRIGGER = "TRIGGER",
   START = "START",
   SWAP = "SWAP",
+  PRICE_ORACLE = "PRICE_ORACLE",
   IF = "IF",
   SWITCH = "SWITCH",
   LENDING = 'LENDING',
