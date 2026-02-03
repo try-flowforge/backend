@@ -9,6 +9,7 @@ import { SlackNodeProcessor } from './SlackNodeProcessor';
 import { TelegramNodeProcessor } from './TelegramNodeProcessor';
 import { StartNodeProcessor } from './StartNodeProcessor';
 import { WalletNodeProcessor } from './WalletNodeProcessor';
+import { OracleNodeProcessor } from './OracleNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -54,6 +55,9 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
 
       // Register Wallet processor
       this.registerProcessor(new WalletNodeProcessor());
+
+      // Register Price Oracle processor
+      this.registerProcessor(new OracleNodeProcessor());
 
       logger.info(
         { processorCount: this.processors.size },
