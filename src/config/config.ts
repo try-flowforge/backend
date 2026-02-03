@@ -88,11 +88,13 @@ export const encryptionConfig = {
  * Supported Chain IDs
  */
 export const SUPPORTED_CHAINS = {
+  ETHEREUM_SEPOLIA: 11155111,
   ARBITRUM_SEPOLIA: 421614,
   ARBITRUM_MAINNET: 42161,
 } as const;
 
 export type SupportedChainId =
+  | typeof SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
   | typeof SUPPORTED_CHAINS.ARBITRUM_SEPOLIA
   | typeof SUPPORTED_CHAINS.ARBITRUM_MAINNET;
 
@@ -118,6 +120,13 @@ export const relayerConfig = {
  * Chain-specific configurations
  */
 export const chainConfigs: Record<SupportedChainId, ChainConfig> = {
+  [SUPPORTED_CHAINS.ETHEREUM_SEPOLIA]: {
+    chainId: SUPPORTED_CHAINS.ETHEREUM_SEPOLIA,
+    rpcUrl: getRequiredEnv("ETHEREUM_SEPOLIA_RPC_URL"),
+    factoryAddress: getRequiredEnv("SAFE_FACTORY_ADDRESS_11155111"),
+    moduleAddress: getRequiredEnv("SAFE_MODULE_ADDRESS_11155111"),
+    name: "Ethereum Sepolia",
+  },
   [SUPPORTED_CHAINS.ARBITRUM_SEPOLIA]: {
     chainId: SUPPORTED_CHAINS.ARBITRUM_SEPOLIA,
     rpcUrl: getRequiredEnv("ARBITRUM_SEPOLIA_RPC_URL"),
@@ -138,6 +147,9 @@ export const chainConfigs: Record<SupportedChainId, ChainConfig> = {
  * Helper to get chain config by chain ID
  */
 export function getChainConfig(chainId: number): ChainConfig {
+  if (chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA) {
+    return chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA];
+  }
   if (chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA) {
     return chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA];
   }
@@ -152,6 +164,7 @@ export function getChainConfig(chainId: number): ChainConfig {
  */
 export function isSupportedChain(chainId: number): chainId is SupportedChainId {
   return (
+    chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA ||
     chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA ||
     chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET
   );
@@ -162,6 +175,10 @@ export function isSupportedChain(chainId: number): chainId is SupportedChainId {
  * @deprecated Use chainConfigs[chainId] instead
  */
 export const safeConfig = {
+  factoryAddress11155111:
+    chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].factoryAddress,
+  moduleAddress11155111:
+    chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].moduleAddress,
   factoryAddress421614:
     chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].factoryAddress,
   moduleAddress421614:

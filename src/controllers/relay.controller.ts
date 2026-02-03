@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import { AuthenticatedRequest } from "../middleware/privy-auth";
 import { getRelayerService } from "../services/relayer.service";
 import { safeRelayValidationService } from "../services/safeRelayValidation.service";
+import { acquireLock, releaseLock } from "../services/distributed-lock.service";
 import { logger } from "../utils/logger";
 import {
   config,
@@ -17,15 +18,32 @@ import { checkRateLimit } from "../services/rate-limiter.service";
 import { RATE_LIMIT_CONSTANTS } from "../config/constants";
 
 /**
+ * Result of user creation/update operation
+ */
+interface UserSyncResult {
+  success: boolean;
+  userCreated: boolean;
+  safeAddressUpdated: boolean;
+  error?: string;
+}
+
+/**
  * Ensure user exists in database and update their Safe wallet address
  * Creates user if they don't exist, then updates the Safe address for the chain
+ * Returns structured result for tracking - does not throw to avoid failing SAFE creation
  */
 async function ensureUserExistsAndUpdateSafe(
   userId: string,
   walletAddress: string,
   safeAddress: string,
   chainId: SupportedChainId
-): Promise<void> {
+): Promise<UserSyncResult> {
+  const result: UserSyncResult = {
+    success: false,
+    userCreated: false,
+    safeAddressUpdated: false,
+  };
+
   try {
     // Check if user exists
     let user = await UserModel.findById(userId);
@@ -57,11 +75,12 @@ async function ensureUserExistsAndUpdateSafe(
         onboarded_at: new Date(),
       });
 
+      result.userCreated = true;
       logger.info({ userId, email }, 'User created in database');
     }
 
     // Update the Safe wallet address for the appropriate chain
-    const isTestnet = chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA;
+    const isTestnet = chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA || chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA;
 
     if (isTestnet) {
       await UserModel.updateSafeWalletAddresses(userId, safeAddress, undefined);
@@ -70,9 +89,27 @@ async function ensureUserExistsAndUpdateSafe(
       await UserModel.updateSafeWalletAddresses(userId, undefined, safeAddress);
       logger.info({ userId, safeAddress, chain: 'mainnet' }, 'Updated user Safe wallet address');
     }
+
+    result.safeAddressUpdated = true;
+    result.success = true;
+    return result;
   } catch (error) {
-    logger.error({ error, userId, walletAddress, safeAddress }, 'Failed to ensure user exists and update Safe');
-    // Don't throw - we don't want to fail the Safe creation just because user update failed
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    result.error = errorMessage;
+    logger.error(
+      {
+        error: errorMessage,
+        userId,
+        walletAddress,
+        safeAddress,
+        chainId,
+        userCreated: result.userCreated,
+        safeAddressUpdated: result.safeAddressUpdated,
+      },
+      'CRITICAL: Failed to sync user with database - SAFE may be orphaned'
+    );
+
+    return result;
   }
 }
 
@@ -85,6 +122,9 @@ export const createSafe = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
+  let lockValue: string | undefined;
+  let lockKey: string | undefined;
+
   try {
     const { chainId } = req.body;
 
@@ -92,7 +132,7 @@ export const createSafe = async (
     if (!isSupportedChain(chainId)) {
       res.status(400).json({
         success: false,
-        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
+        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ETHEREUM_SEPOLIA} (Ethereum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
       });
       return;
     }
@@ -103,6 +143,22 @@ export const createSafe = async (
     const userId = req.userId;
 
     const chainConfig = getChainConfig(supportedChainId);
+
+    // Acquire distributed lock to prevent race conditions
+    // Lock is per-user per-chain to allow parallel creation on different chains
+    lockKey = `safe-creation:${userId}:${supportedChainId}`;
+    const lockResult = await acquireLock(lockKey, { ttlSeconds: 120 });
+
+    if (!lockResult.acquired) {
+      logger.warn({ userId, chainId: supportedChainId }, "SAFE creation already in progress");
+      res.status(409).json({
+        success: false,
+        error: "SAFE creation already in progress. Please wait and try again.",
+        code: "CREATION_IN_PROGRESS",
+      });
+      return;
+    }
+    lockValue = lockResult.lockValue;
 
     logger.info(
       {
@@ -148,11 +204,15 @@ export const createSafe = async (
       // Ensure user exists in DB and has their Safe address recorded
       await ensureUserExistsAndUpdateSafe(userId, userAddress, existingSafeAddress, supportedChainId);
 
+      // Release lock before returning
+      await releaseLock(lockKey, lockValue!);
+
       res.json({
         success: true,
         data: {
           safeAddress: existingSafeAddress,
           txHash: null, // No new transaction was created
+          alreadyExisted: true,
         },
       });
       return;
@@ -168,6 +228,9 @@ export const createSafe = async (
     );
 
     if (!rateLimitResult.allowed) {
+      // Release lock before returning
+      await releaseLock(lockKey, lockValue!);
+
       res.status(429).json({
         success: false,
         error: "Rate limit exceeded. Please try again later.",
@@ -220,6 +283,10 @@ export const createSafe = async (
         },
         "SafeWalletCreated event not found in receipt"
       );
+
+      // Release lock before returning
+      await releaseLock(lockKey, lockValue!);
+
       res.status(500).json({
         success: false,
         error: "Failed to retrieve Safe address from transaction",
@@ -245,15 +312,24 @@ export const createSafe = async (
     // Ensure user exists in DB and has their Safe address recorded
     await ensureUserExistsAndUpdateSafe(userId, userAddress, safeAddress, supportedChainId);
 
+    // Release lock before returning
+    await releaseLock(lockKey, lockValue!);
+
     res.json({
       success: true,
       data: {
         safeAddress,
         txHash,
+        alreadyExisted: false,
       },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Ensure lock is released on error
+    if (lockKey && lockValue) {
+      await releaseLock(lockKey, lockValue);
+    }
 
     logger.error(
       {
@@ -296,7 +372,7 @@ export const enableModule = async (
     if (!isSupportedChain(chainId)) {
       res.status(400).json({
         success: false,
-        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
+        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ETHEREUM_SEPOLIA} (Ethereum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
       });
       return;
     }
@@ -306,6 +382,34 @@ export const enableModule = async (
 
     const userAddress = req.userWalletAddress;
     const userId = req.userId;
+
+    // Step 0: Check if module is already enabled (idempotency)
+    // Do this BEFORE rate limiting to avoid consuming quota for no-op requests
+    const moduleEnabledCheck = await safeRelayValidationService.isModuleEnabled(
+      safeAddress,
+      supportedChainId
+    );
+
+    if (moduleEnabledCheck.enabled) {
+      logger.info(
+        {
+          userId,
+          safeAddress,
+          chainId: supportedChainId,
+          chainName: chainConfig.name,
+        },
+        "Module already enabled, returning success"
+      );
+
+      res.json({
+        success: true,
+        data: {
+          txHash: null,
+          alreadyEnabled: true,
+        },
+      });
+      return;
+    }
 
     // Rate limiting: max module enable per user per day
     const rateLimitKey = `enable-module:${userId}`;
