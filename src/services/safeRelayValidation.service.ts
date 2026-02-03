@@ -367,6 +367,51 @@ export class SafeRelayValidationService {
       };
     }
   }
+
+  /**
+   * Check if module is already enabled on the Safe (idempotency check)
+   * Returns true if module is already enabled, false otherwise
+   */
+  async isModuleEnabled(
+    safeAddress: string,
+    chainId: SupportedChainId
+  ): Promise<{ enabled: boolean; error?: string }> {
+    try {
+      const moduleAddress = this.getSafeModuleAddress(chainId);
+      const relayerService = getRelayerService();
+      const provider = relayerService.getProvider(chainId);
+
+      const SAFE_ABI = ["function isModuleEnabled(address module) view returns (bool)"];
+      const safeContract = new ethers.Contract(safeAddress, SAFE_ABI, provider);
+
+      const isEnabled = await safeContract.isModuleEnabled(moduleAddress);
+
+      logger.debug(
+        {
+          safeAddress,
+          chainId,
+          moduleAddress,
+          isEnabled,
+        },
+        "Checked module enabled status"
+      );
+
+      return { enabled: isEnabled };
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          safeAddress,
+          chainId,
+        },
+        "Failed to check if module is enabled"
+      );
+      return {
+        enabled: false,
+        error: error instanceof Error ? error.message : "Failed to check module status",
+      };
+    }
+  }
 }
 
 // Singleton instance
