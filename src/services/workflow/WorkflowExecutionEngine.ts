@@ -486,6 +486,21 @@ export class WorkflowExecutionEngine {
   ): Promise<string> {
     // If execution ID is provided, use it; otherwise let the database generate one
     if (providedExecutionId) {
+      // Check if execution already exists (e.g., from a retry)
+      const existing = await pool.query<{ id: string }>(
+        `SELECT id FROM workflow_executions WHERE id = $1`,
+        [providedExecutionId]
+      );
+      
+      if (existing.rows.length > 0) {
+        logger.info(
+          { executionId: providedExecutionId },
+          'Workflow execution already exists, reusing existing execution'
+        );
+        return existing.rows[0].id;
+      }
+    
+      // Insert new execution with provided ID
       const result = await pool.query<{ id: string }>(
         `INSERT INTO workflow_executions (
           id,
@@ -505,6 +520,22 @@ export class WorkflowExecutionEngine {
           ExecutionStatus.PENDING,
         ]
       );
+
+      // If insert was skipped due to conflict, fetch the existing one
+      if (result.rows.length === 0) {
+        const existingAfterConflict = await pool.query<{ id: string }>(
+          `SELECT id FROM workflow_executions WHERE id = $1`,
+          [providedExecutionId]
+        );
+        if (existingAfterConflict.rows.length > 0) {
+          logger.info(
+            { executionId: providedExecutionId },
+            'Workflow execution created by concurrent request, reusing existing execution'
+          );
+          return existingAfterConflict.rows[0].id;
+        }
+      }
+
       return result.rows[0].id;
     } else {
       const result = await pool.query<{ id: string }>(
