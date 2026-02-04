@@ -6,6 +6,7 @@ import {
 import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { emailService } from '../../email.service';
 import { logger } from '../../../utils/logger';
+import { templateString } from '../../../utils/template-engine';
 
 /**
  * Email Node Configuration
@@ -43,20 +44,24 @@ export class EmailNodeProcessor implements INodeProcessor {
         throw new Error('Email service not configured. Check SMTP environment variables.');
       }
 
+      // Template subject and body with input data from previous nodes
+      const templatedSubject = templateString(config.subject, input.inputData);
+      const templatedBody = templateString(config.body, input.inputData);
+
       // Send email
       logger.info(
         {
           nodeId: input.nodeId,
           to: config.to,
-          subject: config.subject,
+          subject: templatedSubject,
         },
         'Sending email from workflow'
       );
 
       const result = await emailService.sendEmail({
         to: config.to,
-        subject: config.subject,
-        body: config.body,
+        subject: templatedSubject,
+        body: templatedBody,
       });
 
       const endTime = new Date();
@@ -98,7 +103,8 @@ export class EmailNodeProcessor implements INodeProcessor {
           sent: true,
           messageId: result.messageId,
           to: config.to,
-          subject: config.subject,
+          subject: templatedSubject,
+          body: templatedBody,
           sentAt: new Date().toISOString(),
         },
         metadata: {

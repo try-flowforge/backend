@@ -11,6 +11,7 @@ import { StartNodeProcessor } from './StartNodeProcessor';
 import { WalletNodeProcessor } from './WalletNodeProcessor';
 import { OracleNodeProcessor } from './OracleNodeProcessor';
 import { PythOracleNodeProcessor } from './PythOracleNodeProcessor';
+import { LlmTransformNodeProcessor } from './LlmTransformNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -62,6 +63,9 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
 
       // Register Pyth Price Oracle processor
       this.registerProcessor(new PythOracleNodeProcessor());
+
+      // Register LLM Transform processor
+      this.registerProcessor(new LlmTransformNodeProcessor());
 
       logger.info(
         { processorCount: this.processors.size },

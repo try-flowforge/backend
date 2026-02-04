@@ -22,6 +22,7 @@ import * as migration018 from "./018_cleanup_demo_users";
 import * as migration019 from "./019_create_lending_executions_table";
 import * as migration020 from "./020_add_lending_node_type";
 import * as migration021 from "./021_add_aave_compound_node_types";
+import * as migration022 from "./022_add_llm_transform_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -167,6 +168,12 @@ const migrations: Migration[] = [
     name: "021_add_aave_compound_node_types",
     up: migration021.up,
     down: migration021.down,
+  },
+  {
+    id: 22,
+    name: "022_add_llm_transform_node_type",
+    up: migration022.up,
+    down: migration022.down,
   },
 ];
 

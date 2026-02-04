@@ -7,6 +7,7 @@ import {
 import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { SlackConnectionModel } from '../../../models/slack';
 import { logger } from '../../../utils/logger';
+import { templateString } from '../../../utils/template-engine';
 
 /**
  * Slack Node Processor
@@ -41,8 +42,64 @@ export class SlackNodeProcessor implements INodeProcessor {
                 throw new Error('Slack connection not found or does not belong to user');
             }
 
+            // Debug: Log input data to see what's available
+            logger.info(
+                {
+                    nodeId: input.nodeId,
+                    inputDataKeys: Object.keys(input.inputData || {}),
+                    blocksKeys: Object.keys(input.inputData?.blocks || {}),
+                    hasBlocks: !!input.inputData?.blocks,
+                    originalMessage: config.message,
+                },
+                'Slack node input data (debug)'
+            );
+
+            // Log the blocks namespace content
+            if (input.inputData?.blocks) {
+                Object.keys(input.inputData.blocks).forEach(blockId => {
+                    const blockData = input.inputData.blocks[blockId];
+                    logger.info(
+                        {
+                            nodeId: input.nodeId,
+                            blockId,
+                            blockDataKeys: Object.keys(blockData || {}),
+                            blockDataSample: JSON.stringify(blockData).substring(0, 300),
+                        },
+                        'Slack node - available block data'
+                    );
+                });
+            }
+
+            // Check if using old static message and suggest using templates
+            const isOldStaticMessage = config.message === "Hello from FlowForge! 🚀" || 
+                                        config.message === "Hello from FlowForge!" ||
+                                        (!config.message.includes("{{") && config.message.trim().length > 0);
+            
+            if (isOldStaticMessage) {
+                logger.warn(
+                    {
+                        nodeId: input.nodeId,
+                        message: config.message,
+                        suggestion: "Consider using template syntax like {{blocks.<nodeId>.text}} to include dynamic content from previous blocks",
+                        availableBlocks: Object.keys(input.inputData?.blocks || {}),
+                    },
+                    'Slack node using static message - templates available'
+                );
+            }
+
             // Template the message with input data from previous nodes
-            const message = this.templateMessage(config.message, input.inputData);
+            const message = templateString(config.message, input.inputData);
+
+            logger.info(
+                {
+                    nodeId: input.nodeId,
+                    originalMessage: config.message,
+                    templatedMessage: message,
+                    messageChanged: config.message !== message,
+                    isOldStaticMessage,
+                },
+                'Slack message templating (debug)'
+            );
 
             // Send message via webhook or OAuth
             let sendResult: { success: boolean; error?: string };
@@ -161,27 +218,6 @@ export class SlackNodeProcessor implements INodeProcessor {
         }
 
         return { valid: true };
-    }
-
-    /**
-     * Template message by replacing {{key}} placeholders with actual values
-     */
-    private templateMessage(template: string, data: Record<string, any>): string {
-        if (!data || typeof data !== 'object') {
-            return template;
-        }
-
-        return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-            const value = this.getValueByPath(data, path.trim());
-            return value !== undefined ? String(value) : match;
-        });
-    }
-
-    /**
-     * Get nested value from object by path (e.g., "swap.txHash")
-     */
-    private getValueByPath(obj: any, path: string): any {
-        return path.split('.').reduce((current, key) => current?.[key], obj);
     }
 
     /**

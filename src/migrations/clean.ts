@@ -21,6 +21,8 @@ import * as migration017 from "./017_create_telegram_verification_codes_table";
 import * as migration018 from "./018_cleanup_demo_users";
 import * as migration019 from "./019_create_lending_executions_table";
 import * as migration020 from "./020_add_lending_node_type";
+import * as migration021 from "./021_add_aave_compound_node_types";
+import * as migration022 from "./022_add_llm_transform_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -119,6 +121,8 @@ const resetDatabase = async (): Promise<void> => {
     await migration018.up();
     await migration019.up(pool);
     await migration020.up(pool);
+    await migration021.up(pool);
+    await migration022.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -207,6 +211,14 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [20, "020_add_lending_node_type"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [21, "021_add_aave_compound_node_types"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [22, "022_add_llm_transform_node_type"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {

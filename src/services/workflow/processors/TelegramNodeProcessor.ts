@@ -7,6 +7,7 @@ import {
 import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { TelegramConnectionModel } from '../../../models/telegram';
 import { logger } from '../../../utils/logger';
+import { templateString } from '../../../utils/template-engine';
 
 // Telegram API configuration (using centralized bot)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -57,7 +58,7 @@ export class TelegramNodeProcessor implements INodeProcessor {
             }
 
             // Template the message with input data from previous nodes
-            const message = this.templateMessage(config.message, input.inputData);
+            const message = templateString(config.message, input.inputData);
 
             // Send message via Telegram Bot API
             const sendResult = await this.sendMessage(chatId, message);
@@ -160,27 +161,6 @@ export class TelegramNodeProcessor implements INodeProcessor {
         }
 
         return { valid: true };
-    }
-
-    /**
-     * Template message by replacing {{key}} placeholders with actual values
-     */
-    private templateMessage(template: string, data: Record<string, any>): string {
-        if (!data || typeof data !== 'object') {
-            return template;
-        }
-
-        return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-            const value = this.getValueByPath(data, path.trim());
-            return value !== undefined ? String(value) : match;
-        });
-    }
-
-    /**
-     * Get nested value from object by path (e.g., "swap.txHash")
-     */
-    private getValueByPath(obj: any, path: string): any {
-        return path.split('.').reduce((current, key) => current?.[key], obj);
     }
 
     /**
