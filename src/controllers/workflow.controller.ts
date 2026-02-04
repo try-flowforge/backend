@@ -13,6 +13,48 @@ import crypto from 'crypto';
 import { generateSubscriptionToken } from '../services/subscription-token.service';
 
 /**
+ * Translate placeholder node IDs in templates from frontend IDs to database UUIDs.
+ * Replaces {{blocks.oldNodeId...}} with {{blocks.newUUID...}}
+ */
+function translatePlaceholderIds(text: string, idMap: Map<string, string>): string {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+
+  return text.replace(/\{\{blocks\.([^.}]+)/g, (match, nodeId) => {
+    const realId = idMap.get(nodeId);
+    return realId ? `{{blocks.${realId}` : match;
+  });
+}
+
+/**
+ * Translate all placeholder IDs in a node config object
+ */
+function translateNodeConfigPlaceholders(
+  config: Record<string, any>,
+  idMap: Map<string, string>
+): Record<string, any> {
+  const newConfig = { ...config };
+
+  // Fields that may contain template placeholders
+  const templateFields = [
+    'userPromptTemplate',
+    'systemPrompt',
+    'message',
+    'body',
+    'subject',
+  ];
+
+  for (const field of templateFields) {
+    if (newConfig[field] && typeof newConfig[field] === 'string') {
+      newConfig[field] = translatePlaceholderIds(newConfig[field], idMap);
+    }
+  }
+
+  return newConfig;
+}
+
+/**
  * Create a new workflow
  */
 export const createWorkflow = async (
@@ -118,6 +160,18 @@ export const createWorkflow = async (
 
         nodeIds.set(node.id, nodeResult.rows[0].id);
       }
+
+      // Translate placeholder IDs in node configs (after all nodes have UUIDs)
+      for (const node of nodes) {
+        const realNodeId = nodeIds.get(node.id);
+        if (realNodeId && node.config) {
+          const translatedConfig = translateNodeConfigPlaceholders(node.config, nodeIds);
+          await client.query(
+            'UPDATE workflow_nodes SET config = $1 WHERE id = $2',
+            [JSON.stringify(translatedConfig), realNodeId]
+          );
+        }
+      }      
 
       // Update trigger node ID
       if (triggerNodeId) {
@@ -584,6 +638,20 @@ export const fullUpdateWorkflow = async (
         }
       }
 
+      // Translate placeholder IDs in node configs (after all nodes have UUIDs)
+      if (nodes && Array.isArray(nodes)) {
+        for (const node of nodes) {
+          const realNodeId = nodeIds.get(node.id);
+          if (realNodeId && node.config) {
+            const translatedConfig = translateNodeConfigPlaceholders(node.config, nodeIds);
+            await client.query(
+              'UPDATE workflow_nodes SET config = $1 WHERE id = $2',
+              [JSON.stringify(translatedConfig), realNodeId]
+            );
+          }
+        }
+      }
+      
       // Update trigger node ID
       if (triggerNodeId) {
         const realTriggerNodeId = nodeIds.get(triggerNodeId);

@@ -440,9 +440,70 @@ export class WorkflowExecutionEngine {
       }
     }
 
+    // Add blocks namespace with all upstream ancestors
+    // This allows any node to reference any upstream node's output via {{blocks.<nodeId>}}
+    const upstreamAncestors = this.getAllUpstreamNodes(nodeId, workflow);
+    inputData.blocks = {};
+    
+    for (const ancestorNodeId of upstreamAncestors) {
+      const ancestorOutput = context.nodeOutputs.get(ancestorNodeId);
+      if (ancestorOutput) {
+        inputData.blocks[ancestorNodeId] = ancestorOutput;
+      }
+    }
+
+    // Debug: Log what data we're passing to this node
+    logger.info(
+      {
+        targetNodeId: nodeId,
+        upstreamAncestorIds: upstreamAncestors,
+        blocksPopulated: Object.keys(inputData.blocks),
+        directInputKeys: Object.keys(inputData).filter(k => k !== 'blocks'),
+      },
+      'Collected input data for node (debug)'
+    );
+
     return inputData;
   }
 
+  /**
+ * Get all upstream ancestor nodes (transitive predecessors) for a given node
+ * Uses BFS to traverse backwards through the workflow graph
+ */
+  private getAllUpstreamNodes(
+    nodeId: string,
+    workflow: WorkflowDefinition
+  ): string[] {
+    const visited = new Set<string>();
+    const queue: string[] = [nodeId];
+    const ancestors: string[] = [];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      
+      if (visited.has(currentId)) {
+        continue;
+      }
+      
+      visited.add(currentId);
+
+      // Find all nodes that point to the current node
+      const incomingEdges = workflow.edges.filter(e => e.targetNodeId === currentId);
+      
+      for (const edge of incomingEdges) {
+        const sourceNodeId = edge.sourceNodeId;
+        
+        // Don't include the starting node itself
+        if (sourceNodeId !== nodeId && !visited.has(sourceNodeId)) {
+          ancestors.push(sourceNodeId);
+          queue.push(sourceNodeId);
+        }
+      }
+    }
+
+    return ancestors;
+  }
+  
   /**
    * Get value from object by path
    */
