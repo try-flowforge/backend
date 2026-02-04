@@ -4,11 +4,13 @@ import {
   WorkflowExecutionJobData,
   NodeExecutionJobData,
   SwapExecutionJobData,
+  LLMExecutionJobData,
 } from '../../config/queues';
 import { workflowExecutionEngine } from '../workflow/WorkflowExecutionEngine';
 import { nodeProcessorFactory } from '../workflow/processors/NodeProcessorFactory';
 import { swapExecutionService } from '../swap/SwapExecutionService';
 import { logger } from '../../utils/logger';
+import { ExecutionStatus, TriggerType } from '../../types';
 
 // Worker Configuration
 const redisConnection = {
@@ -25,7 +27,6 @@ const defaultWorkerOptions = {
     duration: 1000, // 200 jobs per second max
   },
 };
-import { ExecutionStatus, TriggerType } from '../../types';
 
 /**
  * Workflow Execution Worker
@@ -302,25 +303,117 @@ export class SwapExecutionWorker {
 }
 
 /**
+ * LLM Execution Worker
+ * Processes LLM execution jobs by calling the LLM microservice
+ */
+export class LLMExecutionWorker {
+  private worker: Worker<LLMExecutionJobData>;
+
+  constructor() {
+    this.worker = new Worker<LLMExecutionJobData>(
+      QueueName.LLM_EXECUTION,
+      async (job: Job<LLMExecutionJobData>) => {
+        return await this.processJob(job);
+      },
+      {
+        ...defaultWorkerOptions,
+        connection: redisConnection,
+        concurrency: parseInt(process.env.LLM_WORKER_CONCURRENCY || '5', 10),
+      }
+    );
+
+    this.setupEventListeners();
+  }
+
+  private async processJob(job: Job<LLMExecutionJobData>): Promise<any> {
+    const { userId, provider, model, messages, temperature, maxOutputTokens, responseSchema, requestId } = job.data;
+
+    logger.info(
+      { jobId: job.id, userId, provider, model, requestId },
+      'Processing LLM execution job'
+    );
+
+    try {
+      // Dynamic import to avoid circular dependency
+      const { llmServiceClient } = await import('../llm/llm-service-client');
+
+      const response = await llmServiceClient.chat({
+        provider,
+        model,
+        messages,
+        temperature,
+        maxOutputTokens,
+        responseSchema,
+        requestId,
+        userId,
+      });
+
+      logger.info(
+        { jobId: job.id, requestId, usage: response.usage },
+        'LLM execution completed'
+      );
+
+      return response;
+    } catch (error) {
+      logger.error(
+        { error, jobId: job.id, requestId, provider, model },
+        'LLM execution job failed'
+      );
+      throw error;
+    }
+  }
+
+  private setupEventListeners(): void {
+    this.worker.on('completed', (job) => {
+      logger.info(
+        { jobId: job.id, requestId: job.data.requestId },
+        'LLM execution job completed'
+      );
+    });
+
+    this.worker.on('failed', (job, error) => {
+      logger.error(
+        {
+          jobId: job?.id,
+          requestId: job?.data.requestId,
+          error,
+        },
+        'LLM execution job failed'
+      );
+    });
+
+    this.worker.on('error', (error) => {
+      logger.error({ error }, 'LLM execution worker error');
+    });
+  }
+
+  async close(): Promise<void> {
+    await this.worker.close();
+  }
+}
+
+/**
  * Initialize all workers
  */
 export const initializeWorkers = (): {
   workflowWorker: WorkflowExecutionWorker;
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
+  llmWorker: LLMExecutionWorker;  
 } => {
   logger.info('Initializing BullMQ workers...');
 
   const workflowWorker = new WorkflowExecutionWorker();
   const nodeWorker = new NodeExecutionWorker();
   const swapWorker = new SwapExecutionWorker();
-
+  const llmWorker = new LLMExecutionWorker();
   logger.info('BullMQ workers initialized');
 
   return {
     workflowWorker,
     nodeWorker,
     swapWorker,
+    llmWorker,
   };
 };
 
@@ -331,6 +424,7 @@ export const closeWorkers = async (workers: {
   workflowWorker: WorkflowExecutionWorker;
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
+  llmWorker: LLMExecutionWorker;
 }): Promise<void> => {
   logger.info('Closing BullMQ workers...');
 
@@ -338,8 +432,8 @@ export const closeWorkers = async (workers: {
     workers.workflowWorker.close(),
     workers.nodeWorker.close(),
     workers.swapWorker.close(),
+    workers.llmWorker.close(),
   ]);
 
   logger.info('BullMQ workers closed');
 };
-

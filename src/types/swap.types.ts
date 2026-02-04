@@ -33,6 +33,7 @@ export enum NodeType {
   SLACK = "SLACK",
   TELEGRAM = "TELEGRAM",
   WALLET = "WALLET",
+  LLM_TRANSFORM = "LLM_TRANSFORM",
 }
 
 // Trigger Types

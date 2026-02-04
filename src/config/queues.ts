@@ -8,6 +8,7 @@ export enum QueueName {
   NODE_EXECUTION = 'node-execution',
   SWAP_EXECUTION = 'swap-execution',
   WORKFLOW_TRIGGER = 'workflow-trigger',
+  LLM_EXECUTION = 'llm-execution',
 }
 
 // Job Data Types
@@ -37,6 +38,17 @@ export interface SwapExecutionJobData {
   inputConfig: any;
   userId: string;
   walletAddress: string;
+}
+
+export interface LLMExecutionJobData {
+  userId: string;
+  provider: string; // 'openai' | 'openrouter'
+  model: string;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  temperature?: number;
+  maxOutputTokens?: number;
+  responseSchema?: Record<string, any>;
+  requestId: string;
 }
 
 // Queue Configuration - using centralized constants
@@ -71,11 +83,13 @@ let workflowExecutionQueue: Queue<WorkflowExecutionJobData>;
 let nodeExecutionQueue: Queue<NodeExecutionJobData>;
 let swapExecutionQueue: Queue<SwapExecutionJobData>;
 let workflowTriggerQueue: Queue<WorkflowExecutionJobData>;
+let llmExecutionQueue: Queue<LLMExecutionJobData>;
 
 // Queue Events
 let workflowExecutionEvents: QueueEvents;
 let nodeExecutionEvents: QueueEvents;
 let swapExecutionEvents: QueueEvents;
+let llmExecutionEvents: QueueEvents;
 
 /**
  * Initialize all queues
@@ -126,6 +140,18 @@ export const initializeQueues = async (): Promise<void> => {
       defaultQueueOptions
     ) as any;
 
+    // LLM Execution Queue (dedicated for LLM calls)
+    llmExecutionQueue = new Queue(
+      QueueName.LLM_EXECUTION,
+      {
+        ...defaultQueueOptions,
+        defaultJobOptions: {
+          ...defaultQueueOptions.defaultJobOptions,
+          attempts: 2, // LLM calls get 2 attempts (provider retries are handled by llm-service)
+        },
+      }
+    ) as any;    
+
     // Initialize Queue Events
     workflowExecutionEvents = new QueueEvents(QueueName.WORKFLOW_EXECUTION, {
       connection: defaultQueueOptions.connection,
@@ -136,6 +162,10 @@ export const initializeQueues = async (): Promise<void> => {
     });
 
     swapExecutionEvents = new QueueEvents(QueueName.SWAP_EXECUTION, {
+      connection: defaultQueueOptions.connection,
+    });
+
+    llmExecutionEvents = new QueueEvents(QueueName.LLM_EXECUTION, {
       connection: defaultQueueOptions.connection,
     });
 
@@ -188,6 +218,18 @@ const setupQueueEventListeners = () => {
       'Swap failed'
     );
   });
+
+  // LLM Execution Events
+  llmExecutionEvents.on('completed', ({ jobId }) => {
+    logger.info({ jobId, queue: QueueName.LLM_EXECUTION }, 'LLM request completed');
+  });
+
+  llmExecutionEvents.on('failed', ({ jobId, failedReason }) => {
+    logger.error(
+      { jobId, queue: QueueName.LLM_EXECUTION, failedReason },
+      'LLM request failed'
+    );
+  });
 };
 
 /**
@@ -203,6 +245,28 @@ export const getQueue = <T = any>(queueName: QueueName): Queue<T> => {
       return swapExecutionQueue as unknown as Queue<T>;
     case QueueName.WORKFLOW_TRIGGER:
       return workflowTriggerQueue as unknown as Queue<T>;
+    case QueueName.LLM_EXECUTION:
+      return llmExecutionQueue as unknown as Queue<T>;
+    default:
+      throw new Error(`Unknown queue: ${queueName}`);
+  }
+};
+
+/**
+ * Get queue events instance
+ */
+export const getQueueEvents = (queueName: QueueName): QueueEvents => {
+  switch (queueName) {
+    case QueueName.WORKFLOW_EXECUTION:
+      return workflowExecutionEvents;
+    case QueueName.NODE_EXECUTION:
+      return nodeExecutionEvents;
+    case QueueName.SWAP_EXECUTION:
+      return swapExecutionEvents;
+    case QueueName.WORKFLOW_TRIGGER:
+      throw new Error('Workflow trigger queue does not have events');
+    case QueueName.LLM_EXECUTION:
+      return llmExecutionEvents;
     default:
       throw new Error(`Unknown queue: ${queueName}`);
   }
@@ -265,6 +329,31 @@ export const enqueueSwapExecution = async (
     data,
     {
       priority: 1, // High priority for swaps
+    }
+  );
+};
+
+/**
+ * Add job to LLM execution queue
+ */
+export const enqueueLLMExecution = async (
+  data: LLMExecutionJobData
+): Promise<Job<LLMExecutionJobData>> => {
+  logger.info(
+    {
+      provider: data.provider,
+      model: data.model,
+      userId: data.userId,
+      requestId: data.requestId,
+    },
+    'Enqueueing LLM execution'
+  );
+
+  return await llmExecutionQueue.add(
+    `llm:${data.requestId}`,
+    data,
+    {
+      jobId: data.requestId,
     }
   );
 };
@@ -404,9 +493,11 @@ export const closeQueues = async (): Promise<void> => {
       nodeExecutionQueue?.close(),
       swapExecutionQueue?.close(),
       workflowTriggerQueue?.close(),
+      llmExecutionQueue?.close(),
       workflowExecutionEvents?.close(),
       nodeExecutionEvents?.close(),
       swapExecutionEvents?.close(),
+      llmExecutionEvents?.close(),
     ]);
 
     logger.info('BullMQ queues closed successfully');

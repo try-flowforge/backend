@@ -6,6 +6,7 @@ import {
 } from '../config/config';
 import { ApiResponse } from '../types';
 import { logger } from '../utils/logger';
+import { llmServiceClient } from '../services/llm/llm-service-client';
 
 /**
  * Meta Controller
@@ -32,11 +33,25 @@ export class MetaController {
         };
       });
 
+      // Fetch LLM models (cached in llmServiceClient)
+      let llmModels: any[] = [];
+      try {
+        llmModels = await llmServiceClient.listModels();
+        logger.debug({ modelCount: llmModels.length }, 'LLM models fetched for runtime config');
+      } catch (error) {
+        logger.warn(
+          { error: error instanceof Error ? error.message : String(error) },
+          'Failed to fetch LLM models, continuing without them'
+        );
+        // Don't fail the entire request if LLM service is unavailable
+      }
+      
       const response: ApiResponse = {
         success: true,
         data: {
           activeChains: activeChains,
           chainDetails: chainDetails,
+          llmModels: llmModels,
           timestamp: new Date().toISOString(),
         },
         meta: {
@@ -44,7 +59,7 @@ export class MetaController {
         },
       };
 
-      logger.info({ activeChains }, 'Runtime config requested');
+      logger.info({ activeChains, llmModels }, 'Runtime config requested');
 
       res.status(200).json(response);
     } catch (error) {
