@@ -3,6 +3,7 @@ import { ISwapProvider, ISwapProviderFactory } from '../interfaces/ISwapProvider
 import { UniswapProvider } from './UniswapProvider';
 import { RelayProvider } from './RelayProvider';
 import { OneInchProvider } from './OneInchProvider';
+import { LiFiProvider } from './LiFiProvider';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -27,6 +28,7 @@ export class SwapProviderFactory implements ISwapProviderFactory {
       this.providers.set(SwapProvider.UNISWAP, new UniswapProvider());
       this.providers.set(SwapProvider.RELAY, new RelayProvider());
       this.providers.set(SwapProvider.ONEINCH, new OneInchProvider());
+      this.providers.set(SwapProvider.LIFI, new LiFiProvider());
 
       logger.info(
         { providerCount: this.providers.size },

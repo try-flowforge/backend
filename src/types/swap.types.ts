@@ -14,6 +14,7 @@ export enum SwapProvider {
   UNISWAP = "UNISWAP",
   RELAY = "RELAY",
   ONEINCH = "ONEINCH",
+  LIFI = "LIFI",
 }
 
 // Node Types
@@ -162,6 +163,29 @@ export interface SwapExecutionResult {
   errorMessage?: string;
   errorCode?: string;
   retryCount?: number;
+  // For signature-based flow
+  requiresSignature?: boolean;
+  safeTxHash?: string;
+  safeTxData?: {
+    to: string;
+    value: string;
+    data: string;
+    operation: number;
+  };
+}
+
+// Safe Transaction Hash for Signing
+export interface SafeTransactionHashResult {
+  safeTxHash: string;
+  safeAddress: string;
+  safeTxData: {
+    to: string;
+    value: string;
+    data: string;
+    operation: number;
+  };
+  needsApproval: boolean;
+  tokenAddress?: string;
 }
 
 // Swap Node Definition

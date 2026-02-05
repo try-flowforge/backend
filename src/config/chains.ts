@@ -91,6 +91,12 @@ export const PROVIDER_CONFIGS = {
     apiKey: process.env.ONEINCH_API_KEY,
     defaultSlippage: 0.5,
   },
+  LIFI: {
+    apiUrl: process.env.LIFI_API_URL || 'https://li.quest/v1',
+    apiKey: process.env.LIFI_API_KEY,
+    integratorId: process.env.LIFI_INTEGRATOR_ID || 'agentic-workflow',
+    defaultSlippage: 0.5,
+  },
 };
 
 // RPC Rate Limiting & Fallbacks

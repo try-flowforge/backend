@@ -227,36 +227,20 @@ export class SwapExecutionWorker {
   }
 
   private async processJob(job: Job<SwapExecutionJobData>): Promise<any> {
-    const { nodeExecutionId, provider, chain, inputConfig } = job.data;
+    const { nodeExecutionId, provider, chain, inputConfig, userId } = job.data;
 
     logger.info(
-      { jobId: job.id, provider, chain },
+      { jobId: job.id, provider, chain, userId },
       'Processing swap execution job'
     );
 
     try {
-      // Validate wallet private key exists
-      const privateKey = process.env.WALLET_PRIVATE_KEY;
-
-      if (!privateKey) {
-        throw new Error(
-          'WALLET_PRIVATE_KEY environment variable is required for swap execution. ' +
-          'Please configure a wallet private key in your environment.'
-        );
-      }
-
-      if (!privateKey.startsWith('0x') || privateKey.length !== 66) {
-        throw new Error(
-          'Invalid WALLET_PRIVATE_KEY format. Must be a 66-character hex string starting with 0x.'
-        );
-      }
-
       const result = await swapExecutionService.executeSwap(
         nodeExecutionId,
         chain as any,
         provider as any,
         inputConfig,
-        privateKey
+        userId,
       );
 
       if (!result.success) {
