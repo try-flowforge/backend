@@ -295,7 +295,7 @@ export class LLMExecutionWorker {
 
   constructor() {
     this.worker = new Worker<LLMExecutionJobData>(
-      QueueName.LLM_EXECUTION,
+      QueueName.LLM,
       async (job: Job<LLMExecutionJobData>) => {
         return await this.processJob(job);
       },

@@ -423,7 +423,7 @@ export class WorkflowExecutionEngine {
       return context.initialInput || {};
     }
 
-    // Collect outputs from predecessor nodes
+    // Collect outputs from predecessor nodes (existing behavior)
     const inputData: any = {};
 
     for (const edge of incomingEdges) {
@@ -440,11 +440,11 @@ export class WorkflowExecutionEngine {
       }
     }
 
-    // Add blocks namespace with all upstream ancestors
+    // NEW: Add blocks namespace with all upstream ancestors
     // This allows any node to reference any upstream node's output via {{blocks.<nodeId>}}
     const upstreamAncestors = this.getAllUpstreamNodes(nodeId, workflow);
     inputData.blocks = {};
-    
+
     for (const ancestorNodeId of upstreamAncestors) {
       const ancestorOutput = context.nodeOutputs.get(ancestorNodeId);
       if (ancestorOutput) {
@@ -467,9 +467,9 @@ export class WorkflowExecutionEngine {
   }
 
   /**
- * Get all upstream ancestor nodes (transitive predecessors) for a given node
- * Uses BFS to traverse backwards through the workflow graph
- */
+   * Get all upstream ancestor nodes (transitive predecessors) for a given node
+   * Uses BFS to traverse backwards through the workflow graph
+   */
   private getAllUpstreamNodes(
     nodeId: string,
     workflow: WorkflowDefinition
@@ -480,19 +480,19 @@ export class WorkflowExecutionEngine {
 
     while (queue.length > 0) {
       const currentId = queue.shift()!;
-      
+
       if (visited.has(currentId)) {
         continue;
       }
-      
+
       visited.add(currentId);
 
       // Find all nodes that point to the current node
       const incomingEdges = workflow.edges.filter(e => e.targetNodeId === currentId);
-      
+
       for (const edge of incomingEdges) {
         const sourceNodeId = edge.sourceNodeId;
-        
+
         // Don't include the starting node itself
         if (sourceNodeId !== nodeId && !visited.has(sourceNodeId)) {
           ancestors.push(sourceNodeId);
@@ -503,7 +503,7 @@ export class WorkflowExecutionEngine {
 
     return ancestors;
   }
-  
+
   /**
    * Get value from object by path
    */
@@ -545,6 +545,13 @@ export class WorkflowExecutionEngine {
     initialInput?: Record<string, any>,
     providedExecutionId?: string
   ): Promise<string> {
+    // Get current workflow version
+    const workflowResult = await pool.query<{ version: number }>(
+      'SELECT version FROM workflows WHERE id = $1',
+      [workflowId]
+    );
+    const versionNumber = workflowResult.rows[0]?.version || 1;
+
     // If execution ID is provided, use it; otherwise let the database generate one
     if (providedExecutionId) {
       // Check if execution already exists (e.g., from a retry)
@@ -552,7 +559,7 @@ export class WorkflowExecutionEngine {
         `SELECT id FROM workflow_executions WHERE id = $1`,
         [providedExecutionId]
       );
-      
+
       if (existing.rows.length > 0) {
         logger.info(
           { executionId: providedExecutionId },
@@ -560,8 +567,8 @@ export class WorkflowExecutionEngine {
         );
         return existing.rows[0].id;
       }
-    
-      // Insert new execution with provided ID
+
+      // Insert new execution with provided ID and version_number
       const result = await pool.query<{ id: string }>(
         `INSERT INTO workflow_executions (
           id,
@@ -569,8 +576,10 @@ export class WorkflowExecutionEngine {
           user_id,
           triggered_by,
           initial_input,
-          status
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          status,
+          version_number
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO NOTHING
         RETURNING id`,
         [
           providedExecutionId,
@@ -579,6 +588,7 @@ export class WorkflowExecutionEngine {
           triggeredBy,
           initialInput ? JSON.stringify(initialInput) : null,
           ExecutionStatus.PENDING,
+          versionNumber,
         ]
       );
 
@@ -605,8 +615,9 @@ export class WorkflowExecutionEngine {
           user_id,
           triggered_by,
           initial_input,
-          status
-        ) VALUES ($1, $2, $3, $4, $5)
+          status,
+          version_number
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id`,
         [
           workflowId,
@@ -614,6 +625,7 @@ export class WorkflowExecutionEngine {
           triggeredBy,
           initialInput ? JSON.stringify(initialInput) : null,
           ExecutionStatus.PENDING,
+          versionNumber,
         ]
       );
       return result.rows[0].id;

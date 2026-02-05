@@ -8,7 +8,7 @@ export enum QueueName {
   NODE_EXECUTION = 'node-execution',
   SWAP_EXECUTION = 'swap-execution',
   WORKFLOW_TRIGGER = 'workflow-trigger',
-  LLM_EXECUTION = 'llm-execution',
+  LLM = 'llm', // LLM execution queue
 }
 
 // Job Data Types
@@ -18,6 +18,7 @@ export interface WorkflowExecutionJobData {
   triggeredBy: string;
   initialInput?: Record<string, any>;
   executionId?: string;
+  versionNumber?: number;
 }
 
 export interface NodeExecutionJobData {
@@ -83,13 +84,13 @@ let workflowExecutionQueue: Queue<WorkflowExecutionJobData>;
 let nodeExecutionQueue: Queue<NodeExecutionJobData>;
 let swapExecutionQueue: Queue<SwapExecutionJobData>;
 let workflowTriggerQueue: Queue<WorkflowExecutionJobData>;
-let llmExecutionQueue: Queue<LLMExecutionJobData>;
+let llmQueue: Queue<LLMExecutionJobData>;
 
 // Queue Events
 let workflowExecutionEvents: QueueEvents;
 let nodeExecutionEvents: QueueEvents;
 let swapExecutionEvents: QueueEvents;
-let llmExecutionEvents: QueueEvents;
+let llmEvents: QueueEvents;
 
 /**
  * Initialize all queues
@@ -141,8 +142,8 @@ export const initializeQueues = async (): Promise<void> => {
     ) as any;
 
     // LLM Execution Queue (dedicated for LLM calls)
-    llmExecutionQueue = new Queue(
-      QueueName.LLM_EXECUTION,
+    llmQueue = new Queue(
+      QueueName.LLM,
       {
         ...defaultQueueOptions,
         defaultJobOptions: {
@@ -150,7 +151,7 @@ export const initializeQueues = async (): Promise<void> => {
           attempts: 2, // LLM calls get 2 attempts (provider retries are handled by llm-service)
         },
       }
-    ) as any;    
+    ) as any;
 
     // Initialize Queue Events
     workflowExecutionEvents = new QueueEvents(QueueName.WORKFLOW_EXECUTION, {
@@ -165,7 +166,7 @@ export const initializeQueues = async (): Promise<void> => {
       connection: defaultQueueOptions.connection,
     });
 
-    llmExecutionEvents = new QueueEvents(QueueName.LLM_EXECUTION, {
+    llmEvents = new QueueEvents(QueueName.LLM, {
       connection: defaultQueueOptions.connection,
     });
 
@@ -220,13 +221,13 @@ const setupQueueEventListeners = () => {
   });
 
   // LLM Execution Events
-  llmExecutionEvents.on('completed', ({ jobId }) => {
-    logger.info({ jobId, queue: QueueName.LLM_EXECUTION }, 'LLM request completed');
+  llmEvents.on('completed', ({ jobId }) => {
+    logger.info({ jobId, queue: QueueName.LLM }, 'LLM request completed');
   });
 
-  llmExecutionEvents.on('failed', ({ jobId, failedReason }) => {
+  llmEvents.on('failed', ({ jobId, failedReason }) => {
     logger.error(
-      { jobId, queue: QueueName.LLM_EXECUTION, failedReason },
+      { jobId, queue: QueueName.LLM, failedReason },
       'LLM request failed'
     );
   });
@@ -245,8 +246,8 @@ export const getQueue = <T = any>(queueName: QueueName): Queue<T> => {
       return swapExecutionQueue as unknown as Queue<T>;
     case QueueName.WORKFLOW_TRIGGER:
       return workflowTriggerQueue as unknown as Queue<T>;
-    case QueueName.LLM_EXECUTION:
-      return llmExecutionQueue as unknown as Queue<T>;
+    case QueueName.LLM:
+      return llmQueue as unknown as Queue<T>;
     default:
       throw new Error(`Unknown queue: ${queueName}`);
   }
@@ -265,8 +266,8 @@ export const getQueueEvents = (queueName: QueueName): QueueEvents => {
       return swapExecutionEvents;
     case QueueName.WORKFLOW_TRIGGER:
       throw new Error('Workflow trigger queue does not have events');
-    case QueueName.LLM_EXECUTION:
-      return llmExecutionEvents;
+    case QueueName.LLM:
+      return llmEvents;
     default:
       throw new Error(`Unknown queue: ${queueName}`);
   }
@@ -349,7 +350,7 @@ export const enqueueLLMExecution = async (
     'Enqueueing LLM execution'
   );
 
-  return await llmExecutionQueue.add(
+  return await llmQueue.add(
     `llm:${data.requestId}`,
     data,
     {
@@ -493,11 +494,11 @@ export const closeQueues = async (): Promise<void> => {
       nodeExecutionQueue?.close(),
       swapExecutionQueue?.close(),
       workflowTriggerQueue?.close(),
-      llmExecutionQueue?.close(),
+      llmQueue?.close(),
       workflowExecutionEvents?.close(),
       nodeExecutionEvents?.close(),
       swapExecutionEvents?.close(),
-      llmExecutionEvents?.close(),
+      llmEvents?.close(),
     ]);
 
     logger.info('BullMQ queues closed successfully');
@@ -506,3 +507,4 @@ export const closeQueues = async (): Promise<void> => {
     throw error;
   }
 };
+

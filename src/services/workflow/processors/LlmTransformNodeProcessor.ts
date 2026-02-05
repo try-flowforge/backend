@@ -109,7 +109,7 @@ export class LlmTransformNodeProcessor implements INodeProcessor {
       }, 'Waiting for LLM job to complete');
 
       // waitUntilFinished requires QueueEvents and optional timeout
-      const result = await job.waitUntilFinished(getQueueEvents(QueueName.LLM_EXECUTION), 200000);
+      const result = await job.waitUntilFinished(getQueueEvents(QueueName.LLM), 200000);
 
       const endTime = new Date();
 

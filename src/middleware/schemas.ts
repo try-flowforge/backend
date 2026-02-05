@@ -21,6 +21,11 @@ export const idParamSchema = Joi.object({
     id: uuidSchema.required(),
 });
 
+export const idWithVersionParamSchema = Joi.object({
+    id: uuidSchema.required(),
+    versionNumber: Joi.number().integer().min(1).required(),
+});
+
 // ===========================================
 // WORKFLOW SCHEMAS
 // ===========================================
@@ -92,6 +97,22 @@ export const createWorkflowSchema = Joi.object({
         .items(Joi.string().max(VALIDATION_CONSTANTS.MAX_TAG_LENGTH))
         .max(VALIDATION_CONSTANTS.MAX_TAGS_PER_WORKFLOW)
         .default([]),
+    isPublic: Joi.boolean().default(false),
+}).custom((value, helpers) => {
+    // When isPublic is true, enforce description and tags requirements
+    if (value.isPublic) {
+        if (!value.description || value.description.trim() === '') {
+            return helpers.error('any.invalid', {
+                message: 'Description is required when publishing a workflow publicly',
+            });
+        }
+        if (!value.tags || value.tags.length === 0) {
+            return helpers.error('any.invalid', {
+                message: 'At least one tag is required when publishing a workflow publicly',
+            });
+        }
+    }
+    return value;
 });
 
 /**
@@ -106,8 +127,24 @@ export const updateWorkflowSchema = Joi.object({
     tags: Joi.array()
         .items(Joi.string().max(VALIDATION_CONSTANTS.MAX_TAG_LENGTH))
         .max(VALIDATION_CONSTANTS.MAX_TAGS_PER_WORKFLOW),
+    isPublic: Joi.boolean(),
 }).min(1).messages({
     'object.min': 'At least one field must be provided for update',
+}).custom((value, helpers) => {
+    // When isPublic is being set to true, enforce description and tags requirements
+    if (value.isPublic) {
+        if (value.description !== undefined && (!value.description || value.description.trim() === '')) {
+            return helpers.error('any.invalid', {
+                message: 'Description is required when publishing a workflow publicly',
+            });
+        }
+        if (value.tags !== undefined && (!value.tags || value.tags.length === 0)) {
+            return helpers.error('any.invalid', {
+                message: 'At least one tag is required when publishing a workflow publicly',
+            });
+        }
+    }
+    return value;
 });
 
 /**
@@ -123,6 +160,16 @@ export const executeWorkflowSchema = Joi.object({
 export const listWorkflowsQuerySchema = Joi.object({
     category: Joi.string().max(50),
     isActive: Joi.boolean(),
+    limit: Joi.number().integer().min(1).max(100).default(50),
+    offset: Joi.number().integer().min(0).default(0),
+});
+
+/**
+ * Schema for listing public workflows (unauthenticated)
+ */
+export const listPublicWorkflowsQuerySchema = Joi.object({
+    q: Joi.string().max(200).allow(''),
+    tag: Joi.string().max(VALIDATION_CONSTANTS.MAX_TAG_LENGTH),
     limit: Joi.number().integer().min(1).max(100).default(50),
     offset: Joi.number().integer().min(0).default(0),
 });
@@ -146,6 +193,22 @@ export const fullUpdateWorkflowSchema = Joi.object({
     tags: Joi.array()
         .items(Joi.string().max(VALIDATION_CONSTANTS.MAX_TAG_LENGTH))
         .max(VALIDATION_CONSTANTS.MAX_TAGS_PER_WORKFLOW),
+    isPublic: Joi.boolean(),
+}).custom((value, helpers) => {
+    // When isPublic is true, enforce description and tags requirements
+    if (value.isPublic) {
+        if (!value.description || value.description.trim() === '') {
+            return helpers.error('any.invalid', {
+                message: 'Description is required when publishing a workflow publicly',
+            });
+        }
+        if (!value.tags || value.tags.length === 0) {
+            return helpers.error('any.invalid', {
+                message: 'At least one tag is required when publishing a workflow publicly',
+            });
+        }
+    }
+    return value;
 });
 
 // ===========================================

@@ -75,6 +75,7 @@ export const createWorkflow = async (
       triggerNodeId,
       category,
       tags,
+      isPublic,
     } = req.body;
 
     // Validate required fields - userId should always be present from auth middleware
@@ -113,6 +114,7 @@ export const createWorkflow = async (
       await client.query('BEGIN');
 
       // Create workflow
+      const publishedAt = isPublic ? new Date() : null;
       const workflowResult = await client.query(
         `INSERT INTO workflows (
           user_id,
@@ -122,10 +124,12 @@ export const createWorkflow = async (
           is_active,
           is_draft,
           category,
-          tags
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          tags,
+          is_public,
+          published_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
-        [userId, name, description, null, false, true, category, tags]
+        [userId, name, description, null, false, true, category, tags, isPublic || false, publishedAt]
       );
 
       const workflow = workflowResult.rows[0];
@@ -170,7 +174,7 @@ export const createWorkflow = async (
             [JSON.stringify(translatedConfig), realNodeId]
           );
         }
-      }      
+      }
 
       // Update trigger node ID
       if (triggerNodeId) {
@@ -461,7 +465,7 @@ export const updateWorkflow = async (
     const { id } = req.params;
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.userId;
-    const { name, description, isActive, isDraft, category, tags } = req.body;
+    const { name, description, isActive, isDraft, category, tags, isPublic } = req.body;
 
     const fields: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -501,6 +505,19 @@ export const updateWorkflow = async (
       fields.push(`tags = $${paramIndex}`);
       values.push(tags);
       paramIndex++;
+    }
+
+    if (isPublic !== undefined) {
+      fields.push(`is_public = $${paramIndex}`);
+      values.push(isPublic);
+      paramIndex++;
+
+      // Set or clear published_at based on isPublic
+      if (isPublic) {
+        fields.push(`published_at = COALESCE(published_at, NOW())`);
+      } else {
+        fields.push(`published_at = NULL`);
+      }
     }
 
     values.push(id, userId);
@@ -558,6 +575,7 @@ export const fullUpdateWorkflow = async (
       triggerNodeId,
       category,
       tags,
+      isPublic,
     } = req.body;
 
     logger.info({ workflowId: id, userId, nodeCount: nodes?.length, edgeCount: edges?.length }, 'Full update workflow requested');
@@ -567,9 +585,9 @@ export const fullUpdateWorkflow = async (
     try {
       await client.query('BEGIN');
 
-      // Check if workflow exists and belongs to user
+      // Check if workflow exists and belongs to user, get current version
       const workflowCheck = await client.query(
-        'SELECT id FROM workflows WHERE id = $1 AND user_id = $2',
+        'SELECT id, version, name, description, category, tags, is_public FROM workflows WHERE id = $1 AND user_id = $2',
         [id, userId]
       );
 
@@ -585,17 +603,83 @@ export const fullUpdateWorkflow = async (
         return;
       }
 
+      const currentWorkflow = workflowCheck.rows[0];
+      const currentVersion = currentWorkflow.version || 1;
+      const newVersion = currentVersion + 1;
+
+      // Get current nodes and edges for version snapshot
+      const currentNodesResult = await client.query(
+        'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+        [id]
+      );
+      const currentEdgesResult = await client.query(
+        'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Save current state to version history (before updating)
+      await client.query(
+        `INSERT INTO workflow_version_history (
+          workflow_id, 
+          version_number, 
+          change_summary,
+          nodes_snapshot, 
+          edges_snapshot,
+          workflow_metadata,
+          created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (workflow_id, version_number) DO NOTHING`,
+        [
+          id,
+          currentVersion,
+          `Version ${currentVersion}`,
+          JSON.stringify(currentNodesResult.rows),
+          JSON.stringify(currentEdgesResult.rows),
+          JSON.stringify({
+            name: currentWorkflow.name,
+            description: currentWorkflow.description,
+            category: currentWorkflow.category,
+            tags: currentWorkflow.tags,
+            is_public: currentWorkflow.is_public,
+          }),
+          userId,
+        ]
+      );
+
+      logger.info({ workflowId: id, currentVersion, newVersion }, 'Saving version snapshot before update');
+
       // Update workflow metadata
+      let publishedAtClause = '';
+      const updateParams: any[] = [name, description, category, tags];
+
+      if (isPublic !== undefined) {
+        if (isPublic) {
+          // When publishing, set published_at if not already set
+          publishedAtClause = ', is_public = $5, published_at = COALESCE(published_at, NOW())';
+          updateParams.push(isPublic);
+        } else {
+          // When unpublishing, clear published_at
+          publishedAtClause = ', is_public = $5, published_at = NULL';
+          updateParams.push(isPublic);
+        }
+      }
+
+      updateParams.push(id, userId);
+      const paramCount = updateParams.length;
+
       const workflowResult = await client.query(
         `UPDATE workflows SET 
           name = COALESCE($1, name),
           description = COALESCE($2, description),
           category = COALESCE($3, category),
           tags = COALESCE($4, tags),
+          version = version + 1,
+          version_created_at = NOW(),
           updated_at = NOW()
-        WHERE id = $5 AND user_id = $6
+          ${publishedAtClause}
+        WHERE id = $${paramCount - 1} AND user_id = $${paramCount}
         RETURNING *`,
-        [name, description, category, tags, id, userId]
+        updateParams
       );
 
       const workflow = workflowResult.rows[0];
@@ -650,7 +734,7 @@ export const fullUpdateWorkflow = async (
           }
         }
       }
-      
+
       // Update trigger node ID
       if (triggerNodeId) {
         const realTriggerNodeId = nodeIds.get(triggerNodeId);
@@ -787,23 +871,17 @@ export const executeWorkflow = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const workflowId = Array.isArray(req.params.workflowId)
-      ? req.params.workflowId[0]
-      : req.params.workflowId;
-    if (!workflowId) {
-      res.status(400).json({ success: false, error: 'Invalid workflowId' });
-      return;
-    }
+    const id = req.params.id as string;
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.userId;
     const { initialInput = {} } = req.body || {};
 
-    logger.info({ workflowId, userId }, 'Manual workflow execution requested');
+    logger.info({ workflowId: id, userId }, 'Manual workflow execution requested');
 
     // Verify workflow exists and belongs to authenticated user
     const workflowResult = await pool.query(
       'SELECT * FROM workflows WHERE id = $1 AND user_id = $2',
-      [workflowId, userId]
+      [id, userId]
     );
 
     if (workflowResult.rows.length === 0) {
@@ -817,14 +895,18 @@ export const executeWorkflow = async (
       return;
     }
 
-    // Enqueue execution
+    const workflow = workflowResult.rows[0];
+    const versionNumber = workflow.version || 1;
+
+    // Enqueue execution with version number
     const executionId = crypto.randomUUID();
     await enqueueWorkflowExecution({
-      workflowId: workflowId,
+      workflowId: id,
       userId,
       triggeredBy: TriggerType.MANUAL,
       initialInput,
       executionId,
+      versionNumber,
     });
 
     // Generate subscription token for SSE access
@@ -937,6 +1019,951 @@ export const getExecutionHistory = async (
 
     res.json(response);
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Sanitize node config for public display
+ * Removes user-specific and sensitive identifiers
+ */
+function sanitizeNodeConfig(nodeType: string, config: Record<string, any>): Record<string, any> {
+  const sanitized = { ...config };
+
+  switch (nodeType) {
+    case 'SLACK':
+      delete sanitized.connectionId;
+      delete sanitized.channelId;
+      break;
+
+    case 'TELEGRAM':
+      delete sanitized.connectionId;
+      delete sanitized.chatId;
+      break;
+
+    case 'EMAIL':
+      delete sanitized.to;
+      // Keep subject and body template structure
+      break;
+
+    case 'WALLET':
+      delete sanitized.walletAddress;
+      break;
+
+    case 'SWAP':
+      // Keep swap config but remove wallet address
+      if (sanitized.inputConfig) {
+        delete sanitized.inputConfig.walletAddress;
+      }
+      break;
+
+    // Keep other node types as-is (IF, SWITCH, START, etc.)
+    default:
+      break;
+  }
+
+  return sanitized;
+}
+
+/**
+ * List all public workflows (no authentication required)
+ */
+export const listPublicWorkflows = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { q, tag, limit = 50, offset = 0 } = req.query;
+
+    // Build query with search and tag filters
+    let query = `
+      SELECT 
+        w.id,
+        w.name,
+        w.description,
+        w.category,
+        w.tags,
+        w.published_at,
+        w.updated_at,
+        w.created_at,
+        COALESCE(exec_stats.execution_count, 0)::int as usage_count
+      FROM workflows w
+      LEFT JOIN (
+        SELECT 
+          workflow_id,
+          COUNT(DISTINCT user_id)::int as execution_count
+        FROM workflow_executions
+        GROUP BY workflow_id
+      ) exec_stats ON w.id = exec_stats.workflow_id
+      WHERE w.is_public = true
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    // Search by name or description
+    if (q && typeof q === 'string' && q.trim() !== '') {
+      query += ` AND (w.name ILIKE $${paramIndex} OR w.description ILIKE $${paramIndex})`;
+      params.push(`%${q.trim()}%`);
+      paramIndex++;
+    }
+
+    // Filter by tag
+    if (tag && typeof tag === 'string') {
+      query += ` AND $${paramIndex} = ANY(w.tags)`;
+      params.push(tag);
+      paramIndex++;
+    }
+
+    query += ' ORDER BY w.published_at DESC NULLS LAST, w.updated_at DESC';
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM workflows w WHERE w.is_public = true';
+    const countParams: any[] = [];
+    let countParamIndex = 1;
+
+    if (q && typeof q === 'string' && q.trim() !== '') {
+      countQuery += ` AND (w.name ILIKE $${countParamIndex} OR w.description ILIKE $${countParamIndex})`;
+      countParams.push(`%${q.trim()}%`);
+      countParamIndex++;
+    }
+
+    if (tag && typeof tag === 'string') {
+      countQuery += ` AND $${countParamIndex} = ANY(w.tags)`;
+      countParams.push(tag);
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const totalCount = parseInt(countResult.rows[0].count, 10);
+
+    const response: ApiResponse = {
+      success: true,
+      data: result.rows,
+      meta: {
+        timestamp: new Date().toISOString(),
+        total: totalCount,
+        limit: Number(limit),
+        offset: Number(offset),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get a single public workflow with sanitized node configs (no authentication required)
+ */
+export const getPublicWorkflow = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Get workflow
+    const workflowResult = await pool.query(
+      'SELECT * FROM workflows WHERE id = $1 AND is_public = true',
+      [id]
+    );
+
+    if (workflowResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Public workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const workflow = workflowResult.rows[0];
+
+    // Get nodes
+    const nodesResult = await pool.query(
+      'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+      [id]
+    );
+
+    // Sanitize node configs
+    const sanitizedNodes = nodesResult.rows.map((node) => ({
+      ...node,
+      config: sanitizeNodeConfig(node.type, node.config || {}),
+    }));
+
+    // Get edges
+    const edgesResult = await pool.query(
+      'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+      [id]
+    );
+
+    // Remove user_id from workflow for privacy
+    const { user_id, ...workflowData } = workflow;
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        ...workflowData,
+        nodes: sanitizedNodes,
+        edges: edgesResult.rows,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get version history for a public workflow (no authentication required)
+ */
+export const getPublicWorkflowVersions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Verify workflow is public
+    const workflowResult = await pool.query(
+      'SELECT id, version FROM workflows WHERE id = $1 AND is_public = true',
+      [id]
+    );
+
+    if (workflowResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Public workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const currentVersion = workflowResult.rows[0].version || 1;
+
+    // Get version history
+    const versionsResult = await pool.query(
+      `SELECT id, version_number, change_summary, created_at
+       FROM workflow_version_history
+       WHERE workflow_id = $1
+       ORDER BY version_number DESC`,
+      [id]
+    );
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        currentVersion,
+        versions: versionsResult.rows,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get a specific version of a public workflow (no authentication required)
+ */
+export const getPublicWorkflowVersion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id, versionNumber } = req.params;
+    const versionStr = Array.isArray(versionNumber) ? versionNumber[0] : versionNumber;
+    const parsedVersionNumber = parseInt(versionStr, 10);
+
+    if (isNaN(parsedVersionNumber) || parsedVersionNumber < 1) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid version number',
+          code: 'INVALID_VERSION_NUMBER',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    // Verify workflow is public
+    const workflowResult = await pool.query(
+      'SELECT id, version, name, description, category, tags FROM workflows WHERE id = $1 AND is_public = true',
+      [id]
+    );
+
+    if (workflowResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Public workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const currentVersion = workflowResult.rows[0].version || 1;
+
+    // If requesting current version, return current workflow
+    if (parsedVersionNumber === currentVersion) {
+      // Get current nodes
+      const nodesResult = await pool.query(
+        'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Sanitize node configs
+      const sanitizedNodes = nodesResult.rows.map((node) => ({
+        ...node,
+        config: sanitizeNodeConfig(node.type, node.config || {}),
+      }));
+
+      // Get edges
+      const edgesResult = await pool.query(
+        'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+        [id]
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          versionNumber: currentVersion,
+          isCurrent: true,
+          nodes: sanitizedNodes,
+          edges: edgesResult.rows,
+          metadata: {
+            name: workflowResult.rows[0].name,
+            description: workflowResult.rows[0].description,
+          },
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      res.json(response);
+      return;
+    }
+
+    // Get historical version
+    const versionResult = await pool.query(
+      `SELECT * FROM workflow_version_history
+       WHERE workflow_id = $1 AND version_number = $2`,
+      [id, parsedVersionNumber]
+    );
+
+    if (versionResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Version not found',
+          code: 'VERSION_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const version = versionResult.rows[0];
+
+    // Sanitize nodes in snapshot
+    const sanitizedNodes = (version.nodes_snapshot || []).map((node: any) => ({
+      ...node,
+      config: sanitizeNodeConfig(node.type, node.config || {}),
+    }));
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        versionNumber: parsedVersionNumber,
+        isCurrent: false,
+        nodes: sanitizedNodes,
+        edges: version.edges_snapshot || [],
+        metadata: version.workflow_metadata || {},
+        createdAt: version.created_at,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Clone a public workflow to the authenticated user's account
+ */
+export const clonePublicWorkflow = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
+
+    if (!userId) {
+      throw new AppError(401, 'Authentication required', 'UNAUTHORIZED');
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Get the public workflow
+      const workflowResult = await client.query(
+        'SELECT * FROM workflows WHERE id = $1 AND is_public = true',
+        [id]
+      );
+
+      if (workflowResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Public workflow not found',
+            code: 'WORKFLOW_NOT_FOUND',
+          },
+        } as ApiResponse);
+        return;
+      }
+
+      const sourceWorkflow = workflowResult.rows[0];
+
+      // Create new workflow (as private, owned by the cloning user)
+      const newWorkflowResult = await client.query(
+        `INSERT INTO workflows (
+          user_id,
+          name,
+          description,
+          trigger_node_id,
+          is_active,
+          is_draft,
+          category,
+          tags,
+          is_public,
+          published_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *`,
+        [
+          userId,
+          `${sourceWorkflow.name} (Copy)`,
+          sourceWorkflow.description,
+          null, // Will update after cloning nodes
+          false,
+          true,
+          sourceWorkflow.category,
+          sourceWorkflow.tags,
+          false, // Clone as private
+          null,
+        ]
+      );
+
+      const newWorkflow = newWorkflowResult.rows[0];
+      const newWorkflowId = newWorkflow.id;
+
+      // Get source nodes
+      const nodesResult = await client.query(
+        'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Clone nodes with sanitized configs
+      const nodeIdMap = new Map<string, string>();
+
+      for (const node of nodesResult.rows) {
+        // Sanitize config when cloning
+        const sanitizedConfig = sanitizeNodeConfig(node.type, node.config || {});
+
+        const newNodeResult = await client.query(
+          `INSERT INTO workflow_nodes (
+            workflow_id,
+            type,
+            name,
+            description,
+            config,
+            position,
+            metadata
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id`,
+          [
+            newWorkflowId,
+            node.type,
+            node.name,
+            node.description,
+            JSON.stringify(sanitizedConfig),
+            node.position,
+            node.metadata,
+          ]
+        );
+
+        nodeIdMap.set(node.id, newNodeResult.rows[0].id);
+      }
+
+      // Update trigger node ID if exists
+      if (sourceWorkflow.trigger_node_id) {
+        const newTriggerNodeId = nodeIdMap.get(sourceWorkflow.trigger_node_id);
+        if (newTriggerNodeId) {
+          await client.query(
+            'UPDATE workflows SET trigger_node_id = $1 WHERE id = $2',
+            [newTriggerNodeId, newWorkflowId]
+          );
+        }
+      }
+
+      // Get source edges
+      const edgesResult = await client.query(
+        'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Clone edges
+      for (const edge of edgesResult.rows) {
+        const newSourceId = nodeIdMap.get(edge.source_node_id);
+        const newTargetId = nodeIdMap.get(edge.target_node_id);
+
+        if (newSourceId && newTargetId) {
+          await client.query(
+            `INSERT INTO workflow_edges (
+              workflow_id,
+              source_node_id,
+              target_node_id,
+              source_handle,
+              target_handle,
+              condition,
+              data_mapping
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              newWorkflowId,
+              newSourceId,
+              newTargetId,
+              edge.source_handle,
+              edge.target_handle,
+              edge.condition,
+              edge.data_mapping,
+            ]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+
+      logger.info({ sourceWorkflowId: id, newWorkflowId, userId }, 'Public workflow cloned successfully');
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          id: newWorkflowId,
+          ...newWorkflow,
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      res.status(201).json(response);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, workflowId: id, userId }, 'Error cloning public workflow');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error in clonePublicWorkflow');
+    next(error);
+  }
+};
+
+/**
+ * Get workflow version history
+ */
+export const getWorkflowVersions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
+
+    // Verify workflow exists and belongs to user
+    const workflowCheck = await pool.query(
+      'SELECT id, version FROM workflows WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (workflowCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const currentVersion = workflowCheck.rows[0].version || 1;
+
+    // Get version history
+    const versionsResult = await pool.query(
+      `SELECT 
+        id,
+        version_number,
+        change_summary,
+        created_at,
+        created_by
+      FROM workflow_version_history 
+      WHERE workflow_id = $1 
+      ORDER BY version_number DESC`,
+      [id]
+    );
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        currentVersion,
+        versions: versionsResult.rows,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+        total: versionsResult.rows.length,
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error({ error }, 'Error in getWorkflowVersions');
+    next(error);
+  }
+};
+
+/**
+ * Get specific workflow version
+ */
+export const getWorkflowVersion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id, versionNumber } = req.params;
+    const versionStr = Array.isArray(versionNumber) ? versionNumber[0] : versionNumber;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
+
+    // Verify workflow exists and belongs to user
+    const workflowCheck = await pool.query(
+      'SELECT id FROM workflows WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (workflowCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    // Get specific version
+    const versionResult = await pool.query(
+      `SELECT * FROM workflow_version_history 
+       WHERE workflow_id = $1 AND version_number = $2`,
+      [id, parseInt(versionStr, 10)]
+    );
+
+    if (versionResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Version not found',
+          code: 'VERSION_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const version = versionResult.rows[0];
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        id: version.id,
+        workflowId: id,
+        versionNumber: version.version_number,
+        changeSummary: version.change_summary,
+        nodes: version.nodes_snapshot,
+        edges: version.edges_snapshot,
+        metadata: version.workflow_metadata,
+        createdAt: version.created_at,
+        createdBy: version.created_by,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error({ error }, 'Error in getWorkflowVersion');
+    next(error);
+  }
+};
+
+/**
+ * Restore workflow to a previous version
+ */
+export const restoreWorkflowVersion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id, versionNumber } = req.params;
+    const versionStr = Array.isArray(versionNumber) ? versionNumber[0] : versionNumber;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
+
+    // Parse and validate version number
+    const parsedVersionNumber = parseInt(versionStr, 10);
+    if (isNaN(parsedVersionNumber) || parsedVersionNumber < 1) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid version number',
+          code: 'INVALID_VERSION_NUMBER',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Verify workflow exists and belongs to user
+      const workflowCheck = await client.query(
+        'SELECT id, version, name, description, category, tags, is_public FROM workflows WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      if (workflowCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Workflow not found',
+            code: 'WORKFLOW_NOT_FOUND',
+          },
+        } as ApiResponse);
+        return;
+      }
+
+      const currentWorkflow = workflowCheck.rows[0];
+      const currentVersion = currentWorkflow.version || 1;
+
+      // Block rollback for public workflows
+      if (currentWorkflow.is_public) {
+        await client.query('ROLLBACK');
+        res.status(403).json({
+          success: false,
+          error: {
+            message: 'Cannot rollback public workflows. Unpublish the workflow first.',
+            code: 'ROLLBACK_PUBLIC_FORBIDDEN',
+          },
+        } as ApiResponse);
+        return;
+      }
+
+      // Get version to restore
+      const versionResult = await client.query(
+        `SELECT * FROM workflow_version_history 
+         WHERE workflow_id = $1 AND version_number = $2`,
+        [id, parsedVersionNumber]
+      );
+
+      if (versionResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Version not found',
+            code: 'VERSION_NOT_FOUND',
+          },
+        } as ApiResponse);
+        return;
+      }
+
+      const versionToRestore = versionResult.rows[0];
+
+      // Get current nodes and edges for snapshot
+      const currentNodesResult = await client.query(
+        'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+        [id]
+      );
+      const currentEdgesResult = await client.query(
+        'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Save current state to version history before restoring
+      await client.query(
+        `INSERT INTO workflow_version_history (
+          workflow_id, 
+          version_number, 
+          change_summary,
+          nodes_snapshot, 
+          edges_snapshot,
+          workflow_metadata,
+          created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (workflow_id, version_number) DO NOTHING`,
+        [
+          id,
+          currentVersion,
+          `Before restoring to version ${versionNumber}`,
+          JSON.stringify(currentNodesResult.rows),
+          JSON.stringify(currentEdgesResult.rows),
+          JSON.stringify({
+            name: currentWorkflow.name,
+            description: currentWorkflow.description,
+            category: currentWorkflow.category,
+            tags: currentWorkflow.tags,
+            is_public: currentWorkflow.is_public,
+          }),
+          userId,
+        ]
+      );
+
+      // Delete current edges and nodes
+      await client.query('DELETE FROM workflow_edges WHERE workflow_id = $1', [id]);
+      await client.query('DELETE FROM workflow_nodes WHERE workflow_id = $1', [id]);
+
+      // Restore nodes from snapshot
+      const restoredNodes = versionToRestore.nodes_snapshot;
+      const nodeIdMap = new Map<string, string>();
+
+      for (const node of restoredNodes) {
+        const result = await client.query(
+          `INSERT INTO workflow_nodes (
+            workflow_id, type, name, description, config, position, metadata
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [
+            id,
+            node.type,
+            node.name,
+            node.description,
+            JSON.stringify(node.config),
+            JSON.stringify(node.position),
+            JSON.stringify(node.metadata),
+          ]
+        );
+        nodeIdMap.set(node.id, result.rows[0].id);
+      }
+
+      // Restore edges from snapshot
+      const restoredEdges = versionToRestore.edges_snapshot;
+      for (const edge of restoredEdges) {
+        const sourceId = nodeIdMap.get(edge.source_node_id);
+        const targetId = nodeIdMap.get(edge.target_node_id);
+
+        if (sourceId && targetId) {
+          await client.query(
+            `INSERT INTO workflow_edges (
+              workflow_id, source_node_id, target_node_id, source_handle, target_handle, condition, data_mapping
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              id,
+              sourceId,
+              targetId,
+              edge.source_handle,
+              edge.target_handle,
+              edge.condition ? JSON.stringify(edge.condition) : null,
+              edge.data_mapping ? JSON.stringify(edge.data_mapping) : null,
+            ]
+          );
+        }
+      }
+
+      // Update workflow version to the restored version (true rollback)
+      const workflowMetadata = versionToRestore.workflow_metadata || {};
+
+      await client.query(
+        `UPDATE workflows SET 
+          version = $1,
+          version_created_at = NOW(),
+          updated_at = NOW(),
+          name = COALESCE($2, name),
+          description = COALESCE($3, description)
+        WHERE id = $4`,
+        [parsedVersionNumber, workflowMetadata.name, workflowMetadata.description, id]
+      );
+
+      // Delete version history entries newer than the restored version
+      await client.query(
+        `DELETE FROM workflow_version_history 
+         WHERE workflow_id = $1 AND version_number > $2`,
+        [id, parsedVersionNumber]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info({ workflowId: id, restoredToVersion: parsedVersionNumber }, 'Workflow version restored (rollback)');
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          workflowId: id,
+          restoredToVersion: parsedVersionNumber,
+          message: `Workflow rolled back to version ${parsedVersionNumber}`,
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      res.json(response);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, workflowId: id, versionNumber }, 'Error restoring workflow version');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error in restoreWorkflowVersion');
     next(error);
   }
 };

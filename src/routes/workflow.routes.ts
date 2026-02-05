@@ -9,6 +9,14 @@ import {
   executeWorkflow,
   getExecutionStatus,
   getExecutionHistory,
+  listPublicWorkflows,
+  getPublicWorkflow,
+  getPublicWorkflowVersions,
+  getPublicWorkflowVersion,
+  clonePublicWorkflow,
+  getWorkflowVersions,
+  getWorkflowVersion,
+  restoreWorkflowVersion,
 } from '../controllers/workflow.controller';
 import { subscribeToExecution } from '../services/ExecutionSSEService';
 import { verifyPrivyToken } from '../middleware/privy-auth';
@@ -21,23 +29,37 @@ import {
   executeWorkflowSchema,
   listWorkflowsQuerySchema,
   idParamSchema,
+  idWithVersionParamSchema,
   fullUpdateWorkflowSchema,
+  listPublicWorkflowsQuerySchema,
 } from '../middleware/schemas';
 
+
 const router = Router();
+
+// ===========================================
+// PUBLIC ROUTES (no authentication required)
+// ===========================================
+
+// List public workflows
+router.get('/public', validateQuery(listPublicWorkflowsQuerySchema), listPublicWorkflows);
+
+// Get public workflow detail
+router.get('/public/:id', validateParams(idParamSchema), getPublicWorkflow);
+
+// Public workflow version history (no auth required)
+router.get('/public/:id/versions', validateParams(idParamSchema), getPublicWorkflowVersions);
+router.get('/public/:id/versions/:versionNumber', validateParams(idWithVersionParamSchema), getPublicWorkflowVersion);
+
+// ===========================================
+// AUTHENTICATED ROUTES
+// ===========================================
 
 // Real-time execution updates via Server-Sent Events
 // Security: Token-based authentication is used instead of Authorization header
 router.get('/executions/:executionId/subscribe', async (req: Request, res: Response) => {
-  const executionId = typeof req.params.executionId === 'string'
-    ? req.params.executionId
-    : req.params.executionId?.[0];
+  const executionId = req.params.executionId as string;
   const token = req.query.token as string | undefined;
-
-  if (!executionId) {
-    res.status(400).json({ success: false, error: 'Missing executionId' });
-    return;
-  }
 
   // Verify the subscription token
   const verification = await verifySubscriptionToken(executionId, token);
@@ -65,6 +87,9 @@ router.get('/executions/:executionId/subscribe', async (req: Request, res: Respo
 // Apply Privy authentication to all other workflow routes
 router.use(verifyPrivyToken);
 
+// Clone public workflow (authenticated)
+router.post('/public/:id/clone', validateParams(idParamSchema), clonePublicWorkflow);
+
 // Workflow CRUD with validation
 router.post('/', validateBody(createWorkflowSchema), createWorkflow);
 router.get('/', validateQuery(listWorkflowsQuerySchema), listWorkflows);
@@ -72,6 +97,11 @@ router.get('/:id', validateParams(idParamSchema), getWorkflow);
 router.put('/:id', validateParams(idParamSchema), validateBody(updateWorkflowSchema), updateWorkflow);
 router.put('/:id/full', validateParams(idParamSchema), validateBody(fullUpdateWorkflowSchema), fullUpdateWorkflow);
 router.delete('/:id', validateParams(idParamSchema), deleteWorkflow);
+
+// Workflow Version History
+router.get('/:id/versions', validateParams(idParamSchema), getWorkflowVersions);
+router.get('/:id/versions/:versionNumber', validateParams(idWithVersionParamSchema), getWorkflowVersion);
+router.post('/:id/versions/:versionNumber/restore', validateParams(idWithVersionParamSchema), restoreWorkflowVersion);
 
 // Workflow Execution with validation
 router.post('/:id/execute', validateParams(idParamSchema), validateBody(executeWorkflowSchema), executeWorkflow);
