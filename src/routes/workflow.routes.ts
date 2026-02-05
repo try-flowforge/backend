@@ -11,6 +11,8 @@ import {
   getExecutionHistory,
   listPublicWorkflows,
   getPublicWorkflow,
+  getPublicWorkflowVersions,
+  getPublicWorkflowVersion,
   clonePublicWorkflow,
   getWorkflowVersions,
   getWorkflowVersion,
@@ -44,6 +46,10 @@ router.get('/public', validateQuery(listPublicWorkflowsQuerySchema), listPublicW
 
 // Get public workflow detail
 router.get('/public/:id', validateParams(idParamSchema), getPublicWorkflow);
+
+// Public workflow version history (no auth required)
+router.get('/public/:id/versions', validateParams(idParamSchema), getPublicWorkflowVersions);
+router.get('/public/:id/versions/:versionNumber', validateParams(idWithVersionParamSchema), getPublicWorkflowVersion);
 
 // ===========================================
 // AUTHENTICATED ROUTES

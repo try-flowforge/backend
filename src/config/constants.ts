@@ -106,7 +106,7 @@ export const VALIDATION_CONSTANTS = {
     MIN_NODES_PER_WORKFLOW: 1,
 
     /** Maximum tags per workflow */
-    MAX_TAGS_PER_WORKFLOW: 5,
+    MAX_TAGS_PER_WORKFLOW: 20,
 
     /** Maximum tag length */
     MAX_TAG_LENGTH: 20,
