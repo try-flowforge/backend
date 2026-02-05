@@ -54,8 +54,8 @@ export class IfNodeProcessor implements INodeProcessor {
         throw new Error(`Invalid IF configuration: ${validation.errors?.join(', ')}`);
       }
 
-      // Get the value to test from input data
-      const leftValue = this.getValueByPath(input.inputData, config.leftPath);
+      // Get the value to test - either from path lookup or as literal value
+      const leftValue = this.resolveValue(input.inputData, config.leftPath);
 
       // Evaluate the condition
       const conditionResult = this.evaluateCondition(
@@ -125,6 +125,39 @@ export class IfNodeProcessor implements INodeProcessor {
         },
       };
     }
+  }
+
+  /**
+   * Resolve a value - either as a path lookup from input data or as a literal value
+   * 
+   * If the value looks like a path (contains dots or matches a key in input data),
+   * it tries to resolve it from input data. Otherwise, it treats it as a literal value.
+   * 
+   * Examples:
+   * - "input.amount" -> looks up inputData.input.amount
+   * - "amount" -> looks up inputData.amount, falls back to "amount" as literal
+   * - "100" -> treated as literal value 100
+   * - "hello" -> treated as literal value "hello"
+   */
+  private resolveValue(inputData: any, valueOrPath: string): any {
+    if (!valueOrPath) return undefined;
+
+    // First, try to resolve as a path from input data
+    const resolvedFromPath = this.getValueByPath(inputData, valueOrPath);
+    
+    // If we found a value in input data, use it
+    if (resolvedFromPath !== undefined) {
+      return resolvedFromPath;
+    }
+
+    // Otherwise, treat the value as a literal
+    // Try to parse as number if it looks like a number
+    if (!isNaN(Number(valueOrPath)) && valueOrPath !== '') {
+      return Number(valueOrPath);
+    }
+
+    // Return as string literal
+    return valueOrPath;
   }
 
   /**

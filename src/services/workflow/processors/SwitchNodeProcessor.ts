@@ -73,8 +73,8 @@ export class SwitchNodeProcessor implements INodeProcessor {
         );
       }
 
-      // Get the value to test from input data
-      const testValue = this.getValueByPath(input.inputData, config.valuePath);
+      // Get the value to test - either from path lookup or as literal value
+      const testValue = this.resolveValue(input.inputData, config.valuePath);
 
       // Find the first matching case (excluding default)
       let matchedCase: SwitchCase | undefined;
@@ -161,6 +161,39 @@ export class SwitchNodeProcessor implements INodeProcessor {
         },
       };
     }
+  }
+
+  /**
+   * Resolve a value - either as a path lookup from input data or as a literal value
+   * 
+   * If the value looks like a path (contains dots or matches a key in input data),
+   * it tries to resolve it from input data. Otherwise, it treats it as a literal value.
+   * 
+   * Examples:
+   * - "input.status" -> looks up inputData.input.status
+   * - "status" -> looks up inputData.status, falls back to "status" as literal
+   * - "100" -> treated as literal value 100
+   * - "active" -> treated as literal value "active"
+   */
+  private resolveValue(inputData: any, valueOrPath: string): any {
+    if (!valueOrPath) return undefined;
+
+    // First, try to resolve as a path from input data
+    const resolvedFromPath = this.getValueByPath(inputData, valueOrPath);
+    
+    // If we found a value in input data, use it
+    if (resolvedFromPath !== undefined) {
+      return resolvedFromPath;
+    }
+
+    // Otherwise, treat the value as a literal
+    // Try to parse as number if it looks like a number
+    if (!isNaN(Number(valueOrPath)) && valueOrPath !== "") {
+      return Number(valueOrPath);
+    }
+
+    // Return as string literal
+    return valueOrPath;
   }
 
   /**

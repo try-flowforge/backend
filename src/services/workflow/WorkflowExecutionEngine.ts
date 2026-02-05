@@ -345,6 +345,20 @@ export class WorkflowExecutionEngine {
         );
       }
 
+      // Handle SWITCH nodes - store branch decision
+      if (node.type === NodeType.SWITCH && result.output?.branchToFollow) {
+        branchDecisions.set(node.id, result.output.branchToFollow);
+
+        logger.info(
+          {
+            nodeId: node.id,
+            branchChosen: result.output.branchToFollow,
+            matchedCaseLabel: result.output.matchedCaseLabel,
+          },
+          'SWITCH node: branch selected'
+        );
+      }
+
       // Check if node failed
       if (!result.success) {
         logger.error({ nodeId: node.id, error: result.error }, 'Node execution failed');
@@ -366,7 +380,7 @@ export class WorkflowExecutionEngine {
   }
 
   /**
-   * Get next node to execute (handles IF node branching)
+   * Get next node to execute (handles IF and SWITCH node branching)
    */
   private getNextNode(
     currentNodeId: string,
@@ -396,6 +410,28 @@ export class WorkflowExecutionEngine {
         return null;
       }
     }
+
+    // If this is a SWITCH node, follow the chosen branch (case id)
+    if (currentNode?.type === NodeType.SWITCH) {
+      const chosenBranch = branchDecisions.get(currentNodeId);
+
+      if (chosenBranch) {
+        // Find edge with matching sourceHandle (case id like "case_1", "default", etc.)
+        const branchEdges = workflow.edges.filter(
+          e => e.sourceNodeId === currentNodeId && e.sourceHandle === chosenBranch
+        );
+
+        if (branchEdges.length > 0) {
+          return branchEdges[0].targetNodeId;
+        }
+
+        logger.warn(
+          { nodeId: currentNodeId, branch: chosenBranch },
+          'SWITCH node: no edge found for chosen branch'
+        );
+        return null;
+      }
+    }    
 
     // For regular nodes, follow the first outgoing edge
     const outgoingEdges = workflow.edges.filter(e => e.sourceNodeId === currentNodeId);
