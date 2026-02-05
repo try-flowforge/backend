@@ -39,6 +39,7 @@ function translateNodeConfigPlaceholders(
   // Fields that may contain template placeholders
   const templateFields = [
     'userPromptTemplate',
+    'systemPrompt',
     'message',
     'body',
     'subject',
@@ -75,6 +76,7 @@ export const createWorkflow = async (
       triggerNodeId,
       category,
       tags,
+      isPublic,
     } = req.body;
 
     // Validate required fields - userId should always be present from auth middleware
@@ -113,6 +115,7 @@ export const createWorkflow = async (
       await client.query('BEGIN');
 
       // Create workflow
+      const publishedAt = isPublic ? new Date() : null;
       const workflowResult = await client.query(
         `INSERT INTO workflows (
           user_id,
@@ -122,10 +125,12 @@ export const createWorkflow = async (
           is_active,
           is_draft,
           category,
-          tags
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          tags,
+          is_public,
+          published_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
-        [userId, name, description, null, false, true, category, tags]
+        [userId, name, description, null, false, true, category, tags, isPublic || false, publishedAt]
       );
 
       const workflow = workflowResult.rows[0];
@@ -170,7 +175,7 @@ export const createWorkflow = async (
             [JSON.stringify(translatedConfig), realNodeId]
           );
         }
-      }      
+      }
 
       // Update trigger node ID
       if (triggerNodeId) {
@@ -461,7 +466,7 @@ export const updateWorkflow = async (
     const { id } = req.params;
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.userId;
-    const { name, description, isActive, isDraft, category, tags } = req.body;
+    const { name, description, isActive, isDraft, category, tags, isPublic } = req.body;
 
     const fields: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -501,6 +506,19 @@ export const updateWorkflow = async (
       fields.push(`tags = $${paramIndex}`);
       values.push(tags);
       paramIndex++;
+    }
+
+    if (isPublic !== undefined) {
+      fields.push(`is_public = $${paramIndex}`);
+      values.push(isPublic);
+      paramIndex++;
+      
+      // Set or clear published_at based on isPublic
+      if (isPublic) {
+        fields.push(`published_at = COALESCE(published_at, NOW())`);
+      } else {
+        fields.push(`published_at = NULL`);
+      }
     }
 
     values.push(id, userId);
@@ -558,6 +576,7 @@ export const fullUpdateWorkflow = async (
       triggerNodeId,
       category,
       tags,
+      isPublic,
     } = req.body;
 
     logger.info({ workflowId: id, userId, nodeCount: nodes?.length, edgeCount: edges?.length }, 'Full update workflow requested');
@@ -586,6 +605,24 @@ export const fullUpdateWorkflow = async (
       }
 
       // Update workflow metadata
+      let publishedAtClause = '';
+      const updateParams: any[] = [name, description, category, tags];
+      
+      if (isPublic !== undefined) {
+        if (isPublic) {
+          // When publishing, set published_at if not already set
+          publishedAtClause = ', is_public = $5, published_at = COALESCE(published_at, NOW())';
+          updateParams.push(isPublic);
+        } else {
+          // When unpublishing, clear published_at
+          publishedAtClause = ', is_public = $5, published_at = NULL';
+          updateParams.push(isPublic);
+        }
+      }
+      
+      updateParams.push(id, userId);
+      const paramCount = updateParams.length;
+      
       const workflowResult = await client.query(
         `UPDATE workflows SET 
           name = COALESCE($1, name),
@@ -593,9 +630,10 @@ export const fullUpdateWorkflow = async (
           category = COALESCE($3, category),
           tags = COALESCE($4, tags),
           updated_at = NOW()
-        WHERE id = $5 AND user_id = $6
+          ${publishedAtClause}
+        WHERE id = $${paramCount - 1} AND user_id = $${paramCount}
         RETURNING *`,
-        [name, description, category, tags, id, userId]
+        updateParams
       );
 
       const workflow = workflowResult.rows[0];
@@ -650,7 +688,7 @@ export const fullUpdateWorkflow = async (
           }
         }
       }
-      
+
       // Update trigger node ID
       if (triggerNodeId) {
         const realTriggerNodeId = nodeIds.get(triggerNodeId);
@@ -787,23 +825,17 @@ export const executeWorkflow = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const workflowId = Array.isArray(req.params.workflowId)
-      ? req.params.workflowId[0]
-      : req.params.workflowId;
-    if (!workflowId) {
-      res.status(400).json({ success: false, error: 'Invalid workflowId' });
-      return;
-    }
+    const id = req.params.id as string;
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.userId;
     const { initialInput = {} } = req.body || {};
 
-    logger.info({ workflowId, userId }, 'Manual workflow execution requested');
+    logger.info({ workflowId: id, userId }, 'Manual workflow execution requested');
 
     // Verify workflow exists and belongs to authenticated user
     const workflowResult = await pool.query(
       'SELECT * FROM workflows WHERE id = $1 AND user_id = $2',
-      [workflowId, userId]
+      [id, userId]
     );
 
     if (workflowResult.rows.length === 0) {
@@ -820,7 +852,7 @@ export const executeWorkflow = async (
     // Enqueue execution
     const executionId = crypto.randomUUID();
     await enqueueWorkflowExecution({
-      workflowId: workflowId,
+      workflowId: id,
       userId,
       triggeredBy: TriggerType.MANUAL,
       initialInput,
@@ -937,6 +969,396 @@ export const getExecutionHistory = async (
 
     res.json(response);
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Sanitize node config for public display
+ * Removes user-specific and sensitive identifiers
+ */
+function sanitizeNodeConfig(nodeType: string, config: Record<string, any>): Record<string, any> {
+  const sanitized = { ...config };
+
+  switch (nodeType) {
+    case 'SLACK':
+      delete sanitized.connectionId;
+      delete sanitized.channelId;
+      break;
+
+    case 'TELEGRAM':
+      delete sanitized.connectionId;
+      delete sanitized.chatId;
+      break;
+
+    case 'EMAIL':
+      delete sanitized.to;
+      // Keep subject and body template structure
+      break;
+
+    case 'WALLET':
+      delete sanitized.walletAddress;
+      break;
+
+    case 'SWAP':
+      // Keep swap config but remove wallet address
+      if (sanitized.inputConfig) {
+        delete sanitized.inputConfig.walletAddress;
+      }
+      break;
+
+    // Keep other node types as-is (IF, SWITCH, START, etc.)
+    default:
+      break;
+  }
+
+  return sanitized;
+}
+
+/**
+ * List all public workflows (no authentication required)
+ */
+export const listPublicWorkflows = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { q, tag, limit = 50, offset = 0 } = req.query;
+
+    // Build query with search and tag filters
+    let query = `
+      SELECT 
+        w.id,
+        w.name,
+        w.description,
+        w.category,
+        w.tags,
+        w.published_at,
+        w.updated_at,
+        w.created_at,
+        COALESCE(exec_stats.execution_count, 0)::int as usage_count
+      FROM workflows w
+      LEFT JOIN (
+        SELECT 
+          workflow_id,
+          COUNT(DISTINCT user_id)::int as execution_count
+        FROM workflow_executions
+        GROUP BY workflow_id
+      ) exec_stats ON w.id = exec_stats.workflow_id
+      WHERE w.is_public = true
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    // Search by name or description
+    if (q && typeof q === 'string' && q.trim() !== '') {
+      query += ` AND (w.name ILIKE $${paramIndex} OR w.description ILIKE $${paramIndex})`;
+      params.push(`%${q.trim()}%`);
+      paramIndex++;
+    }
+
+    // Filter by tag
+    if (tag && typeof tag === 'string') {
+      query += ` AND $${paramIndex} = ANY(w.tags)`;
+      params.push(tag);
+      paramIndex++;
+    }
+
+    query += ' ORDER BY w.published_at DESC NULLS LAST, w.updated_at DESC';
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM workflows w WHERE w.is_public = true';
+    const countParams: any[] = [];
+    let countParamIndex = 1;
+
+    if (q && typeof q === 'string' && q.trim() !== '') {
+      countQuery += ` AND (w.name ILIKE $${countParamIndex} OR w.description ILIKE $${countParamIndex})`;
+      countParams.push(`%${q.trim()}%`);
+      countParamIndex++;
+    }
+
+    if (tag && typeof tag === 'string') {
+      countQuery += ` AND $${countParamIndex} = ANY(w.tags)`;
+      countParams.push(tag);
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const totalCount = parseInt(countResult.rows[0].count, 10);
+
+    const response: ApiResponse = {
+      success: true,
+      data: result.rows,
+      meta: {
+        timestamp: new Date().toISOString(),
+        total: totalCount,
+        limit: Number(limit),
+        offset: Number(offset),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get a single public workflow with sanitized node configs (no authentication required)
+ */
+export const getPublicWorkflow = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Get workflow
+    const workflowResult = await pool.query(
+      'SELECT * FROM workflows WHERE id = $1 AND is_public = true',
+      [id]
+    );
+
+    if (workflowResult.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Public workflow not found',
+          code: 'WORKFLOW_NOT_FOUND',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const workflow = workflowResult.rows[0];
+
+    // Get nodes
+    const nodesResult = await pool.query(
+      'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+      [id]
+    );
+
+    // Sanitize node configs
+    const sanitizedNodes = nodesResult.rows.map((node) => ({
+      ...node,
+      config: sanitizeNodeConfig(node.type, node.config || {}),
+    }));
+
+    // Get edges
+    const edgesResult = await pool.query(
+      'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+      [id]
+    );
+
+    // Remove user_id from workflow for privacy
+    const { user_id, ...workflowData } = workflow;
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        ...workflowData,
+        nodes: sanitizedNodes,
+        edges: edgesResult.rows,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Clone a public workflow to the authenticated user's account
+ */
+export const clonePublicWorkflow = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
+
+    if (!userId) {
+      throw new AppError(401, 'Authentication required', 'UNAUTHORIZED');
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Get the public workflow
+      const workflowResult = await client.query(
+        'SELECT * FROM workflows WHERE id = $1 AND is_public = true',
+        [id]
+      );
+
+      if (workflowResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Public workflow not found',
+            code: 'WORKFLOW_NOT_FOUND',
+          },
+        } as ApiResponse);
+        return;
+      }
+
+      const sourceWorkflow = workflowResult.rows[0];
+
+      // Create new workflow (as private, owned by the cloning user)
+      const newWorkflowResult = await client.query(
+        `INSERT INTO workflows (
+          user_id,
+          name,
+          description,
+          trigger_node_id,
+          is_active,
+          is_draft,
+          category,
+          tags,
+          is_public,
+          published_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *`,
+        [
+          userId,
+          `${sourceWorkflow.name} (Copy)`,
+          sourceWorkflow.description,
+          null, // Will update after cloning nodes
+          false,
+          true,
+          sourceWorkflow.category,
+          sourceWorkflow.tags,
+          false, // Clone as private
+          null,
+        ]
+      );
+
+      const newWorkflow = newWorkflowResult.rows[0];
+      const newWorkflowId = newWorkflow.id;
+
+      // Get source nodes
+      const nodesResult = await client.query(
+        'SELECT * FROM workflow_nodes WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Clone nodes with sanitized configs
+      const nodeIdMap = new Map<string, string>();
+
+      for (const node of nodesResult.rows) {
+        // Sanitize config when cloning
+        const sanitizedConfig = sanitizeNodeConfig(node.type, node.config || {});
+
+        const newNodeResult = await client.query(
+          `INSERT INTO workflow_nodes (
+            workflow_id,
+            type,
+            name,
+            description,
+            config,
+            position,
+            metadata
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id`,
+          [
+            newWorkflowId,
+            node.type,
+            node.name,
+            node.description,
+            JSON.stringify(sanitizedConfig),
+            node.position,
+            node.metadata,
+          ]
+        );
+
+        nodeIdMap.set(node.id, newNodeResult.rows[0].id);
+      }
+
+      // Update trigger node ID if exists
+      if (sourceWorkflow.trigger_node_id) {
+        const newTriggerNodeId = nodeIdMap.get(sourceWorkflow.trigger_node_id);
+        if (newTriggerNodeId) {
+          await client.query(
+            'UPDATE workflows SET trigger_node_id = $1 WHERE id = $2',
+            [newTriggerNodeId, newWorkflowId]
+          );
+        }
+      }
+
+      // Get source edges
+      const edgesResult = await client.query(
+        'SELECT * FROM workflow_edges WHERE workflow_id = $1',
+        [id]
+      );
+
+      // Clone edges
+      for (const edge of edgesResult.rows) {
+        const newSourceId = nodeIdMap.get(edge.source_node_id);
+        const newTargetId = nodeIdMap.get(edge.target_node_id);
+
+        if (newSourceId && newTargetId) {
+          await client.query(
+            `INSERT INTO workflow_edges (
+              workflow_id,
+              source_node_id,
+              target_node_id,
+              source_handle,
+              target_handle,
+              condition,
+              data_mapping
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              newWorkflowId,
+              newSourceId,
+              newTargetId,
+              edge.source_handle,
+              edge.target_handle,
+              edge.condition,
+              edge.data_mapping,
+            ]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+
+      logger.info({ sourceWorkflowId: id, newWorkflowId, userId }, 'Public workflow cloned successfully');
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          id: newWorkflowId,
+          ...newWorkflow,
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      res.status(201).json(response);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, workflowId: id, userId }, 'Error cloning public workflow');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error in clonePublicWorkflow');
     next(error);
   }
 };

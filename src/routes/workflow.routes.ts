@@ -9,6 +9,9 @@ import {
   executeWorkflow,
   getExecutionStatus,
   getExecutionHistory,
+  listPublicWorkflows,
+  getPublicWorkflow,
+  clonePublicWorkflow,
 } from '../controllers/workflow.controller';
 import { subscribeToExecution } from '../services/ExecutionSSEService';
 import { verifyPrivyToken } from '../middleware/privy-auth';
@@ -22,22 +25,30 @@ import {
   listWorkflowsQuerySchema,
   idParamSchema,
   fullUpdateWorkflowSchema,
+  listPublicWorkflowsQuerySchema,
 } from '../middleware/schemas';
 
 const router = Router();
 
+// ===========================================
+// PUBLIC ROUTES (no authentication required)
+// ===========================================
+
+// List public workflows
+router.get('/public', validateQuery(listPublicWorkflowsQuerySchema), listPublicWorkflows);
+
+// Get public workflow detail
+router.get('/public/:id', validateParams(idParamSchema), getPublicWorkflow);
+
+// ===========================================
+// AUTHENTICATED ROUTES
+// ===========================================
+
 // Real-time execution updates via Server-Sent Events
 // Security: Token-based authentication is used instead of Authorization header
 router.get('/executions/:executionId/subscribe', async (req: Request, res: Response) => {
-  const executionId = typeof req.params.executionId === 'string'
-    ? req.params.executionId
-    : req.params.executionId?.[0];
+  const executionId = req.params.executionId as string;
   const token = req.query.token as string | undefined;
-
-  if (!executionId) {
-    res.status(400).json({ success: false, error: 'Missing executionId' });
-    return;
-  }
 
   // Verify the subscription token
   const verification = await verifySubscriptionToken(executionId, token);
@@ -64,6 +75,9 @@ router.get('/executions/:executionId/subscribe', async (req: Request, res: Respo
 
 // Apply Privy authentication to all other workflow routes
 router.use(verifyPrivyToken);
+
+// Clone public workflow (authenticated)
+router.post('/public/:id/clone', validateParams(idParamSchema), clonePublicWorkflow);
 
 // Workflow CRUD with validation
 router.post('/', validateBody(createWorkflowSchema), createWorkflow);
