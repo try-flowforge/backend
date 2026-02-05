@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { swapExecutionService } from '../services/swap/SwapExecutionService';
 import { swapProviderFactory } from '../services/swap/providers/SwapProviderFactory';
+import { AuthenticatedRequest } from '../middleware/privy-auth';
 import { logger } from '../utils/logger';
 import {
   SwapProvider,
@@ -8,6 +9,7 @@ import {
   SwapInputConfig,
   ApiResponse,
 } from '../types';
+import { randomUUID } from 'crypto';
 
 /**
  * Get quote from swap provider
@@ -202,6 +204,132 @@ export const getSwapExecution = async (
 
     res.json(response);
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Build Safe transaction hash for user to sign
+ * Returns transaction hash that frontend needs to sign with EIP-712
+ */
+export const buildSafeSwapTransaction = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { provider, chain } = req.params;
+    const config: SwapInputConfig = req.body;
+    const userId = authReq.userId;
+
+    // Generate a temporary node execution ID for tracking
+    // IMPORTANT: must be a UUID because it's persisted in `swap_executions.node_execution_id` (uuid column)
+    const nodeExecutionId = randomUUID();
+
+    logger.info({ provider, chain, userId }, 'Building Safe transaction hash for signing');
+
+    const safeTxHashResult = await swapExecutionService.buildSwapTransactionForSigning(
+      nodeExecutionId,
+      chain as SupportedChain,
+      provider as SwapProvider,
+      config,
+      userId
+    );
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        safeTxHash: safeTxHashResult.safeTxHash,
+        safeAddress: safeTxHashResult.safeAddress,
+        safeTxData: safeTxHashResult.safeTxData,
+        needsApproval: safeTxHashResult.needsApproval,
+        tokenAddress: safeTxHashResult.tokenAddress,
+        nodeExecutionId, // Return for use in execute endpoint
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error({ error }, 'Failed to build Safe transaction hash');
+    next(error);
+  }
+};
+
+/**
+ * Execute swap with user signature
+ * User must have signed the transaction hash first (via buildSafeSwapTransaction)
+ */
+export const executeSwapWithSignature = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { provider, chain } = req.params;
+    const { config, signature, nodeExecutionId } = req.body;
+    const userId = authReq.userId;
+
+    if (!signature) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Signature is required',
+          code: 'SIGNATURE_REQUIRED',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    if (!nodeExecutionId) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'nodeExecutionId is required',
+          code: 'NODE_EXECUTION_ID_REQUIRED',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    logger.info({ provider, chain, userId }, 'Executing swap with signature');
+
+    const result = await swapExecutionService.executeSwapWithSignature(
+      nodeExecutionId,
+      chain as SupportedChain,
+      provider as SwapProvider,
+      config as SwapInputConfig,
+      userId,
+      signature as string
+    );
+
+    if (!result.success) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: result.errorMessage || 'Swap execution failed',
+          code: result.errorCode || 'SWAP_FAILED',
+        },
+        data: result,
+      } as ApiResponse);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: true,
+      data: result,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error({ error }, 'Failed to execute swap with signature');
     next(error);
   }
 };

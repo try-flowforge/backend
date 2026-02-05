@@ -9,6 +9,7 @@ import { SupportedChain } from "../types";
  * These are the official Gnosis Safe MultiSend contracts
  */
 const MULTISEND_ADDRESSES: Record<SupportedChainId, string> = {
+  11155111: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Ethereum Sepolia
   421614: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Sepolia
   42161: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Mainnet (same address)
 };
