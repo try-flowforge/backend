@@ -238,5 +238,34 @@ export class UserModel {
       throw error;
     }
   }
+
+  /**
+   * Get Safe wallet address for a user based on chain
+   * @param userId User ID
+   * @param chainId Chain ID (421614 for Arbitrum Sepolia, 42161 for Arbitrum Mainnet)
+   * @returns Safe wallet address or null if not found
+  */
+  static async getSafeAddressByChain(
+    userId: string,
+    chainId: number
+  ): Promise<string | null> {
+    const user = await this.findById(userId);
+    if (!user) {
+      return null;
+    }
+
+    // Arbitrum Sepolia (testnet)
+    if (chainId === 421614) {
+      return user.safe_wallet_address_testnet || null;
+    }
+
+    // Arbitrum Mainnet
+    if (chainId === 42161) {
+      return user.safe_wallet_address_mainnet || null;
+    }
+
+    logger.warn({ userId, chainId }, 'Unsupported chain ID for Safe address lookup');
+    return null;
+  }
 }
 

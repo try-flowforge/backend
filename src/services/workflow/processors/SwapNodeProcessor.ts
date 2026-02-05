@@ -33,25 +33,20 @@ export class SwapNodeProcessor implements INodeProcessor {
         throw new Error(`Invalid swap configuration: ${validation.errors?.join(', ')}`);
       }
 
-      // Get wallet private key from secrets
-      const privateKey = input.secrets['WALLET_PRIVATE_KEY'];
-      if (!privateKey) {
-        throw new Error('Wallet private key not found in secrets');
-      }
-
       // Get node execution ID from database
       const nodeExecutionId = await this.getNodeExecutionId(
         input.executionContext.executionId,
         input.nodeId
       );
 
-      // Execute the swap
+      // Execute the swap via Safe wallet
+      // Pass userId to lookup Safe wallet address
       const result = await swapExecutionService.executeSwap(
         nodeExecutionId,
         config.chain,
         config.provider,
         config.inputConfig,
-        privateKey
+        input.executionContext.userId,
       );
 
       const endTime = new Date();
