@@ -6,12 +6,16 @@
 export enum SupportedChain {
   ARBITRUM = "ARBITRUM",
   ARBITRUM_SEPOLIA = "ARBITRUM_SEPOLIA",
+  ETHEREUM = "ETHEREUM",
   ETHEREUM_SEPOLIA = "ETHEREUM_SEPOLIA",
+  UNICHAIN = "UNICHAIN",
+  UNICHAIN_SEPOLIA = "UNICHAIN_SEPOLIA",
 }
 
 // Supported Swap Providers
 export enum SwapProvider {
   UNISWAP = "UNISWAP",
+  UNISWAP_V4 = "UNISWAP_V4",
   RELAY = "RELAY",
   ONEINCH = "ONEINCH",
   LIFI = "LIFI",
@@ -77,6 +81,11 @@ export interface ChainConfig {
     uniswapRouter?: string;
     uniswapFactory?: string;
     weth?: string;
+    // Uniswap V4 contracts
+    uniswapV4Quoter?: string;
+    uniswapV4PoolSwapTest?: string;
+    universalRouter?: string;
+    permit2?: string;
     // Aave V3 contracts
     aavePool?: string;
     aavePoolDataProvider?: string;

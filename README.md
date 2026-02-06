@@ -97,3 +97,13 @@ docker-compose logs -f postgres        # Logs
 ## LICENSE
 
 [MIT License](LICENSE)
+
+## Test Uniswap V4
+
+```bash
+npx ts-node scripts/test-uniswap-v4.ts --network uni-sepolia --direction usdc-weth --amount 10
+```
+
+Supported networks: eth-sepolia, arb-sepolia, uni-sepolia, eth-main, arb-main, uni-main
+Supported directions: weth-usdc, usdc-weth
+Supported amount: any positive number (wallet should have enough balance)

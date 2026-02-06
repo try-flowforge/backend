@@ -25,6 +25,10 @@ import * as migration021 from "./021_add_aave_compound_node_types";
 import * as migration022 from "./022_add_llm_transform_node_type";
 import * as migration023 from "./023_add_workflow_visibility_fields";
 import * as migration024 from "./024_add_workflow_versioning";
+import * as migration025 from "./025_add_lifi_node_type";
+import * as migration026 from "./026_add_lifi_swap_provider";
+import * as migration027 from "./027_add_eth_sepolia_safe_wallet_and_chain_constraints";
+import * as migration028 from "./028_add_uniswap_v4_swap_provider";
 
 // Load environment variables
 dotenv.config();
@@ -188,6 +192,30 @@ const migrations: Migration[] = [
     name: "024_add_workflow_versioning",
     up: migration024.up,
     down: migration024.down,
+  },
+  {
+    id: 25,
+    name: "025_add_lifi_node_type",
+    up: migration025.up,
+    down: migration025.down,
+  },
+  {
+    id: 26,
+    name: "026_add_lifi_swap_provider",
+    up: migration026.up,
+    down: migration026.down,
+  },
+  {
+    id: 27,
+    name: "027_add_eth_sepolia_safe_wallet_and_chain_constraints",
+    up: migration027.up,
+    down: migration027.down,
+  },
+  {
+    id: 28,
+    name: "028_add_uniswap_v4_swap_provider",
+    up: migration028.up,
+    down: migration028.down,
   },
 ];
 
