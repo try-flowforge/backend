@@ -25,6 +25,9 @@ import * as migration021 from "./021_add_aave_compound_node_types";
 import * as migration022 from "./022_add_llm_transform_node_type";
 import * as migration023 from "./023_add_workflow_visibility_fields";
 import * as migration024 from "./024_add_workflow_versioning";
+import * as migration025 from "./025_add_lifi_node_type";
+import * as migration026 from "./026_add_lifi_swap_provider";
+import * as migration027 from "./027_add_eth_sepolia_safe_wallet_and_chain_constraints";
 
 // Load environment variables
 dotenv.config();
@@ -127,6 +130,9 @@ const resetDatabase = async (): Promise<void> => {
     await migration022.up(pool);
     await migration023.up(pool);
     await migration024.up(pool);
+    await migration025.up(pool);
+    await migration026.up(pool);
+    await migration027.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -231,6 +237,18 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [24, "024_add_workflow_versioning"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [25, "025_add_lifi_node_type"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [26, "026_add_lifi_swap_provider"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [27, "027_add_eth_sepolia_safe_wallet_and_chain_constraints"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {
