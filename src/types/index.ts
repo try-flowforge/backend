@@ -6,6 +6,7 @@ export interface User {
   onboarded_at: Date;
   safe_wallet_address_testnet?: string;
   safe_wallet_address_mainnet?: string;
+  safe_wallet_address_eth_sepolia?: string;
 }
 
 export interface CreateUserInput {

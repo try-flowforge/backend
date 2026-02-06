@@ -341,6 +341,8 @@ export class SafeTransactionService {
         return 421614 as SupportedChainId;
       case SupportedChain.ARBITRUM:
         return 42161 as SupportedChainId;
+      case SupportedChain.ETHEREUM_SEPOLIA:
+        return 11155111 as SupportedChainId;
       default:
         throw new Error(`Unsupported chain: ${chain}`);
     }
@@ -350,7 +352,7 @@ export class SafeTransactionService {
    * Check if chain is testnet
    */
   static isTestnet(chainId: SupportedChainId): boolean {
-    return chainId === 421614;
+    return chainId === 421614 || chainId === 11155111;
   }
 
   /**

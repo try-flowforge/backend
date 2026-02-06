@@ -79,16 +79,9 @@ async function ensureUserExistsAndUpdateSafe(
       logger.info({ userId, email }, 'User created in database');
     }
 
-    // Update the Safe wallet address for the appropriate chain
-    const isTestnet = chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA || chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA;
-
-    if (isTestnet) {
-      await UserModel.updateSafeWalletAddresses(userId, safeAddress, undefined);
-      logger.info({ userId, safeAddress, chain: 'testnet' }, 'Updated user Safe wallet address');
-    } else {
-      await UserModel.updateSafeWalletAddresses(userId, undefined, safeAddress);
-      logger.info({ userId, safeAddress, chain: 'mainnet' }, 'Updated user Safe wallet address');
-    }
+    // Update the Safe wallet address for the specific chain
+    await UserModel.updateSafeAddressForChain(userId, chainId, safeAddress);
+    logger.info({ userId, safeAddress, chainId }, 'Updated user Safe wallet address for chain');
 
     result.safeAddressUpdated = true;
     result.success = true;

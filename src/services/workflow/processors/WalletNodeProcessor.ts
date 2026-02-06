@@ -32,8 +32,9 @@ export class WalletNodeProcessor implements INodeProcessor {
                 address: string;
                 safe_wallet_address_testnet: string | null;
                 safe_wallet_address_mainnet: string | null;
+                safe_wallet_address_eth_sepolia: string | null;
             }>(
-                'SELECT id, address, safe_wallet_address_testnet, safe_wallet_address_mainnet FROM users WHERE id = $1',
+                'SELECT id, address, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia FROM users WHERE id = $1',
                 [userId]
             );
 
@@ -48,15 +49,25 @@ export class WalletNodeProcessor implements INodeProcessor {
                 eoaAddress: user.address,
                 safeWalletAddressMainnet: user.safe_wallet_address_mainnet,
                 safeWalletAddressTestnet: user.safe_wallet_address_testnet,
-                // Provide a default wallet address based on environment
-                walletAddress: user.safe_wallet_address_mainnet || user.safe_wallet_address_testnet || user.address,
+                safeWalletAddressEthSepolia: user.safe_wallet_address_eth_sepolia,
+                // Default wallet: prefer Arbitrum Sepolia, then Ethereum Sepolia, then mainnet
+                walletAddress:
+                    user.safe_wallet_address_testnet ||
+                    user.safe_wallet_address_eth_sepolia ||
+                    user.safe_wallet_address_mainnet ||
+                    user.address,
                 timestamp: new Date().toISOString(),
             };
 
             const endTime = new Date();
 
             logger.info(
-                { nodeId: input.nodeId, userId, hasMainnetWallet: !!user.safe_wallet_address_mainnet },
+                {
+                    nodeId: input.nodeId,
+                    userId,
+                    hasMainnetWallet: !!user.safe_wallet_address_mainnet,
+                    hasEthSepoliaWallet: !!user.safe_wallet_address_eth_sepolia,
+                },
                 'Wallet node executed successfully'
             );
 

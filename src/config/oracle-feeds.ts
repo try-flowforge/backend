@@ -28,6 +28,7 @@ export const PRICE_FEEDS: Record<string, PriceFeedInfo> = {
     chainlink: {
       [SupportedChain.ARBITRUM]: '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
       [SupportedChain.ARBITRUM_SEPOLIA]: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
+      [SupportedChain.ETHEREUM_SEPOLIA]: '0x694AA1769357215DE4FAC081bf1f309aDC325306',
     },
     pyth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
   },
@@ -38,6 +39,7 @@ export const PRICE_FEEDS: Record<string, PriceFeedInfo> = {
     chainlink: {
       [SupportedChain.ARBITRUM]: '0x6ce185860a4963106506C203335A2910413708e9',
       [SupportedChain.ARBITRUM_SEPOLIA]: '0x56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69',
+      [SupportedChain.ETHEREUM_SEPOLIA]: '0x1b44F3514812d835EB1B450AFB6BC2d37093bF56',
     },
     pyth: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
   },
@@ -48,6 +50,7 @@ export const PRICE_FEEDS: Record<string, PriceFeedInfo> = {
     chainlink: {
       [SupportedChain.ARBITRUM]: '0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3',
       [SupportedChain.ARBITRUM_SEPOLIA]: '0x0153002d20B96532C639313c2d54c3dA09109309',
+      [SupportedChain.ETHEREUM_SEPOLIA]: '0xA2F78ab2355fe2f984D808B5CeE7FD964A160109',
     },
     pyth: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
   },
@@ -68,6 +71,7 @@ export const PRICE_FEEDS: Record<string, PriceFeedInfo> = {
     chainlink: {
       [SupportedChain.ARBITRUM]: '0x86E53CF1B870786351Da77A57575e79CB55812CB',
       [SupportedChain.ARBITRUM_SEPOLIA]: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298',
+      [SupportedChain.ETHEREUM_SEPOLIA]: '0xc59E3633BAAC77393d640F2Be3F7246B906e050',
     },
     pyth: '0x8ac0c70fff57e9aefdf5edf44b51d62c2d433653cbb2cf5cc06bb115af04d221',
   },

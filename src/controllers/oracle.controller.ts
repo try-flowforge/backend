@@ -160,7 +160,7 @@ export class OracleController {
           description: 'Decentralized oracle network providing price feeds',
           website: 'https://chain.link',
           docs: 'https://docs.chain.link/data-feeds/price-feeds',
-          supportedChains: [SupportedChain.ARBITRUM, SupportedChain.ARBITRUM_SEPOLIA],
+          supportedChains: [SupportedChain.ARBITRUM, SupportedChain.ARBITRUM_SEPOLIA, SupportedChain.ETHEREUM_SEPOLIA],
         },
         {
           id: OracleProvider.PYTH,
@@ -168,7 +168,7 @@ export class OracleController {
           description: 'High-fidelity price oracle for financial market data',
           website: 'https://pyth.network',
           docs: 'https://docs.pyth.network/price-feeds',
-          supportedChains: [SupportedChain.ARBITRUM, SupportedChain.ARBITRUM_SEPOLIA],
+          supportedChains: [SupportedChain.ARBITRUM, SupportedChain.ARBITRUM_SEPOLIA, SupportedChain.ETHEREUM_SEPOLIA],
         },
       ];
 
