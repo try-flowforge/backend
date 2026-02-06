@@ -239,10 +239,10 @@ export const createUserSchema = Joi.object({
  */
 export const createSafeSchema = Joi.object({
     chainId: Joi.number()
-        .valid(421614, 42161) // Arbitrum Sepolia, Arbitrum Mainnet
+        .valid(11155111, 421614, 42161) // Ethereum Sepolia, Arbitrum Sepolia, Arbitrum Mainnet
         .required()
         .messages({
-            'any.only': 'Chain ID must be 421614 (Arbitrum Sepolia) or 42161 (Arbitrum Mainnet)',
+            'any.only': 'Chain ID must be 11155111 (Ethereum Sepolia), 421614 (Arbitrum Sepolia), or 42161 (Arbitrum Mainnet)',
         }),
 });
 
@@ -251,7 +251,7 @@ export const createSafeSchema = Joi.object({
  */
 export const enableModuleSchema = Joi.object({
     chainId: Joi.number()
-        .valid(421614, 42161)
+        .valid(11155111, 421614, 42161)
         .required(),
     safeAddress: Joi.string()
         .pattern(/^0x[a-fA-F0-9]{40}$/)

@@ -39,9 +39,8 @@ export class LiFiProvider implements ISwapProvider {
     }
 
     supportsChain(chain: SupportedChain): boolean {
-        // LI.FI supports both Arbitrum and Arbitrum Sepolia
-        // However, testnet support may have limited liquidity sources
-        return chain === SupportedChain.ARBITRUM || chain === SupportedChain.ARBITRUM_SEPOLIA;
+        // LI.FI supports Arbitrum, Arbitrum Sepolia, and Ethereum Sepolia (same-chain quotes)
+        return chain === SupportedChain.ARBITRUM || chain === SupportedChain.ARBITRUM_SEPOLIA || chain === SupportedChain.ETHEREUM_SEPOLIA;
     }
 
     async getQuote(
