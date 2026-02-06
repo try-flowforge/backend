@@ -29,6 +29,7 @@ export const validateBody = (schema: Joi.ObjectSchema) => {
         },
         meta: {
           timestamp: new Date().toISOString(),
+          requestId: (req as any).requestId,
         },
       });
       return;
@@ -74,6 +75,7 @@ export const validateParams = (schema: Joi.ObjectSchema) => {
         },
         meta: {
           timestamp: new Date().toISOString(),
+          requestId: (req as any).requestId,
         },
       });
       return;
@@ -119,6 +121,7 @@ export const validateQuery = (schema: Joi.ObjectSchema) => {
         },
         meta: {
           timestamp: new Date().toISOString(),
+          requestId: (req as any).requestId,
         },
       });
       return;

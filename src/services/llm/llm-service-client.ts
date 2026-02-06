@@ -109,77 +109,101 @@ export class LLMServiceClient {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const startTime = Date.now();
+    const maxRetries = 2;
+    const retryDelaysMs = [1000, 2000];
+    let lastError: Error | null = null;
 
-    try {
-      const url = `${LLM_SERVICE_BASE_URL}/v1/chat`;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const url = `${LLM_SERVICE_BASE_URL}/v1/chat`;
 
-      logger.info({
-        requestId: request.requestId,
-        provider: request.provider,
-        model: request.model,
-        userId: request.userId,
-      }, 'Sending chat request to LLM service');
+        logger.info({
+          requestId: request.requestId,
+          provider: request.provider,
+          model: request.model,
+          userId: request.userId,
+          attempt: attempt + 1,
+        }, 'Sending chat request to LLM service');
 
-      const path = '/v1/chat';
-      const bodyStr = JSON.stringify(request);
-      const { timestamp, signature } = signRequest(HMAC_SECRET, 'POST', path, bodyStr);
+        const path = '/v1/chat';
+        const bodyStr = JSON.stringify(request);
+        const { timestamp, signature } = signRequest(HMAC_SECRET, 'POST', path, bodyStr);
 
-      const response = await axios.post(url, request, {
-        headers: {
-          'Content-Type': 'application/json',
-          [HMAC_HEADERS.TIMESTAMP]: timestamp,
-          [HMAC_HEADERS.SIGNATURE]: signature,
-        },
-        timeout: REQUEST_TIMEOUT,
-      });
+        const response = await axios.post(url, request, {
+          headers: {
+            'Content-Type': 'application/json',
+            [HMAC_HEADERS.TIMESTAMP]: timestamp,
+            [HMAC_HEADERS.SIGNATURE]: signature,
+          },
+          timeout: REQUEST_TIMEOUT,
+        });
 
-      const latencyMs = Date.now() - startTime;
+        const latencyMs = Date.now() - startTime;
 
-      if (response.status !== 200) {
+        if (response.status !== 200) {
+          const errorData = response.data as any;
+          const err = new Error(errorData.error?.message || `LLM service error (${response.status})`);
+          const status = response.status;
+          if (status >= 500 && attempt < maxRetries) {
+            logger.warn({ requestId: request.requestId, status, attempt: attempt + 1 }, 'LLM service 5xx, retrying');
+            lastError = err;
+            await new Promise((r) => setTimeout(r, retryDelaysMs[attempt]));
+            continue;
+          }
+          throw err;
+        }
+
+        const responseData = response.data;
+
+        if (!responseData.success || !responseData.data) {
+          throw new Error('Invalid response from LLM service');
+        }
+
+        logger.info({
+          requestId: request.requestId,
+          latencyMs,
+          usage: responseData.data.usage,
+        }, 'Chat request completed');
+
+        return responseData.data;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const isRetryable =
+          attempt < maxRetries &&
+          (axios.isAxiosError(error)
+            ? (error.code === 'ECONNABORTED' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || (error.response?.status != null && error.response.status >= 500))
+            : false);
+
+        if (isRetryable) {
+          logger.warn({
+            requestId: request.requestId,
+            attempt: attempt + 1,
+            error: lastError.message,
+          }, 'Chat request failed, retrying');
+          await new Promise((r) => setTimeout(r, retryDelaysMs[attempt]));
+          continue;
+        }
+
+        const latencyMs = Date.now() - startTime;
+        const errorMessage = axios.isAxiosError(error)
+          ? error.response?.data?.error?.message || error.message
+          : lastError.message;
+
         logger.error({
           requestId: request.requestId,
-          statusCode: response.status,
+          provider: request.provider,
+          model: request.model,
           latencyMs,
-          response: response.data,
-        }, 'LLM service returned error');
+          error: errorMessage,
+        }, 'Chat request to LLM service failed');
 
-        const errorData = response.data as any;
-        throw new Error(errorData.error?.message || `LLM service error (${response.status})`);
+        throw axios.isAxiosError(error) && error.response?.data?.error
+          ? new Error(error.response.data.error.message || `LLM service error (${error.response?.status})`)
+          : lastError;
       }
-
-      const responseData = response.data;
-
-      if (!responseData.success || !responseData.data) {
-        throw new Error('Invalid response from LLM service');
-      }
-
-      logger.info({
-        requestId: request.requestId,
-        latencyMs,
-        usage: responseData.data.usage,
-      }, 'Chat request completed');
-
-      return responseData.data;
-    } catch (error) {
-      const latencyMs = Date.now() - startTime;
-      const errorMessage = error instanceof AxiosError
-        ? error.response?.data?.error?.message || error.message
-        : error instanceof Error
-          ? error.message
-          : String(error);
-
-      logger.error({
-        requestId: request.requestId,
-        provider: request.provider,
-        model: request.model,
-        latencyMs,
-        error: errorMessage,
-      }, 'Chat request to LLM service failed');
-
-      throw error instanceof AxiosError && error.response?.data?.error
-        ? new Error(error.response.data.error.message || `LLM service error (${error.response.status})`)
-        : error;
     }
+
+    throw lastError ?? new Error('LLM chat request failed after retries');
   }
 
   async healthCheck(): Promise<{ healthy: boolean; providers?: { openai: boolean; openrouter: boolean } }> {

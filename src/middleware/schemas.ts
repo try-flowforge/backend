@@ -309,6 +309,71 @@ export const listTimeBlocksQuerySchema = Joi.object({
 // SWAP SCHEMAS
 // ===========================================
 
+/** Supported chains for swap/lending/oracle */
+const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA'] as const;
+/** Swap providers */
+const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
+/** Lending providers */
+const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
+
+/** Params: provider + chain (for quote, build-transaction) */
+export const swapProviderChainParamsSchema = Joi.object({
+    provider: Joi.string().valid(...SWAP_PROVIDERS).required().messages({
+        'any.only': `provider must be one of: ${SWAP_PROVIDERS.join(', ')}`,
+    }),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required().messages({
+        'any.only': `chain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
+});
+
+/** Params: chain only (for GET /providers/:chain) */
+export const swapChainParamsSchema = Joi.object({
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required().messages({
+        'any.only': `chain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
+});
+
+/** Params: chain + token address (for GET /providers/:chain/token/:address) */
+export const swapChainTokenParamsSchema = Joi.object({
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required().messages({
+        'any.only': `chain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
+    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
+        'string.pattern.base': 'address must be a valid 0x-prefixed 40-char hex',
+    }),
+});
+
+/** Lending: provider + chain */
+export const lendingProviderChainParamsSchema = Joi.object({
+    provider: Joi.string().valid(...LENDING_PROVIDERS).required().messages({
+        'any.only': `provider must be one of: ${LENDING_PROVIDERS.join(', ')}`,
+    }),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required().messages({
+        'any.only': `chain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
+});
+
+/** Lending: chain only */
+export const lendingChainParamsSchema = Joi.object({
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required().messages({
+        'any.only': `chain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
+});
+
+/** Lending: provider + chain + walletAddress (position, account) */
+export const lendingPositionParamsSchema = Joi.object({
+    provider: Joi.string().valid(...LENDING_PROVIDERS).required(),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+});
+
+/** Lending: provider + chain + asset address */
+export const lendingAssetParamsSchema = Joi.object({
+    provider: Joi.string().valid(...LENDING_PROVIDERS).required(),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    asset: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+});
+
 /**
  * Token info schema
  */
@@ -340,6 +405,34 @@ export const swapInputConfigSchema = Joi.object({
     recipient: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
     enablePartialFill: Joi.boolean().default(false),
     simulateFirst: Joi.boolean().default(true),
+});
+
+// ===========================================
+// LENDING BODY SCHEMAS
+// ===========================================
+
+const lendingTokenInfoSchema = Joi.object({
+    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    symbol: Joi.string(),
+    decimals: Joi.number().integer().min(0).max(18),
+    name: Joi.string(),
+});
+
+/** Body for POST /lending/quote/:provider/:chain */
+export const lendingQuoteBodySchema = Joi.object({
+    operation: Joi.string()
+        .valid('SUPPLY', 'WITHDRAW', 'BORROW', 'REPAY', 'ENABLE_COLLATERAL', 'DISABLE_COLLATERAL')
+        .required(),
+    asset: lendingTokenInfoSchema.required(),
+    amount: Joi.string().required(),
+    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    interestRateMode: Joi.string().valid('STABLE', 'VARIABLE'),
+    onBehalfOf: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
+    maxPriorityFeePerGas: Joi.string(),
+    maxFeePerGas: Joi.string(),
+    gasLimit: Joi.string(),
+    simulateFirst: Joi.boolean().default(true),
+    referralCode: Joi.number().integer().min(0),
 });
 
 // ===========================================

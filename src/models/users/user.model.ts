@@ -242,9 +242,9 @@ export class UserModel {
   /**
    * Get Safe wallet address for a user based on chain
    * @param userId User ID
-   * @param chainId Chain ID (421614 for Arbitrum Sepolia, 42161 for Arbitrum Mainnet)
+   * @param chainId Chain ID (421614 Arbitrum Sepolia, 42161 Arbitrum Mainnet, 11155111 Ethereum Sepolia)
    * @returns Safe wallet address or null if not found
-  */
+   */
   static async getSafeAddressByChain(
     userId: string,
     chainId: number
@@ -254,14 +254,14 @@ export class UserModel {
       return null;
     }
 
-    // Arbitrum Sepolia (testnet)
     if (chainId === 421614) {
       return user.safe_wallet_address_testnet || null;
     }
-
-    // Arbitrum Mainnet
     if (chainId === 42161) {
       return user.safe_wallet_address_mainnet || null;
+    }
+    if (chainId === 11155111) {
+      return user.safe_wallet_address_eth_sepolia || null;
     }
 
     logger.warn({ userId, chainId }, 'Unsupported chain ID for Safe address lookup');
