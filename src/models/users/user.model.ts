@@ -13,7 +13,7 @@ export class UserModel {
     const text = `
       INSERT INTO users (id, address, email, onboarded_at)
       VALUES ($1, $2, $3, $4)
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
     `;
     const values = [id, address, email, onboardedDate];
 
@@ -37,7 +37,7 @@ export class UserModel {
    */
   static async findById(id: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
       FROM users
       WHERE id = $1
     `;
@@ -60,7 +60,7 @@ export class UserModel {
    */
   static async findByAddress(address: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
       FROM users
       WHERE address = $1
     `;
@@ -83,7 +83,7 @@ export class UserModel {
    */
   static async findByEmail(email: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
       FROM users
       WHERE email = $1
     `;
@@ -106,7 +106,7 @@ export class UserModel {
    */
   static async findAll(limit = 50, offset = 0): Promise<User[]> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
       FROM users
       ORDER BY onboarded_at DESC
       LIMIT $1 OFFSET $2
@@ -196,7 +196,7 @@ export class UserModel {
       UPDATE users
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
     `;
 
     try {
@@ -208,6 +208,51 @@ export class UserModel {
       return result.rows[0];
     } catch (error) {
       logger.error({ error, userId: id }, 'Failed to update Safe wallet addresses');
+      throw error;
+    }
+  }
+
+  /**
+   * Update Safe wallet address for a specific chain
+   * @param id User ID
+   * @param chainId 421614 (Arbitrum Sepolia), 42161 (Arbitrum Mainnet), 11155111 (Ethereum Sepolia)
+   * @param address Safe wallet address
+   */
+  static async updateSafeAddressForChain(
+    id: string,
+    chainId: number,
+    address: string
+  ): Promise<User | null> {
+    const column =
+      chainId === 421614
+        ? 'safe_wallet_address_testnet'
+        : chainId === 42161
+          ? 'safe_wallet_address_mainnet'
+          : chainId === 11155111
+            ? 'safe_wallet_address_eth_sepolia'
+            : null;
+
+    if (!column) {
+      logger.warn({ userId: id, chainId }, 'Unsupported chain ID for Safe address update');
+      return null;
+    }
+
+    const text = `
+      UPDATE users
+      SET ${column} = $1
+      WHERE id = $2
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+    `;
+
+    try {
+      const result = await query(text, [address, id]);
+      if (result.rows.length === 0) {
+        return null;
+      }
+      logger.info({ userId: id, chainId }, 'User Safe wallet address updated for chain');
+      return result.rows[0];
+    } catch (error) {
+      logger.error({ error, userId: id, chainId }, 'Failed to update Safe wallet address for chain');
       throw error;
     }
   }
