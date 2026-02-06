@@ -274,14 +274,13 @@ export function validateConfig(): void {
   }
 }
 
-// Validate on module load
+// Validate on module load - fail startup if config is invalid
 try {
   validateConfig();
 } catch (error) {
-  console.error(
-    "Configuration validation warning:",
-    error instanceof Error ? error.message : String(error)
-  );
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("Configuration validation failed:", message);
+  throw error;
 }
 
 export default config;

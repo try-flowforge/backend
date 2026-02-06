@@ -72,6 +72,7 @@ export const errorHandler = (
     },
     meta: {
       timestamp: new Date().toISOString(),
+      requestId: (req as any).requestId,
     },
   };
 
@@ -90,7 +91,7 @@ export const errorHandler = (
  * 404 Not Found handler
  */
 export const notFoundHandler = (req: Request, res: Response): void => {
-  logger.warn({ method: req.method, url: req.url }, 'Route not found');
+  logger.warn({ method: req.method, url: req.url, requestId: (req as any).requestId }, 'Route not found');
 
   const response: ApiResponse = {
     success: false,
@@ -100,6 +101,7 @@ export const notFoundHandler = (req: Request, res: Response): void => {
     },
     meta: {
       timestamp: new Date().toISOString(),
+      requestId: (req as any).requestId,
     },
   };
 
