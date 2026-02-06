@@ -1,6 +1,7 @@
 import { SwapProvider, SupportedChain } from '../../../types';
 import { ISwapProvider, ISwapProviderFactory } from '../interfaces/ISwapProvider';
 import { UniswapProvider } from './UniswapProvider';
+import { UniswapV4Provider } from './UniswapV4Provider';
 import { RelayProvider } from './RelayProvider';
 import { OneInchProvider } from './OneInchProvider';
 import { LiFiProvider } from './LiFiProvider';
@@ -26,6 +27,7 @@ export class SwapProviderFactory implements ISwapProviderFactory {
 
     try {
       this.providers.set(SwapProvider.UNISWAP, new UniswapProvider());
+      this.providers.set(SwapProvider.UNISWAP_V4, new UniswapV4Provider());
       this.providers.set(SwapProvider.RELAY, new RelayProvider());
       this.providers.set(SwapProvider.ONEINCH, new OneInchProvider());
       this.providers.set(SwapProvider.LIFI, new LiFiProvider());
