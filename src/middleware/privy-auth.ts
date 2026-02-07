@@ -77,28 +77,64 @@ export const verifyPrivyToken = async (
         return;
       }
 
-      // Fetch user details to get linked wallets
-      const user = await client.getUser(userId);
+      // Fetch user details to get linked wallets.
+      // Newly-created embedded wallets may take a moment to propagate through
+      // Privy's infrastructure, so retry a few times before giving up.
+      const walletClientType = (
+        acc: { address?: string; walletClientType?: string },
+      ) => acc.walletClientType;
 
-      const walletAccounts =
-        user.linkedAccounts?.filter(
-          (account): account is typeof account & { address: string } =>
-            account.type === "wallet" && "address" in account
-        ) ?? [];
+      let canonicalWallet: { address: string; walletClientType?: string } | undefined;
 
-      // Canonical wallet: prefer first external (MetaMask, WalletConnect, etc.) else embedded
-      const walletClientType = (acc: (typeof walletAccounts)[number]) =>
-        "walletClientType" in acc ? (acc.walletClientType as string) : undefined;
-      const externalWallet = walletAccounts.find(
-        (account) => walletClientType(account) !== "privy"
-      );
-      const embeddedWallet = walletAccounts.find(
-        (account) => walletClientType(account) === "privy"
-      );
-      const canonicalWallet = externalWallet ?? embeddedWallet;
+      const MAX_WALLET_RETRIES = 3;
+      const WALLET_RETRY_DELAY_MS = 1500;
+
+      for (let attempt = 1; attempt <= MAX_WALLET_RETRIES; attempt++) {
+        const user = await client.getUser(userId);
+
+        // Debug: log all linked accounts so we can see what Privy returns
+        logger.info(
+          {
+            userId,
+            attempt,
+            linkedAccountCount: user.linkedAccounts?.length ?? 0,
+            linkedAccountTypes: user.linkedAccounts?.map((a) => {
+              const obj: Record<string, unknown> = { type: a.type };
+              if ("walletClientType" in a) obj.walletClientType = (a as unknown as { walletClientType: string }).walletClientType;
+              if ("address" in a) obj.address = (a as unknown as { address: string }).address;
+              return obj;
+            }),
+          },
+          "Privy getUser linked accounts"
+        );
+
+        const walletAccounts =
+          user.linkedAccounts?.filter(
+            (account): account is typeof account & { address: string } =>
+              account.type === "wallet" && "address" in account
+          ) ?? [];
+
+        const externalWallet = walletAccounts.find(
+          (account) => walletClientType(account) !== "privy"
+        );
+        const embeddedWallet = walletAccounts.find(
+          (account) => walletClientType(account) === "privy"
+        );
+        canonicalWallet = externalWallet ?? embeddedWallet;
+
+        if (canonicalWallet) break;
+
+        if (attempt < MAX_WALLET_RETRIES) {
+          logger.info(
+            { userId, attempt, maxRetries: MAX_WALLET_RETRIES },
+            "No linked wallet found yet, retrying after delay"
+          );
+          await new Promise((r) => setTimeout(r, WALLET_RETRY_DELAY_MS));
+        }
+      }
 
       if (!canonicalWallet) {
-        logger.warn({ userId }, "User has no linked wallet");
+        logger.warn({ userId }, "User has no linked wallet after retries");
         res.status(401).json({
           success: false,
           error:
