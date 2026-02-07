@@ -91,12 +91,14 @@ export const SUPPORTED_CHAINS = {
   ETHEREUM_SEPOLIA: 11155111,
   ARBITRUM_SEPOLIA: 421614,
   ARBITRUM_MAINNET: 42161,
+  BASE_MAINNET: 8453,
 } as const;
 
 export type SupportedChainId =
   | typeof SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
   | typeof SUPPORTED_CHAINS.ARBITRUM_SEPOLIA
-  | typeof SUPPORTED_CHAINS.ARBITRUM_MAINNET;
+  | typeof SUPPORTED_CHAINS.ARBITRUM_MAINNET
+  | typeof SUPPORTED_CHAINS.BASE_MAINNET;
 
 /**
  * Chain Configuration
@@ -141,6 +143,13 @@ export const chainConfigs: Record<SupportedChainId, ChainConfig> = {
     moduleAddress: getRequiredEnv("SAFE_MODULE_ADDRESS_42161"),
     name: "Arbitrum Mainnet",
   },
+  [SUPPORTED_CHAINS.BASE_MAINNET]: {
+    chainId: SUPPORTED_CHAINS.BASE_MAINNET,
+    rpcUrl: getOptionalEnv("BASE_RPC_URL", "https://mainnet.base.org"),
+    factoryAddress: getOptionalEnv("SAFE_WALLET_FACTORY_ADDRESS_8453", "0x0000000000000000000000000000000000000000"),
+    moduleAddress: getOptionalEnv("SAFE_MODULE_ADDRESS_8453", "0x0000000000000000000000000000000000000000"),
+    name: "Base",
+  },
 } as const;
 
 /**
@@ -156,6 +165,9 @@ export function getChainConfig(chainId: number): ChainConfig {
   if (chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET) {
     return chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET];
   }
+  if (chainId === SUPPORTED_CHAINS.BASE_MAINNET) {
+    return chainConfigs[SUPPORTED_CHAINS.BASE_MAINNET];
+  }
   throw new Error(`Unsupported chain ID: ${chainId}`);
 }
 
@@ -166,7 +178,8 @@ export function isSupportedChain(chainId: number): chainId is SupportedChainId {
   return (
     chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA ||
     chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA ||
-    chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET
+    chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET ||
+    chainId === SUPPORTED_CHAINS.BASE_MAINNET
   );
 }
 
@@ -178,6 +191,7 @@ export function getActiveChains(): SupportedChainId[] {
     SUPPORTED_CHAINS.ETHEREUM_SEPOLIA,
     SUPPORTED_CHAINS.ARBITRUM_SEPOLIA,
     SUPPORTED_CHAINS.ARBITRUM_MAINNET,
+    SUPPORTED_CHAINS.BASE_MAINNET,
   ];
 }
 

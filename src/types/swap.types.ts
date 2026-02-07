@@ -6,6 +6,7 @@
 export enum SupportedChain {
   ARBITRUM = "ARBITRUM",
   ARBITRUM_SEPOLIA = "ARBITRUM_SEPOLIA",
+  BASE = "BASE",
   ETHEREUM = "ETHEREUM",
   ETHEREUM_SEPOLIA = "ETHEREUM_SEPOLIA",
   UNICHAIN = "UNICHAIN",
@@ -126,6 +127,9 @@ export interface SwapInputConfig {
   recipient?: string; // If different from walletAddress
   enablePartialFill?: boolean; // For 1inch
   simulateFirst?: boolean; // Default: true - simulate before executing
+
+  /** For LiFi cross-chain: destination chain. When set and different from source chain, use cross-chain quote/execution. */
+  toChain?: SupportedChain;
 }
 
 // Swap Quote Response
@@ -203,6 +207,9 @@ export interface SwapNodeConfig {
   provider: SwapProvider;
   chain: SupportedChain;
   inputConfig: SwapInputConfig;
+
+  /** For LiFi cross-chain: destination chain. When set and different from chain, use cross-chain quote/execution. */
+  toChain?: SupportedChain;
 
   // Execution preferences
   simulateFirst?: boolean; // Default: true

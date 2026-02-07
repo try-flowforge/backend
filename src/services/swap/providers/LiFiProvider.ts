@@ -39,8 +39,12 @@ export class LiFiProvider implements ISwapProvider {
     }
 
     supportsChain(chain: SupportedChain): boolean {
-        // LI.FI supports Arbitrum, Arbitrum Sepolia, and Ethereum Sepolia (same-chain quotes)
-        return chain === SupportedChain.ARBITRUM || chain === SupportedChain.ARBITRUM_SEPOLIA || chain === SupportedChain.ETHEREUM_SEPOLIA;
+        return (
+            chain === SupportedChain.ARBITRUM ||
+            chain === SupportedChain.ARBITRUM_SEPOLIA ||
+            chain === SupportedChain.BASE ||
+            chain === SupportedChain.ETHEREUM_SEPOLIA
+        );
     }
 
     async getQuote(
@@ -50,30 +54,28 @@ export class LiFiProvider implements ISwapProvider {
         logger.debug({ chain, config }, 'Getting LI.FI quote');
 
         try {
-            const chainConfig = CHAIN_CONFIGS[chain];
+            const fromChainConfig = CHAIN_CONFIGS[chain];
+            const toChain = config.toChain != null && config.toChain !== chain ? config.toChain : chain;
+            const toChainConfig = CHAIN_CONFIGS[toChain];
             const slippage = (config.slippageTolerance || 0.5) / 100; // LI.FI expects decimal format (0.005 for 0.5%)
 
-            // LI.FI /quote endpoint for single-step routes
-            // For same-chain swaps, fromChain === toChain
-            // fromAddress should be the Safe address (recipient) if provided, otherwise walletAddress
-            // This ensures tokens are taken from and sent to the Safe wallet
             const fromAddress = config.recipient || config.walletAddress;
-            
+
             const response = await axios.get(
                 `${this.apiUrl}/quote`,
                 {
                     params: {
-                        fromChain: chainConfig.chainId,
-                        toChain: chainConfig.chainId,
+                        fromChain: fromChainConfig.chainId,
+                        toChain: toChainConfig.chainId,
                         fromToken: config.sourceToken.address,
                         toToken: config.destinationToken.address,
                         fromAmount: config.amount,
-                        fromAddress: fromAddress, // Use Safe address if available
+                        fromAddress: fromAddress,
                         slippage: slippage,
                         integrator: this.integratorId,
                     },
                     headers: this.getHeaders(),
-                    timeout: 15000,
+                    timeout: 20000,
                 }
             );
 
@@ -137,12 +139,14 @@ export class LiFiProvider implements ISwapProvider {
             // Note: The 'from' field should be the Safe address (recipient) for Safe transactions
             const fromAddress = config.recipient || config.walletAddress;
             
-            if (quote?.rawQuote?.transactionRequest) {
-                const txRequest = quote.rawQuote.transactionRequest;
+            // Cross-chain: LI.FI returns steps; use first step's transactionRequest (source chain)
+            const rawQuote = quote?.rawQuote;
+            const txRequest = rawQuote?.transactionRequest ?? rawQuote?.transactionRequests?.[0];
 
+            if (txRequest) {
                 return {
                     to: txRequest.to,
-                    from: fromAddress, // Use Safe address if available
+                    from: fromAddress,
                     data: txRequest.data,
                     value: txRequest.value || '0',
                     gasLimit: config.gasLimit || txRequest.gasLimit || '500000',
@@ -152,23 +156,21 @@ export class LiFiProvider implements ISwapProvider {
                 };
             }
 
-            // If no quote provided, fetch a new one to get transaction data
             const freshQuote = await this.getQuote(chain, config);
+            const freshTxRequest = freshQuote.rawQuote?.transactionRequest ?? freshQuote.rawQuote?.transactionRequests?.[0];
 
-            if (!freshQuote.rawQuote?.transactionRequest) {
+            if (!freshTxRequest) {
                 throw new Error('LI.FI did not return transaction data');
             }
 
-            const txRequest = freshQuote.rawQuote.transactionRequest;
-
             const transaction: SwapTransaction = {
-                to: txRequest.to,
-                from: fromAddress, // Use Safe address if available
-                data: txRequest.data,
-                value: txRequest.value || '0',
-                gasLimit: config.gasLimit || txRequest.gasLimit || '500000',
-                maxFeePerGas: config.maxFeePerGas || txRequest.maxFeePerGas,
-                maxPriorityFeePerGas: config.maxPriorityFeePerGas || txRequest.maxPriorityFeePerGas,
+                to: freshTxRequest.to,
+                from: fromAddress,
+                data: freshTxRequest.data,
+                value: freshTxRequest.value || '0',
+                gasLimit: config.gasLimit || freshTxRequest.gasLimit || '500000',
+                maxFeePerGas: config.maxFeePerGas || freshTxRequest.maxFeePerGas,
+                maxPriorityFeePerGas: config.maxPriorityFeePerGas || freshTxRequest.maxPriorityFeePerGas,
                 chainId: CHAIN_CONFIGS[chain].chainId,
             };
 
@@ -216,7 +218,12 @@ export class LiFiProvider implements ISwapProvider {
         const errors: string[] = [];
 
         if (!this.supportsChain(chain)) {
-            errors.push(`LI.FI does not support chain: ${chain}`);
+            errors.push(`LI.FI does not support source chain: ${chain}`);
+        }
+
+        const toChain = config.toChain != null && config.toChain !== chain ? config.toChain : chain;
+        if (config.toChain != null && config.toChain !== chain && !this.supportsChain(toChain)) {
+            errors.push(`LI.FI does not support destination chain: ${toChain}`);
         }
 
         if (!config.sourceToken.address || config.sourceToken.address.length !== 42) {
@@ -227,7 +234,7 @@ export class LiFiProvider implements ISwapProvider {
             errors.push('Invalid destination token address');
         }
 
-        if (config.sourceToken.address.toLowerCase() === config.destinationToken.address.toLowerCase()) {
+        if (chain === toChain && config.sourceToken.address.toLowerCase() === config.destinationToken.address.toLowerCase()) {
             errors.push('Source and destination tokens cannot be the same');
         }
 

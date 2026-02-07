@@ -56,6 +56,21 @@ export const CHAIN_CONFIGS: Record<SupportedChain, ChainConfig> = {
       compoundConfigurator: '0x0',
     },
   },
+  [SupportedChain.BASE]: {
+    chainId: 8453,
+    name: 'Base',
+    rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
+    explorerUrl: 'https://basescan.org',
+    nativeCurrency: {
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    contracts: {
+      weth: '0x4200000000000000000000000000000000000006',
+      // No Uniswap/Aave/Compound required for LiFi-only use
+    },
+  },
   [SupportedChain.ETHEREUM]: {
     chainId: 1,
     name: 'Ethereum',
@@ -207,6 +222,10 @@ export const RPC_CONFIG = {
       process.env.ARBITRUM_SEPOLIA_RPC_FALLBACK_1,
       process.env.ARBITRUM_SEPOLIA_RPC_FALLBACK_2,
     ].filter(Boolean) as string[],
+    [SupportedChain.BASE]: [
+      'https://mainnet.base.org',
+      process.env.BASE_RPC_URL,
+    ].filter(Boolean) as string[],
     [SupportedChain.ETHEREUM_SEPOLIA]: [
       'https://ethereum-sepolia-rpc.publicnode.com',
       'https://eth-sepolia.public.blastapi.io',
@@ -229,6 +248,7 @@ export const GAS_CONFIG = {
   maxPriorityFeePerGas: {
     [SupportedChain.ARBITRUM]: '100000000', // 0.1 gwei
     [SupportedChain.ARBITRUM_SEPOLIA]: '100000000', // 0.1 gwei
+    [SupportedChain.BASE]: '100000000',
     [SupportedChain.ETHEREUM]: '2000000000', // 2 gwei
     [SupportedChain.ETHEREUM_SEPOLIA]: '2000000000', // 2 gwei
     [SupportedChain.UNICHAIN]: '100000000',
@@ -237,6 +257,7 @@ export const GAS_CONFIG = {
   maxFeePerGas: {
     [SupportedChain.ARBITRUM]: '500000000', // 0.5 gwei
     [SupportedChain.ARBITRUM_SEPOLIA]: '1000000000', // 1 gwei
+    [SupportedChain.BASE]: '1000000000',
     [SupportedChain.ETHEREUM]: '50000000000', // 50 gwei
     [SupportedChain.ETHEREUM_SEPOLIA]: '50000000000', // 50 gwei
     [SupportedChain.UNICHAIN]: '1000000000',

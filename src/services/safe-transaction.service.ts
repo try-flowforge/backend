@@ -11,7 +11,8 @@ import { SupportedChain } from "../types";
 const MULTISEND_ADDRESSES: Record<SupportedChainId, string> = {
   11155111: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Ethereum Sepolia
   421614: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Sepolia
-  42161: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Mainnet (same address)
+  42161: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Mainnet
+  8453: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Base Mainnet
 };
 
 /**
@@ -343,6 +344,8 @@ export class SafeTransactionService {
         return 42161 as SupportedChainId;
       case SupportedChain.ETHEREUM_SEPOLIA:
         return 11155111 as SupportedChainId;
+      case SupportedChain.BASE:
+        return 8453 as SupportedChainId;
       default:
         throw new Error(`Unsupported chain: ${chain}`);
     }

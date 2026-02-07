@@ -309,8 +309,8 @@ export const listTimeBlocksQuerySchema = Joi.object({
 // SWAP SCHEMAS
 // ===========================================
 
-/** Supported chains for swap/lending/oracle */
-const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA'] as const;
+/** Supported chains for swap/lending/oracle (includes BASE for LiFi cross-chain) */
+const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA', 'BASE'] as const;
 /** Swap providers */
 const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
 /** Lending providers */
