@@ -7,6 +7,7 @@ export interface User {
   safe_wallet_address_testnet?: string;
   safe_wallet_address_mainnet?: string;
   safe_wallet_address_eth_sepolia?: string;
+  remaining_sponsored_txs?: number;
 }
 
 export interface CreateUserInput {

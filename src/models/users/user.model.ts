@@ -13,7 +13,7 @@ export class UserModel {
     const text = `
       INSERT INTO users (id, address, email, onboarded_at)
       VALUES ($1, $2, $3, $4)
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
     `;
     const values = [id, address, email, onboardedDate];
 
@@ -37,7 +37,7 @@ export class UserModel {
    */
   static async findById(id: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
       FROM users
       WHERE id = $1
     `;
@@ -60,7 +60,7 @@ export class UserModel {
    */
   static async findByAddress(address: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
       FROM users
       WHERE address = $1
     `;
@@ -83,7 +83,7 @@ export class UserModel {
    */
   static async findByEmail(email: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
       FROM users
       WHERE email = $1
     `;
@@ -106,7 +106,7 @@ export class UserModel {
    */
   static async findAll(limit = 50, offset = 0): Promise<User[]> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
       FROM users
       ORDER BY onboarded_at DESC
       LIMIT $1 OFFSET $2
@@ -318,6 +318,40 @@ export class UserModel {
 
     logger.warn({ userId, chainId }, 'Unsupported chain ID for Safe address lookup');
     return null;
+  }
+
+  /**
+   * Consume one sponsored transaction for the user (atomic).
+   * Used when the relayer pays gas for a user's Safe tx; limits to remaining_sponsored_txs.
+   * @param userId User ID
+   * @returns { consumed: true, remaining: number } if a slot was consumed, { consumed: false, remaining: number } otherwise
+   */
+  static async consumeOneSponsoredTx(userId: string): Promise<{
+    consumed: boolean;
+    remaining: number;
+  }> {
+    const text = `
+      UPDATE users
+      SET remaining_sponsored_txs = remaining_sponsored_txs - 1
+      WHERE id = $1 AND remaining_sponsored_txs > 0
+      RETURNING remaining_sponsored_txs
+    `;
+    const values = [userId];
+
+    try {
+      const result = await query(text, values);
+      if (result.rows.length === 0) {
+        const user = await this.findById(userId);
+        const remaining = user?.remaining_sponsored_txs ?? 0;
+        return { consumed: false, remaining };
+      }
+      const remaining = Number(result.rows[0].remaining_sponsored_txs);
+      logger.info({ userId, remaining }, 'Consumed one sponsored tx');
+      return { consumed: true, remaining };
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to consume sponsored tx');
+      throw error;
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import { logger } from "../utils/logger";
 import {
   config,
   getChainConfig,
+  isMainnetChain,
   isSupportedChain,
   SUPPORTED_CHAINS,
   SupportedChainId,
@@ -402,6 +403,19 @@ export const enableModule = async (
         },
       });
       return;
+    }
+
+    // Sponsorship on mainnet only: consume one of the user's sponsored tx slots (testnet = unlimited)
+    if (isMainnetChain(supportedChainId)) {
+      const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
+      if (!sponsorResult.consumed) {
+        res.status(403).json({
+          success: false,
+          error: `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`,
+          code: "NO_SPONSORED_TXS_REMAINING",
+        });
+        return;
+      }
     }
 
     // Rate limiting: max module enable per user per day

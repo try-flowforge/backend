@@ -184,6 +184,16 @@ export function isSupportedChain(chainId: number): chainId is SupportedChainId {
 }
 
 /**
+ * Check if chain ID is mainnet (sponsorship limit applies only on mainnet; testnet is unlimited)
+ */
+export function isMainnetChain(chainId: number): boolean {
+  return (
+    chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET ||
+    chainId === SUPPORTED_CHAINS.BASE_MAINNET
+  );
+}
+
+/**
  * Get list of all supported chains
  */
 export function getActiveChains(): SupportedChainId[] {

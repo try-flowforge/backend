@@ -16,7 +16,7 @@ import { logger } from '../../utils/logger';
 import { pool } from '../../config/database';
 import { redisClient } from '../../config/redis';
 import { getRelayerService } from '../relayer.service';
-import { SupportedChainId } from '../../config/config';
+import { isMainnetChain, SupportedChainId } from '../../config/config';
 import { getSafeTransactionService } from '../safe-transaction.service';
 import { UserModel } from '../../models/users/user.model';
 import { ethers } from 'ethers';
@@ -479,6 +479,16 @@ export class SwapExecutionService {
         );
       }
 
+      // Sponsorship on mainnet only: consume one sponsored tx slot (testnet = unlimited)
+      if (userId && isMainnetChain(chainId)) {
+        const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
+        if (!sponsorResult.consumed) {
+          throw new Error(
+            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+          );
+        }
+      }
+
       // Execute Safe transaction with user signature
       logger.info(
         {
@@ -817,6 +827,16 @@ export class SwapExecutionService {
 
         // Execute with signature if provided, otherwise throw error (signature required)
         if (signature) {
+          // Sponsorship on mainnet only: consume one sponsored tx slot (testnet = unlimited)
+          if (userId && isMainnetChain(chainId)) {
+            const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
+            if (!sponsorResult.consumed) {
+              throw new Error(
+                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+              );
+            }
+          }
+
           logger.info(
             {
               chainId,

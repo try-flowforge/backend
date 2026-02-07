@@ -240,26 +240,9 @@ export class SafeWalletService {
             };
         }
 
-        // Create on mainnet (Arbitrum Mainnet)
-        try {
-            results.mainnet = await this.createSafeForUser(
-                userAddress,
-                SUPPORTED_CHAINS.ARBITRUM_MAINNET
-            );
-        } catch (error) {
-            logger.error(
-                {
-                    error: error instanceof Error ? error.message : String(error),
-                    userAddress,
-                    chain: "mainnet",
-                },
-                "Failed to create mainnet Safe wallet"
-            );
-            results.mainnet = {
-                success: false,
-                error: error instanceof Error ? error.message : "Unknown error",
-            };
-        }
+        // Mainnet Safes are not created on user creation (cost control).
+        // They are created on-demand when the user switches to mainnet and
+        // requests a Safe via POST /relay/create-safe.
 
         return results;
     }
