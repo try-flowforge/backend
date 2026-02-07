@@ -46,12 +46,14 @@ export class UserController {
         // Update user with wallet addresses
         const testnetAddress = safeResults.testnet?.success ? safeResults.testnet.safeAddress : undefined;
         const mainnetAddress = safeResults.mainnet?.success ? safeResults.mainnet.safeAddress : undefined;
+        const ethSepoliaAddress = safeResults.ethSepolia?.success ? safeResults.ethSepolia.safeAddress : undefined;
 
-        if (testnetAddress || mainnetAddress) {
+        if (testnetAddress || mainnetAddress || ethSepoliaAddress) {
           const updatedUser = await UserModel.updateSafeWalletAddresses(
             user.id,
             testnetAddress,
-            mainnetAddress
+            mainnetAddress,
+            ethSepoliaAddress
           );
           if (updatedUser) {
             user = updatedUser;
