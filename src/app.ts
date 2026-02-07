@@ -7,20 +7,15 @@ import routes from './routes';
 export const createApp = (): Application => {
   const app = express();
 
+  app.use(helmet());
+
   // CORS configuration
   app.use(
     cors({
-      origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, // true allows the requesting origin
+      origin: process.env.CORS_ORIGIN || '*',
       credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     })
   );
-
-  // Security middleware
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
-  }));
 
   // Body parsing middleware
   app.use(express.json({ limit: '10mb' }));
