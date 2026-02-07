@@ -496,6 +496,47 @@ export class SafeTransactionService {
   }
 
   /**
+   * Build MultiSend transaction from an array of calls (e.g. approve + permit2.approve + swap).
+   */
+  buildMulticallFromCalls(
+    calls: Array<{ to: string; value: bigint; data: string }>,
+    chainId: SupportedChainId
+  ): { to: string; value: bigint; data: string } {
+    const multisendAddress = MULTISEND_ADDRESSES[chainId];
+    if (!multisendAddress) {
+      throw new Error(`MultiSend contract not configured for chain ${chainId}`);
+    }
+    const encodeTransaction = (
+      operation: number,
+      to: string,
+      value: bigint,
+      data: string
+    ): string => {
+      const toBytes = ethers.getBytes(to);
+      const valueBytes = ethers.zeroPadValue(ethers.toBeHex(value), 32);
+      const dataBytes = ethers.getBytes(data);
+      const dataLengthBytes = ethers.zeroPadValue(ethers.toBeHex(dataBytes.length), 32);
+      const operationByte = ethers.zeroPadValue(ethers.toBeHex(operation), 1);
+      return ethers.concat([
+        operationByte,
+        toBytes,
+        valueBytes,
+        dataLengthBytes,
+        dataBytes,
+      ]);
+    };
+    const encoded = calls.map((c) => encodeTransaction(0, c.to, c.value, c.data));
+    const transactions = ethers.concat(encoded);
+    const iface = new ethers.Interface(MULTISEND_ABI);
+    const multicallData = iface.encodeFunctionData("multiSend", [transactions]);
+    return {
+      to: multisendAddress,
+      value: 0n,
+      data: multicallData,
+    };
+  }
+
+  /**
    * Execute multicall transaction via Safe module
    * Combines approve + swap into a single Safe transaction
    */

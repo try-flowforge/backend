@@ -5,13 +5,17 @@ import {
   getSwapExecution,
   getTokenInfo,
   buildSwapTransaction,
+  buildSafeSwapTransaction,
+  executeSwapWithSignature,
 } from '../controllers/swap.controller';
 import { validateParams, validateBody } from '../middleware/validation';
+import { verifyPrivyToken } from '../middleware/privy-auth';
 import {
   swapProviderChainParamsSchema,
   swapChainParamsSchema,
   swapChainTokenParamsSchema,
   swapInputConfigSchema,
+  swapExecuteWithSignatureBodySchema,
 } from '../middleware/schemas';
 
 const router = Router();
@@ -21,6 +25,24 @@ router.post('/quote/:provider/:chain', validateParams(swapProviderChainParamsSch
 
 // Build unsigned transaction (for frontend wallet signing)
 router.post('/build-transaction/:provider/:chain', validateParams(swapProviderChainParamsSchema), validateBody(swapInputConfigSchema), buildSwapTransaction);
+
+// Build Safe transaction hash for signing (authenticated)
+router.post(
+  '/build-safe-transaction/:provider/:chain',
+  verifyPrivyToken,
+  validateParams(swapProviderChainParamsSchema),
+  validateBody(swapInputConfigSchema),
+  buildSafeSwapTransaction
+);
+
+// Execute swap with signature (authenticated)
+router.post(
+  '/execute-with-signature/:provider/:chain',
+  verifyPrivyToken,
+  validateParams(swapProviderChainParamsSchema),
+  validateBody(swapExecuteWithSignatureBodySchema),
+  executeSwapWithSignature
+);
 
 // Get supported providers for chain
 router.get('/providers/:chain', validateParams(swapChainParamsSchema), getSupportedProviders);

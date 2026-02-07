@@ -12,17 +12,8 @@ import { ISwapProvider } from '../interfaces/ISwapProvider';
 import { getProvider } from '../../../config/providers';
 import { CHAIN_CONFIGS } from '../../../config/chains';
 import { logger } from '../../../utils/logger';
-
-// Uniswap V4 Quoter ABI - quoteExactInputSingle returns (uint256 amountOut, uint256 gasEstimate)
-const V4_QUOTER_ABI = [
-  'function quoteExactInputSingle((tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData)) external returns (uint256 amountOut, uint256 gasEstimate)',
-  'function quoteExactOutputSingle((tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData)) external returns (uint256 amountIn, uint256 gasEstimate)',
-];
-
-// Uniswap V4 PoolSwapTest ABI
-const V4_POOL_SWAP_TEST_ABI = [
-  'function swap(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, tuple(bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (tuple(int256 amount0, int256 amount1) delta)',
-];
+import { QUOTER_ABI } from '../abis/quoter';
+import { UNIVERSAL_ROUTER_ABI } from '../abis/universalRouter';
 
 // ERC20 ABI (minimal)
 const ERC20_ABI = [
@@ -42,22 +33,17 @@ const FEE_TIERS: { fee: number; tickSpacing: number }[] = [
 const HOOKS_ZERO = '0x0000000000000000000000000000000000000000';
 const HOOK_DATA = '0x';
 
-// Universal Router: V4_SWAP command and V4Router actions (see Actions.sol)
+// Universal Router: V4_SWAP command and actions
 const COMMAND_V4_SWAP = 0x10;
 const ACTION_SWAP_EXACT_IN_SINGLE = 0x06;
 const ACTION_SETTLE_ALL = 0x0c;
 const ACTION_TAKE_ALL = 0x0f;
 const ACTION_SWAP_EXACT_OUT_SINGLE = 0x08;
 
-const UNIVERSAL_ROUTER_ABI = [
-  'function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) payable',
-];
-
 /**
- * Uniswap V4 Provider Implementation
- * Uses V4Quoter for quotes. Builds swap via Universal Router (with Permit2) when configured,
- * otherwise falls back to PoolSwapTest (testnets only).
- * See: https://docs.uniswap.org/contracts/v4/deployments
+ * Uniswap V4 Provider.
+ * Uses V4 Quoter for quotes and Universal Router + Permit2 for execution.
+ * No PoolSwapTest fallback; requires universalRouter and permit2 in chain config.
  */
 export class UniswapV4Provider implements ISwapProvider {
   getName(): SwapProvider {
@@ -87,7 +73,7 @@ export class UniswapV4Provider implements ISwapProvider {
     }
 
     const provider = getProvider(chain);
-    const quoter = new Contract(quoterAddress, V4_QUOTER_ABI, provider);
+    const quoter = new Contract(quoterAddress, QUOTER_ABI, provider);
 
     const sourceToken = await this.getTokenInfo(chain, config.sourceToken.address);
     const destToken = await this.getTokenInfo(chain, config.destinationToken.address);
@@ -110,8 +96,7 @@ export class UniswapV4Provider implements ISwapProvider {
       const slippage = config.slippageTolerance || 0.5;
       const slippageMultiplier = 1 - slippage / 100;
       const estimatedAmountOut = (
-        BigInt(bestQuote.amountOut) *
-        BigInt(Math.floor(slippageMultiplier * 10000)) /
+        (BigInt(bestQuote.amountOut) * BigInt(Math.floor(slippageMultiplier * 10000))) /
         BigInt(10000)
       ).toString();
 
@@ -162,8 +147,13 @@ export class UniswapV4Provider implements ISwapProvider {
 
     const chainConfig = CHAIN_CONFIGS[chain];
     const universalRouter = chainConfig?.contracts?.universalRouter;
-    const poolSwapTestAddress = chainConfig?.contracts?.uniswapV4PoolSwapTest;
     const zero = '0x0000000000000000000000000000000000000000';
+
+    if (!universalRouter || universalRouter === '0x0' || universalRouter.toLowerCase() === zero) {
+      throw new Error(
+        `Uniswap V4: Universal Router not configured for chain: ${chain}. Set universalRouter in chain config.`
+      );
+    }
 
     const { poolKey, zeroForOne } = this.buildPoolKey(
       config.sourceToken.address,
@@ -181,94 +171,33 @@ export class UniswapV4Provider implements ISwapProvider {
       BigInt(10000)
     ).toString();
 
-    // Prefer Universal Router when configured (Permit2-based flow)
-    if (universalRouter && universalRouter !== '0x0' && universalRouter.toLowerCase() !== zero) {
-      const txData = this.encodeUniversalRouterV4Swap(
-        poolKey.currency0,
-        poolKey.currency1,
-        fee,
-        tickSpacing,
-        zeroForOne,
-        config.swapType,
-        amountIn,
-        minAmountOut,
-        config.sourceToken.address,
-        config.destinationToken.address
-      );
-
-      const feeData = await getProvider(chain).getFeeData();
-      const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min
-
-      const iface = new Interface(UNIVERSAL_ROUTER_ABI);
-      const executeData = iface.encodeFunctionData('execute', [
-        '0x' + COMMAND_V4_SWAP.toString(16).padStart(2, '0'),
-        [txData],
-        deadline,
-      ]);
-
-      const transaction: SwapTransaction = {
-        to: universalRouter,
-        from: config.walletAddress,
-        data: executeData,
-        value: '0',
-        gasLimit: config.gasLimit || quote?.gasEstimate || '400000',
-        maxFeePerGas: config.maxFeePerGas || feeData.maxFeePerGas?.toString(),
-        maxPriorityFeePerGas:
-          config.maxPriorityFeePerGas || feeData.maxPriorityFeePerGas?.toString(),
-        chainId: chainConfig.chainId,
-      };
-
-      logger.debug({ transaction }, 'Uniswap V4 transaction built (Universal Router)');
-      return transaction;
-    }
-
-    // Fallback: PoolSwapTest (testnets only)
-    if (!poolSwapTestAddress || poolSwapTestAddress === '0x0' || poolSwapTestAddress.toLowerCase() === zero) {
-      throw new Error(
-        `Uniswap V4: neither Universal Router nor PoolSwapTest configured for chain: ${chain}. Set universalRouter in chain config.`
-      );
-    }
-
-    const key = {
-      currency0: poolKey.currency0,
-      currency1: poolKey.currency1,
+    const txData = this.encodeUniversalRouterV4Swap(
+      poolKey.currency0,
+      poolKey.currency1,
       fee,
       tickSpacing,
-      hooks: HOOKS_ZERO,
-    };
-
-    let amountSpecified: bigint;
-    if (config.swapType === SwapType.EXACT_INPUT) {
-      amountSpecified = -BigInt(config.amount);
-    } else {
-      amountSpecified = BigInt(config.amount);
-    }
-
-    const params = {
       zeroForOne,
-      amountSpecified,
-      sqrtPriceLimitX96: 0,
-    };
+      config.swapType,
+      amountIn,
+      minAmountOut,
+      config.sourceToken.address,
+      config.destinationToken.address
+    );
 
-    const testSettings = {
-      takeClaims: true,
-      settleUsingBurn: false,
-    };
-
-    const iface = new Interface(V4_POOL_SWAP_TEST_ABI);
-    const txData = iface.encodeFunctionData('swap', [
-      key,
-      params,
-      testSettings,
-      HOOK_DATA,
+    const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min (same as simple-swap)
+    const iface = new Interface([...UNIVERSAL_ROUTER_ABI]);
+    const executeData = iface.encodeFunctionData('execute', [
+      '0x' + COMMAND_V4_SWAP.toString(16).padStart(2, '0'),
+      [txData],
+      deadline,
     ]);
 
     const feeData = await getProvider(chain).getFeeData();
 
     const transaction: SwapTransaction = {
-      to: poolSwapTestAddress,
-      from: config.walletAddress,
-      data: txData,
+      to: universalRouter,
+      from: config.recipient || config.walletAddress,
+      data: executeData,
       value: '0',
       gasLimit: config.gasLimit || quote?.gasEstimate || '400000',
       maxFeePerGas: config.maxFeePerGas || feeData.maxFeePerGas?.toString(),
@@ -277,14 +206,13 @@ export class UniswapV4Provider implements ISwapProvider {
       chainId: chainConfig.chainId,
     };
 
-    logger.debug({ transaction }, 'Uniswap V4 transaction built (PoolSwapTest)');
+    logger.debug({ transaction }, 'Uniswap V4 transaction built (Universal Router)');
     return transaction;
   }
 
   /**
-   * Encode V4_SWAP input for Universal Router: (bytes actions, bytes[] params).
-   * Actions: SWAP_EXACT_IN_SINGLE (0x06), SETTLE_ALL (0x0c), TAKE_ALL (0x0f).
-   * Params: [ExactInputSingleParams, (currencySettle, amountIn), (currencyTake, minOut)].
+   * Encode V4_SWAP input for Universal Router (same as simple-swap).
+   * (bytes actions, bytes[] params) with SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL.
    */
   private encodeUniversalRouterV4Swap(
     currency0: string,
@@ -300,17 +228,15 @@ export class UniswapV4Provider implements ISwapProvider {
   ): string {
     const coder = AbiCoder.defaultAbiCoder();
 
-    // Exact input: SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
-    const actionSwap = swapType === SwapType.EXACT_INPUT ? ACTION_SWAP_EXACT_IN_SINGLE : ACTION_SWAP_EXACT_OUT_SINGLE;
-    const actions = '0x' +
+    const actionSwap =
+      swapType === SwapType.EXACT_INPUT ? ACTION_SWAP_EXACT_IN_SINGLE : ACTION_SWAP_EXACT_OUT_SINGLE;
+    const actions =
+      '0x' +
       actionSwap.toString(16).padStart(2, '0') +
       ACTION_SETTLE_ALL.toString(16).padStart(2, '0') +
       ACTION_TAKE_ALL.toString(16).padStart(2, '0');
 
-    // PoolKey: (currency0, currency1, fee, tickSpacing, hooks)
     const poolKeyTuple = [currency0, currency1, fee, tickSpacing, HOOKS_ZERO];
-
-    // ExactInputSingleParams: (poolKey, zeroForOne, amountIn, amountOutMinimum, hookData)
     const exactInputParams = [
       poolKeyTuple,
       zeroForOne,
@@ -322,24 +248,10 @@ export class UniswapV4Provider implements ISwapProvider {
       ['tuple(address,address,uint24,int24,address)', 'bool', 'uint128', 'uint128', 'bytes'],
       exactInputParams
     );
+    const param1 = coder.encode(['address', 'uint256'], [sourceToken, amountIn]);
+    const param2 = coder.encode(['address', 'uint256'], [destToken, minAmountOut]);
 
-    // SETTLE_ALL: (currency, amount) - the input token we pay
-    const param1 = coder.encode(
-      ['address', 'uint256'],
-      [sourceToken, amountIn]
-    );
-
-    // TAKE_ALL: (currency, amount) - the output token we receive (min amount)
-    const param2 = coder.encode(
-      ['address', 'uint256'],
-      [destToken, minAmountOut]
-    );
-
-    // V4_SWAP single input: abi.encode(bytes actions, bytes[] params)
-    return coder.encode(
-      ['bytes', 'bytes[]'],
-      [actions, [param0, param1, param2]]
-    );
+    return coder.encode(['bytes', 'bytes[]'], [actions, [param0, param1, param2]]);
   }
 
   async simulateTransaction(
@@ -403,16 +315,17 @@ export class UniswapV4Provider implements ISwapProvider {
   private buildPoolKey(
     token0: string,
     token1: string
-  ): { poolKey: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string }; zeroForOne: boolean } {
+  ): {
+    poolKey: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string };
+    zeroForOne: boolean;
+  } {
     const [addr0, addr1] =
-      token0.toLowerCase() < token1.toLowerCase()
-        ? [token0, token1]
-        : [token1, token0];
+      token0.toLowerCase() < token1.toLowerCase() ? [token0, token1] : [token1, token0];
     return {
       poolKey: {
         currency0: addr0,
         currency1: addr1,
-        fee: 0, // Filled per fee tier
+        fee: 0,
         tickSpacing: 0,
         hooks: HOOKS_ZERO,
       },
@@ -425,8 +338,14 @@ export class UniswapV4Provider implements ISwapProvider {
     config: SwapInputConfig,
     basePoolKey: { currency0: string; currency1: string; hooks: string },
     zeroForOne: boolean
-  ): Promise<any[]> {
-    const results: any[] = [];
+  ): Promise<Array<{ fee: number; tickSpacing: number; amountIn: string; amountOut: string; gasEstimate: string }>> {
+    const results: Array<{
+      fee: number;
+      tickSpacing: number;
+      amountIn: string;
+      amountOut: string;
+      gasEstimate: string;
+    }> = [];
 
     for (const { fee, tickSpacing } of FEE_TIERS) {
       try {
@@ -435,40 +354,29 @@ export class UniswapV4Provider implements ISwapProvider {
           fee,
           tickSpacing,
         };
+        const params = {
+          poolKey,
+          zeroForOne,
+          exactAmount: config.amount,
+          hookData: HOOK_DATA,
+        };
 
         if (config.swapType === SwapType.EXACT_INPUT) {
-          const [amountOut, gasEstimate] = await quoter.quoteExactInputSingle.staticCall({
-            poolKey,
-            zeroForOne,
-            exactAmount: config.amount,
-            hookData: HOOK_DATA,
-          });
-          const slippage = config.slippageTolerance || 0.5;
-          const slippageMultiplier = 1 - slippage / 100;
+          const [amountOut, gasEstimate] = await quoter.quoteExactInputSingle.staticCall(params);
           results.push({
             fee,
             tickSpacing,
             amountIn: config.amount,
             amountOut: amountOut.toString(),
-            estimatedAmountOut: (
-              (BigInt(amountOut) * BigInt(Math.floor(slippageMultiplier * 10000))) /
-              BigInt(10000)
-            ).toString(),
             gasEstimate: gasEstimate.toString(),
           });
         } else {
-          const [amountIn, gasEstimate] = await quoter.quoteExactOutputSingle.staticCall({
-            poolKey,
-            zeroForOne,
-            exactAmount: config.amount,
-            hookData: HOOK_DATA,
-          });
+          const [amountIn, gasEstimate] = await quoter.quoteExactOutputSingle.staticCall(params);
           results.push({
             fee,
             tickSpacing,
             amountIn: amountIn.toString(),
             amountOut: config.amount,
-            estimatedAmountOut: config.amount,
             gasEstimate: gasEstimate.toString(),
           });
         }
@@ -479,16 +387,16 @@ export class UniswapV4Provider implements ISwapProvider {
     return results;
   }
 
-  private selectBestQuote(results: any[], swapType: SwapType): any {
+  private selectBestQuote(
+    results: Array<{ amountIn: string; amountOut: string }>,
+    swapType: SwapType
+  ): { amountIn: string; amountOut: string; fee: number; tickSpacing: number; gasEstimate: string } {
     if (results.length === 0) throw new Error('No valid quotes found');
-    if (swapType === SwapType.EXACT_INPUT) {
-      return results.reduce((best, cur) =>
-        BigInt(cur.amountOut) > BigInt(best.amountOut) ? cur : best
-      );
-    }
-    return results.reduce((best, cur) =>
-      BigInt(cur.amountIn) < BigInt(best.amountIn) ? cur : best
-    );
+    const best =
+      swapType === SwapType.EXACT_INPUT
+        ? results.reduce((a, b) => (BigInt(b.amountOut) > BigInt(a.amountOut) ? b : a))
+        : results.reduce((a, b) => (BigInt(b.amountIn) < BigInt(a.amountIn) ? b : a));
+    return best as { amountIn: string; amountOut: string; fee: number; tickSpacing: number; gasEstimate: string };
   }
 
   private async getTokenInfo(chain: SupportedChain, address: string): Promise<TokenInfo> {

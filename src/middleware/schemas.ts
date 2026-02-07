@@ -397,6 +397,9 @@ export const swapInputConfigSchema = Joi.object({
     walletAddress: Joi.string()
         .pattern(/^0x[a-fA-F0-9]{40}$/)
         .required(),
+    toChain: Joi.string().valid(...SUPPORTED_CHAINS).optional().messages({
+        'any.only': `toChain must be one of: ${SUPPORTED_CHAINS.join(', ')}`,
+    }),
     slippageTolerance: Joi.number().min(0).max(50).default(0.5),
     deadline: Joi.number().integer(),
     maxPriorityFeePerGas: Joi.string(),
@@ -405,6 +408,13 @@ export const swapInputConfigSchema = Joi.object({
     recipient: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
     enablePartialFill: Joi.boolean().default(false),
     simulateFirst: Joi.boolean().default(true),
+});
+
+/** Body for POST /swaps/execute-with-signature/:provider/:chain */
+export const swapExecuteWithSignatureBodySchema = Joi.object({
+    config: swapInputConfigSchema.required(),
+    signature: Joi.string().required(),
+    nodeExecutionId: Joi.string().uuid().required(),
 });
 
 // ===========================================

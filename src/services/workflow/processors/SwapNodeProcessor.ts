@@ -40,12 +40,16 @@ export class SwapNodeProcessor implements INodeProcessor {
       );
 
       // Execute the swap via Safe wallet
-      // Pass userId to lookup Safe wallet address
+      // Pass userId to lookup Safe wallet address. Include toChain for LiFi cross-chain.
+      const inputConfigWithToChain = {
+        ...config.inputConfig,
+        ...(config.toChain != null && { toChain: config.toChain }),
+      };
       const result = await swapExecutionService.executeSwap(
         nodeExecutionId,
         config.chain,
         config.provider,
-        config.inputConfig,
+        inputConfigWithToChain,
         input.executionContext.userId,
       );
 

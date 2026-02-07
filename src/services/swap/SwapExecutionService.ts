@@ -20,6 +20,7 @@ import { SupportedChainId } from '../../config/config';
 import { getSafeTransactionService } from '../safe-transaction.service';
 import { UserModel } from '../../models/users/user.model';
 import { ethers } from 'ethers';
+import { PERMIT2_ABI } from './abis/permit2';
 
 /**
  * Swap Execution Service
@@ -55,6 +56,7 @@ export class SwapExecutionService {
   /**
    * Determine which address needs ERC20 allowance for a given swap provider.
    * - UNISWAP: Uniswap router
+   * - UNISWAP_V4: Permit2 (first approval; then Permit2 approves Universal Router)
    * - LIFI: LI.FI returns an approvalAddress (spender). Fallback to tx.to.
    */
   private getApprovalSpenderAddress(params: {
@@ -68,6 +70,14 @@ export class SwapExecutionService {
     if (provider === SwapProvider.LIFI) {
       const approvalAddress = (quote as any)?.rawQuote?.estimate?.approvalAddress;
       return approvalAddress || transactionTo;
+    }
+
+    if (provider === SwapProvider.UNISWAP_V4) {
+      const permit2 = CHAIN_CONFIGS[chain].contracts?.permit2;
+      if (!permit2) {
+        throw new Error(`Permit2 not configured for chain ${chain}`);
+      }
+      return permit2;
     }
 
     const routerAddress = CHAIN_CONFIGS[chain].contracts?.uniswapRouter;
@@ -244,7 +254,44 @@ export class SwapExecutionService {
     // Safe tx operation: 0 = CALL, 1 = DELEGATECALL
     let safeTxOperation = 0;
 
-    if (needsApproval && approvalData) {
+    if (provider === SwapProvider.UNISWAP_V4) {
+      // Uniswap V4: token -> Permit2, then Permit2.approve(Universal Router), then execute
+      const permit2 = CHAIN_CONFIGS[chain].contracts?.permit2;
+      const universalRouter = CHAIN_CONFIGS[chain].contracts?.universalRouter;
+      if (!permit2 || !universalRouter) {
+        throw new Error(`Uniswap V4: Permit2 or Universal Router not configured for chain ${chain}`);
+      }
+      const amount160 =
+        BigInt(swapConfig.amount) > BigInt(2) ** BigInt(160) - BigInt(1)
+          ? (BigInt(2) ** BigInt(160) - BigInt(1)).toString()
+          : swapConfig.amount;
+      const expiration = Math.floor(Date.now() / 1000) + 3600; // uint48, 1 hour
+      const permit2Iface = new ethers.Interface([...PERMIT2_ABI]);
+      const permit2ApproveData = permit2Iface.encodeFunctionData('approve', [
+        swapConfig.sourceToken.address,
+        universalRouter,
+        amount160,
+        expiration,
+      ]);
+      const calls: Array<{ to: string; value: bigint; data: string }> = [];
+      if (needsApproval && approvalData) {
+        calls.push({
+          to: swapConfig.sourceToken.address,
+          value: 0n,
+          data: approvalData,
+        });
+      }
+      calls.push(
+        { to: permit2, value: 0n, data: permit2ApproveData },
+        {
+          to: transaction.to,
+          value: BigInt(transaction.value || '0'),
+          data: transaction.data,
+        }
+      );
+      safeTxData = safeTransactionService.buildMulticallFromCalls(calls, chainId);
+      safeTxOperation = 1;
+    } else if (needsApproval && approvalData) {
       // Build multicall transaction (approve + swap)
       safeTxData = safeTransactionService.buildMulticallTransaction(
         {
@@ -707,9 +754,45 @@ export class SwapExecutionService {
           value: bigint;
           data: string;
         };
+        let safeTxOperation = 0; // 0 = CALL, 1 = DELEGATECALL (for MultiSend)
 
-        if (needsApproval && approvalData) {
-          // Build multicall transaction (approve + swap)
+        if (provider === SwapProvider.UNISWAP_V4) {
+          const permit2 = CHAIN_CONFIGS[chain].contracts?.permit2;
+          const universalRouter = CHAIN_CONFIGS[chain].contracts?.universalRouter;
+          if (!permit2 || !universalRouter) {
+            throw new Error(`Uniswap V4: Permit2 or Universal Router not configured for chain ${chain}`);
+          }
+          const amount160 =
+            BigInt(swapConfig.amount) > BigInt(2) ** BigInt(160) - BigInt(1)
+              ? (BigInt(2) ** BigInt(160) - BigInt(1)).toString()
+              : swapConfig.amount;
+          const expiration = Math.floor(Date.now() / 1000) + 3600;
+          const permit2Iface = new ethers.Interface([...PERMIT2_ABI]);
+          const permit2ApproveData = permit2Iface.encodeFunctionData('approve', [
+            swapConfig.sourceToken.address,
+            universalRouter,
+            amount160,
+            expiration,
+          ]);
+          const calls: Array<{ to: string; value: bigint; data: string }> = [];
+          if (needsApproval && approvalData) {
+            calls.push({
+              to: swapConfig.sourceToken.address,
+              value: 0n,
+              data: approvalData,
+            });
+          }
+          calls.push(
+            { to: permit2, value: 0n, data: permit2ApproveData },
+            {
+              to: transaction.to,
+              value: BigInt(transaction.value || '0'),
+              data: transaction.data,
+            }
+          );
+          safeTxData = safeTransactionService.buildMulticallFromCalls(calls, chainId);
+          safeTxOperation = 1;
+        } else if (needsApproval && approvalData) {
           safeTxData = safeTransactionService.buildMulticallTransaction(
             {
               to: swapConfig.sourceToken.address,
@@ -723,8 +806,8 @@ export class SwapExecutionService {
             },
             chainId
           );
+          safeTxOperation = 1;
         } else {
-          // Just swap transaction
           safeTxData = {
             to: transaction.to,
             value: BigInt(transaction.value || '0'),
@@ -749,7 +832,7 @@ export class SwapExecutionService {
             safeTxData.to,
             safeTxData.value,
             safeTxData.data,
-            0, // CALL operation
+            safeTxOperation,
             signature,
             undefined,
             0n, // safeTxGas

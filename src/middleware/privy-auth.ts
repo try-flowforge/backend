@@ -77,20 +77,32 @@ export const verifyPrivyToken = async (
         return;
       }
 
-      // Fetch user details to get embedded wallet address
+      // Fetch user details to get linked wallets
       const user = await client.getUser(userId);
 
-      // Find the embedded wallet (Privy wallet)
-      const embeddedWallet = user.linkedAccounts?.find(
-        (account) =>
-          account.type === "wallet" && account.walletClientType === "privy"
-      );
+      const walletAccounts =
+        user.linkedAccounts?.filter(
+          (account): account is typeof account & { address: string } =>
+            account.type === "wallet" && "address" in account
+        ) ?? [];
 
-      if (!embeddedWallet || !("address" in embeddedWallet)) {
-        logger.warn({ userId }, "User does not have an embedded wallet");
+      // Canonical wallet: prefer first external (MetaMask, WalletConnect, etc.) else embedded
+      const walletClientType = (acc: (typeof walletAccounts)[number]) =>
+        "walletClientType" in acc ? (acc.walletClientType as string) : undefined;
+      const externalWallet = walletAccounts.find(
+        (account) => walletClientType(account) !== "privy"
+      );
+      const embeddedWallet = walletAccounts.find(
+        (account) => walletClientType(account) === "privy"
+      );
+      const canonicalWallet = externalWallet ?? embeddedWallet;
+
+      if (!canonicalWallet) {
+        logger.warn({ userId }, "User has no linked wallet");
         res.status(401).json({
           success: false,
-          error: "User does not have an embedded wallet",
+          error:
+            "No wallet linked. Please create or connect a wallet in the app.",
         });
         return;
       }
@@ -98,12 +110,13 @@ export const verifyPrivyToken = async (
       // Attach authenticated user info to request
       (req as AuthenticatedRequest).userId = userId;
       (req as AuthenticatedRequest).userWalletAddress =
-        embeddedWallet.address.toLowerCase();
+        canonicalWallet.address.toLowerCase();
 
       logger.info(
         {
           userId,
-          walletAddress: embeddedWallet.address,
+          walletAddress: canonicalWallet.address,
+          walletType: walletClientType(canonicalWallet) ?? "embedded",
         },
         "User authenticated via Privy"
       );
