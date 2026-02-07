@@ -47,7 +47,7 @@ const AAVE_DATA_PROVIDER_ABI = [
  * Supports Arbitrum mainnet and Arbitrum Sepolia
  */
 export class AaveProvider implements ILendingProvider {
-  private readonly AAVE_CONFIGS = {
+  private readonly AAVE_CONFIGS: Record<string, any> = {
     [SupportedChain.ARBITRUM]: {
       poolAddress: '0x794a61358D6845594F94dc1DB02A252b5b4814aD', // Aave V3 Pool on Arbitrum
       poolDataProviderAddress: '0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654', // Aave V3 Pool Data Provider
@@ -155,7 +155,7 @@ export class AaveProvider implements ILendingProvider {
     logger.info({ chain, operation: config.operation }, 'Building Aave transaction');
 
     const provider = getProvider(chain);
-    const aaveConfig = this.AAVE_CONFIGS[chain];
+    const aaveConfig = this.AAVE_CONFIGS[chain as keyof typeof this.AAVE_CONFIGS];
     const chainConfig = getChainConfig(chain);
 
     const poolContract = new Contract(aaveConfig.poolAddress, AAVE_POOL_ABI, provider);
@@ -343,7 +343,7 @@ export class AaveProvider implements ILendingProvider {
     asset?: string
   ): Promise<LendingPosition | LendingPosition[]> {
     const provider = getProvider(chain);
-    const aaveConfig = this.AAVE_CONFIGS[chain];
+    const aaveConfig = this.AAVE_CONFIGS[chain as keyof typeof this.AAVE_CONFIGS];
 
     const dataProviderContract = new Contract(
       aaveConfig.poolDataProviderAddress,
@@ -397,7 +397,7 @@ export class AaveProvider implements ILendingProvider {
     walletAddress: string
   ): Promise<LendingAccountData> {
     const provider = getProvider(chain);
-    const aaveConfig = this.AAVE_CONFIGS[chain];
+    const aaveConfig = this.AAVE_CONFIGS[chain as keyof typeof this.AAVE_CONFIGS];
 
     const poolContract = new Contract(aaveConfig.poolAddress, AAVE_POOL_ABI, provider);
 
@@ -418,7 +418,7 @@ export class AaveProvider implements ILendingProvider {
     asset: string
   ): Promise<AssetReserveData> {
     const provider = getProvider(chain);
-    const aaveConfig = this.AAVE_CONFIGS[chain];
+    const aaveConfig = this.AAVE_CONFIGS[chain as keyof typeof this.AAVE_CONFIGS];
 
     const dataProviderContract = new Contract(
       aaveConfig.poolDataProviderAddress,
@@ -467,7 +467,7 @@ export class AaveProvider implements ILendingProvider {
 
   async getAvailableAssets(chain: SupportedChain): Promise<AssetReserveData[]> {
     const provider = getProvider(chain);
-    const aaveConfig = this.AAVE_CONFIGS[chain];
+    const aaveConfig = this.AAVE_CONFIGS[chain as keyof typeof this.AAVE_CONFIGS];
 
     const dataProviderContract = new Contract(
       aaveConfig.poolDataProviderAddress,

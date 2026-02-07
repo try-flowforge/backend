@@ -55,7 +55,7 @@ const ERC20_ABI = [
  * Supports Arbitrum mainnet and Arbitrum Sepolia
  */
 export class CompoundProvider implements ILendingProvider {
-  private readonly COMPOUND_CONFIGS = {
+  private readonly COMPOUND_CONFIGS: Record<string, any> = {
     [SupportedChain.ARBITRUM]: {
       // Compound V3 USDC market on Arbitrum
       cometAddress: '0xA5EDBDD9646f8dFF606d7448e414884C7d905dCA', // cUSDCv3
@@ -154,7 +154,7 @@ export class CompoundProvider implements ILendingProvider {
     logger.info({ chain, operation: config.operation }, 'Building Compound transaction');
 
     const provider = getProvider(chain);
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
     const chainConfig = getChainConfig(chain);
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
@@ -301,7 +301,7 @@ export class CompoundProvider implements ILendingProvider {
     }
 
     // Compound V3 specific validations
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
     const isBaseAsset = config.asset.address.toLowerCase() === compoundConfig.baseAsset.toLowerCase();
 
     if (config.operation === LendingOperation.BORROW && !isBaseAsset) {
@@ -330,7 +330,7 @@ export class CompoundProvider implements ILendingProvider {
     asset?: string
   ): Promise<LendingPosition | LendingPosition[]> {
     const provider = getProvider(chain);
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
 
@@ -418,7 +418,7 @@ export class CompoundProvider implements ILendingProvider {
     walletAddress: string
   ): Promise<LendingAccountData> {
     const provider = getProvider(chain);
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
 
@@ -461,7 +461,7 @@ export class CompoundProvider implements ILendingProvider {
     asset: string
   ): Promise<AssetReserveData> {
     const provider = getProvider(chain);
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
 
@@ -535,7 +535,7 @@ export class CompoundProvider implements ILendingProvider {
 
   async getAvailableAssets(chain: SupportedChain): Promise<AssetReserveData[]> {
     const provider = getProvider(chain);
-    const compoundConfig = this.COMPOUND_CONFIGS[chain];
+    const compoundConfig = this.COMPOUND_CONFIGS[chain as keyof typeof this.COMPOUND_CONFIGS];
 
     const cometContract = new Contract(compoundConfig.cometAddress, COMPOUND_COMET_ABI, provider);
     const assets: AssetReserveData[] = [];
