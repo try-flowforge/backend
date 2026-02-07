@@ -77,7 +77,7 @@ export class RelayerService {
     }
 
     const MAX_RETRIES = 3;
-    const CONFIRMATION_TIMEOUT_MS = 10000;
+    const CONFIRMATION_TIMEOUT_MS = 120000; // Increased to 120s for slow chains like Ethereum Sepolia
     const chainConfig = getChainConfig(chainId);
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {

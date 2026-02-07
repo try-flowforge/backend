@@ -140,7 +140,7 @@ export const createSafe = async (
     // Acquire distributed lock to prevent race conditions
     // Lock is per-user per-chain to allow parallel creation on different chains
     lockKey = `safe-creation:${userId}:${supportedChainId}`;
-    const lockResult = await acquireLock(lockKey, { ttlSeconds: 120 });
+    const lockResult = await acquireLock(lockKey, { ttlSeconds: 600 }); // Increased to 10 mins
 
     if (!lockResult.acquired) {
       logger.warn({ userId, chainId: supportedChainId }, "SAFE creation already in progress");
