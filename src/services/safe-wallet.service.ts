@@ -17,6 +17,7 @@ export interface SafeWalletResult {
 
 export interface MultiChainSafeResult {
     testnet?: SafeWalletResult;
+    ethSepolia?: SafeWalletResult;
     mainnet?: SafeWalletResult;
 }
 
@@ -213,6 +214,27 @@ export class SafeWalletService {
                 "Failed to create testnet Safe wallet"
             );
             results.testnet = {
+                success: false,
+                error: error instanceof Error ? error.message : "Unknown error",
+            };
+        }
+
+        // Create on Ethereum Sepolia
+        try {
+            results.ethSepolia = await this.createSafeForUser(
+                userAddress,
+                SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
+            );
+        } catch (error) {
+            logger.error(
+                {
+                    error: error instanceof Error ? error.message : String(error),
+                    userAddress,
+                    chain: "ethSepolia",
+                },
+                "Failed to create Ethereum Sepolia Safe wallet"
+            );
+            results.ethSepolia = {
                 success: false,
                 error: error instanceof Error ? error.message : "Unknown error",
             };

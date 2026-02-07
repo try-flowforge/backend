@@ -168,7 +168,8 @@ export class UserModel {
   static async updateSafeWalletAddresses(
     id: string,
     testnetAddress?: string,
-    mainnetAddress?: string
+    mainnetAddress?: string,
+    ethSepoliaAddress?: string
   ): Promise<User | null> {
     const updates: string[] = [];
     const values: (string | undefined)[] = [];
@@ -183,6 +184,12 @@ export class UserModel {
     if (mainnetAddress !== undefined) {
       updates.push(`safe_wallet_address_mainnet = $${paramIndex}`);
       values.push(mainnetAddress);
+      paramIndex++;
+    }
+
+    if (ethSepoliaAddress !== undefined) {
+      updates.push(`safe_wallet_address_eth_sepolia = $${paramIndex}`);
+      values.push(ethSepoliaAddress);
       paramIndex++;
     }
 

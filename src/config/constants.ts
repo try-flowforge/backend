@@ -55,16 +55,16 @@ export const DATABASE_CONSTANTS = {
 
 export const RATE_LIMIT_CONSTANTS = {
     /** Maximum Safe creations per user per day */
-    MAX_SAFE_CREATIONS_PER_DAY: 2,
+    MAX_SAFE_CREATIONS_PER_DAY: 20,
 
     /** Maximum module enables per user per day */
-    MAX_MODULE_ENABLES_PER_DAY: 2,
+    MAX_MODULE_ENABLES_PER_DAY: 20,
 
     /** Rate limit window duration (ms) - 24 hours */
     RATE_LIMIT_WINDOW_MS: 24 * 60 * 60 * 1000,
 
     /** API rate limit - requests per minute */
-    API_RATE_LIMIT_PER_MINUTE: 4,
+    API_RATE_LIMIT_PER_MINUTE: 60,
 } as const;
 
 export const SSE_CONSTANTS = {
