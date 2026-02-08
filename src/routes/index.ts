@@ -10,6 +10,7 @@ import lendingRoutes from './lending.routes';
 import metaRoutes from './meta.routes';
 import oracleRoutes from './oracle.routes';
 import timeBlockRoutes from './timeblock.routes';
+import ensRoutes from './ens.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -131,5 +132,6 @@ router.use('/swaps', swapRoutes);
 router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);
 router.use('/oracle', oracleRoutes);
+router.use('/ens', ensRoutes);
 
 export default router;

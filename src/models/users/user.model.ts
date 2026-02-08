@@ -321,6 +321,32 @@ export class UserModel {
   }
 
   /**
+   * Set remaining sponsored transactions for a user (e.g. after ENS subdomain registration).
+   */
+  static async setRemainingSponsoredTxs(
+    userId: string,
+    count: number
+  ): Promise<User | null> {
+    const text = `
+      UPDATE users
+      SET remaining_sponsored_txs = $1
+      WHERE id = $2
+      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+    `;
+    const values = [Math.max(0, count), userId];
+
+    try {
+      const result = await query(text, values);
+      if (result.rows.length === 0) return null;
+      logger.info({ userId, remaining_sponsored_txs: count }, 'Set remaining sponsored txs');
+      return result.rows[0];
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to set remaining sponsored txs');
+      throw error;
+    }
+  }
+
+  /**
    * Consume one sponsored transaction for the user (atomic).
    * Used when the relayer pays gas for a user's Safe tx; limits to remaining_sponsored_txs.
    * @param userId User ID
