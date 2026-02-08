@@ -484,7 +484,7 @@ export class SwapExecutionService {
         const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
         if (!sponsorResult.consumed) {
           throw new Error(
-            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
           );
         }
       }
@@ -832,7 +832,7 @@ export class SwapExecutionService {
             const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
             if (!sponsorResult.consumed) {
               throw new Error(
-                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
               );
             }
           }

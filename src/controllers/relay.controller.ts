@@ -411,7 +411,7 @@ export const enableModule = async (
       if (!sponsorResult.consumed) {
         res.status(403).json({
           success: false,
-          error: `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`,
+          error: `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`,
           code: "NO_SPONSORED_TXS_REMAINING",
         });
         return;

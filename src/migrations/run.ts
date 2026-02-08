@@ -30,6 +30,7 @@ import * as migration026 from "./026_add_lifi_swap_provider";
 import * as migration027 from "./027_add_eth_sepolia_safe_wallet_and_chain_constraints";
 import * as migration028 from "./028_add_uniswap_v4_swap_provider";
 import * as migration029 from "./029_add_remaining_sponsored_txs_to_users";
+import * as migration030 from "./030_create_user_ens_subdomains_table";
 
 // Load environment variables
 dotenv.config();
@@ -223,6 +224,12 @@ const migrations: Migration[] = [
     name: "029_add_remaining_sponsored_txs_to_users",
     up: migration029.up,
     down: migration029.down,
+  },
+  {
+    id: 30,
+    name: "030_create_user_ens_subdomains_table",
+    up: migration030.up,
+    down: migration030.down,
   },
 ];
 
