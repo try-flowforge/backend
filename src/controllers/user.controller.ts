@@ -4,6 +4,7 @@ import { CreateUserInput, ApiResponse } from '../types';
 import { AppError } from '../middleware';
 import { SafeWalletService } from '../services/safe-wallet.service';
 import { logger } from '../utils/logger';
+import { NUMERIC_CHAIN_IDS } from '../config/chain-registry';
 
 export class UserController {
   /**
@@ -49,9 +50,9 @@ export class UserController {
           if (result && result.success && result.safeAddress) {
             // Map key to chainId
             let chainId: number | undefined;
-            if (key === 'testnet') chainId = 421614;
-            else if (key === 'mainnet') chainId = 42161;
-            else if (key === 'ethSepolia') chainId = 11155111;
+            if (key === 'testnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
+            else if (key === 'mainnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM;
+            else if (key === 'ethSepolia') chainId = NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA;
 
             if (chainId) {
               const updatedUser = await UserModel.updateSafeWallet(user.id, chainId, result.safeAddress);

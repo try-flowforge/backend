@@ -3,6 +3,33 @@ import * as dotenv from "dotenv";
 // Load environment variables from .env file
 dotenv.config();
 
+export {
+  Chains,
+  type ChainId,
+  NUMERIC_CHAIN_IDS,
+  type NumericChainId,
+  type ChainRegistryEntry,
+  type ChainContracts,
+  CHAIN_REGISTRY,
+  CHAIN_CONFIGS,
+  CHAIN_CONFIGS_BY_NUMERIC_ID,
+  getChain,
+  getChainOrThrow,
+  getAllChains,
+  isValidChainId,
+  isSupportedNumericChainId,
+  isMainnetChain,
+  getActiveNumericChainIds,
+  getActiveChainIds,
+  numericToStringId,
+  stringToNumericId,
+} from "./chain-registry";
+
+import {
+  NUMERIC_CHAIN_IDS,
+  getChainOrThrow,
+} from "./chain-registry";
+
 /**
  * Centralized configuration for the backend
  * All environment variables are loaded and validated here
@@ -85,15 +112,26 @@ export const encryptionConfig = {
 } as const;
 
 /**
- * Supported Chain IDs
+ * Relayer Configuration
  */
-export const SUPPORTED_CHAINS = {
-  ETHEREUM_SEPOLIA: 11155111,
-  ARBITRUM_SEPOLIA: 421614,
-  ARBITRUM_MAINNET: 42161,
-  BASE_MAINNET: 8453,
+export const relayerConfig = {
+  relayerPrivateKey: getRequiredEnv("RELAYER_PRIVATE_KEY"),
 } as const;
 
+/**
+ * @deprecated Import from chain-registry instead.
+ * Kept for backward compatibility with existing consumers.
+ */
+export const SUPPORTED_CHAINS = {
+  ETHEREUM_SEPOLIA: NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA,
+  ARBITRUM_SEPOLIA: NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA,
+  ARBITRUM_MAINNET: NUMERIC_CHAIN_IDS.ARBITRUM,
+  BASE_MAINNET: NUMERIC_CHAIN_IDS.BASE,
+} as const;
+
+/**
+ * @deprecated Use NumericChainId from chain-registry instead.
+ */
 export type SupportedChainId =
   | typeof SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
   | typeof SUPPORTED_CHAINS.ARBITRUM_SEPOLIA
@@ -101,9 +139,10 @@ export type SupportedChainId =
   | typeof SUPPORTED_CHAINS.BASE_MAINNET;
 
 /**
- * Chain Configuration
+ * Old ChainConfig interface from config.ts — mapped to ChainRegistryEntry.
+ * @deprecated Use ChainRegistryEntry from chain-registry.
  */
-export interface ChainConfig {
+export interface OldChainConfig {
   chainId: SupportedChainId;
   rpcUrl: string;
   factoryAddress: string;
@@ -112,135 +151,62 @@ export interface ChainConfig {
 }
 
 /**
- * Relayer Configuration
+ * Backward-compatible chainConfigs keyed by numeric chain id.
+ * Maps to the old shape (factoryAddress, moduleAddress).
  */
-export const relayerConfig = {
-  relayerPrivateKey: getRequiredEnv("RELAYER_PRIVATE_KEY"),
-} as const;
+export const chainConfigs: Record<SupportedChainId, OldChainConfig> = {
+  [SUPPORTED_CHAINS.ETHEREUM_SEPOLIA]: (() => {
+    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA);
+    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
+  })(),
+  [SUPPORTED_CHAINS.ARBITRUM_SEPOLIA]: (() => {
+    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA);
+    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
+  })(),
+  [SUPPORTED_CHAINS.ARBITRUM_MAINNET]: (() => {
+    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ARBITRUM);
+    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
+  })(),
+  [SUPPORTED_CHAINS.BASE_MAINNET]: (() => {
+    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.BASE);
+    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
+  })(),
+};
 
 /**
- * Safe contract addresses: per-chain env (e.g. SAFE_WALLET_FACTORY_ADDRESS_11155111)
- * falls back to single SAFE_WALLET_FACTORY_ADDRESS / SAFE_MODULE_ADDRESS for all chains.
+ * @deprecated Use getChainOrThrow from chain-registry.
  */
-function getSafeFactoryForChain(chainId: number): string {
-  return (
-    process.env[`SAFE_WALLET_FACTORY_ADDRESS_${chainId}`] ||
-    process.env.SAFE_WALLET_FACTORY_ADDRESS ||
-    ""
-  );
-}
-function getSafeModuleForChain(chainId: number): string {
-  return (
-    process.env[`SAFE_MODULE_ADDRESS_${chainId}`] ||
-    process.env.SAFE_MODULE_ADDRESS ||
-    ""
-  );
-}
-
-/**
- * Chain-specific configurations
- */
-export const chainConfigs: Record<SupportedChainId, ChainConfig> = {
-  [SUPPORTED_CHAINS.ETHEREUM_SEPOLIA]: {
-    chainId: SUPPORTED_CHAINS.ETHEREUM_SEPOLIA,
-    rpcUrl: getRequiredEnv("ETHEREUM_SEPOLIA_RPC_URL"),
-    factoryAddress: getSafeFactoryForChain(SUPPORTED_CHAINS.ETHEREUM_SEPOLIA),
-    moduleAddress: getSafeModuleForChain(SUPPORTED_CHAINS.ETHEREUM_SEPOLIA),
-    name: "Ethereum Sepolia",
-  },
-  [SUPPORTED_CHAINS.ARBITRUM_SEPOLIA]: {
-    chainId: SUPPORTED_CHAINS.ARBITRUM_SEPOLIA,
-    rpcUrl: getRequiredEnv("ARBITRUM_SEPOLIA_RPC_URL"),
-    factoryAddress: getSafeFactoryForChain(SUPPORTED_CHAINS.ARBITRUM_SEPOLIA),
-    moduleAddress: getSafeModuleForChain(SUPPORTED_CHAINS.ARBITRUM_SEPOLIA),
-    name: "Arbitrum Sepolia",
-  },
-  [SUPPORTED_CHAINS.ARBITRUM_MAINNET]: {
-    chainId: SUPPORTED_CHAINS.ARBITRUM_MAINNET,
-    rpcUrl: getRequiredEnv("ARBITRUM_RPC_URL"),
-    factoryAddress: getSafeFactoryForChain(SUPPORTED_CHAINS.ARBITRUM_MAINNET),
-    moduleAddress: getSafeModuleForChain(SUPPORTED_CHAINS.ARBITRUM_MAINNET),
-    name: "Arbitrum Mainnet",
-  },
-  [SUPPORTED_CHAINS.BASE_MAINNET]: {
-    chainId: SUPPORTED_CHAINS.BASE_MAINNET,
-    rpcUrl: getOptionalEnv("BASE_RPC_URL", "https://mainnet.base.org"),
-    factoryAddress: getSafeFactoryForChain(SUPPORTED_CHAINS.BASE_MAINNET) || "0x0000000000000000000000000000000000000000",
-    moduleAddress: getSafeModuleForChain(SUPPORTED_CHAINS.BASE_MAINNET) || "0x0000000000000000000000000000000000000000",
-    name: "Base",
-  },
-} as const;
-
-/**
- * Helper to get chain config by chain ID
- */
-export function getChainConfig(chainId: number): ChainConfig {
-  if (chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA) {
-    return chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA];
-  }
-  if (chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA) {
-    return chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA];
-  }
-  if (chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET) {
-    return chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET];
-  }
-  if (chainId === SUPPORTED_CHAINS.BASE_MAINNET) {
-    return chainConfigs[SUPPORTED_CHAINS.BASE_MAINNET];
+export function getChainConfig(chainId: number): OldChainConfig {
+  if (chainId in chainConfigs) {
+    return chainConfigs[chainId as SupportedChainId];
   }
   throw new Error(`Unsupported chain ID: ${chainId}`);
 }
 
 /**
- * Check if chain ID is supported
+ * @deprecated Use isSupportedNumericChainId from chain-registry.
  */
 export function isSupportedChain(chainId: number): chainId is SupportedChainId {
-  return (
-    chainId === SUPPORTED_CHAINS.ETHEREUM_SEPOLIA ||
-    chainId === SUPPORTED_CHAINS.ARBITRUM_SEPOLIA ||
-    chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET ||
-    chainId === SUPPORTED_CHAINS.BASE_MAINNET
-  );
+  return chainId in chainConfigs;
 }
 
 /**
- * Check if chain ID is mainnet (sponsorship limit applies only on mainnet; testnet is unlimited)
- */
-export function isMainnetChain(chainId: number): boolean {
-  return (
-    chainId === SUPPORTED_CHAINS.ARBITRUM_MAINNET ||
-    chainId === SUPPORTED_CHAINS.BASE_MAINNET
-  );
-}
-
-/**
- * Get list of all supported chains
+ * @deprecated Use getActiveNumericChainIds from chain-registry.
  */
 export function getActiveChains(): SupportedChainId[] {
-  return [
-    SUPPORTED_CHAINS.ETHEREUM_SEPOLIA,
-    SUPPORTED_CHAINS.ARBITRUM_SEPOLIA,
-    SUPPORTED_CHAINS.ARBITRUM_MAINNET,
-    SUPPORTED_CHAINS.BASE_MAINNET,
-  ];
+  return Object.keys(chainConfigs).map(Number) as SupportedChainId[];
 }
 
 /**
- * Safe Contract Addresses (deprecated - use chainConfigs instead)
- * @deprecated Use chainConfigs[chainId] instead
+ * @deprecated Use safeFactoryAddress / safeModuleAddress from chain-registry entry directly.
  */
 export const safeConfig = {
-  factoryAddress11155111:
-    chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].factoryAddress,
-  moduleAddress11155111:
-    chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].moduleAddress,
-  factoryAddress421614:
-    chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].factoryAddress,
-  moduleAddress421614:
-    chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].moduleAddress,
-  factoryAddress42161:
-    chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].factoryAddress,
-  moduleAddress42161:
-    chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].moduleAddress,
+  factoryAddress11155111: chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].factoryAddress,
+  moduleAddress11155111: chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].moduleAddress,
+  factoryAddress421614: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].factoryAddress,
+  moduleAddress421614: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].moduleAddress,
+  factoryAddress42161: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].factoryAddress,
+  moduleAddress42161: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].moduleAddress,
 } as const;
 
 /**
@@ -255,13 +221,12 @@ export const rateLimitConfig = {
 
 /**
  * ENS subdomain sponsorship: 3 sponsored txs per 0.5 USDC (per 1 week period).
- * Matches FlowForgeEthUsdcPricer: PERIOD_SECONDS = 7 * 24 * 3600, PRICE_PER_PERIOD = 0.5e6.
  */
 export const SPONSORED_TXS_PER_PERIOD = 3;
 export const ENS_PRICER_PERIOD_SECONDS = 7 * 24 * 3600; // 604800
 
 /**
- * ENS chain IDs (Ethereum mainnet = 1, Sepolia = 11155111)
+ * ENS chain IDs
  */
 export const ENS_CHAIN_IDS = {
   ETHEREUM_MAINNET: 1,
@@ -273,8 +238,7 @@ export type EnsChainId =
   | typeof ENS_CHAIN_IDS.ETHEREUM_SEPOLIA;
 
 /**
- * ENS Configuration (optional): subdomain registry and pricer per chain.
- * Used to verify/grant sponsorship allowance from subdomain registration.
+ * ENS Configuration
  */
 export const ensConfig: Partial<
   Record<
@@ -305,13 +269,12 @@ export const config = {
   encryption: encryptionConfig,
   relayer: relayerConfig,
   chains: chainConfigs,
-  safe: safeConfig, // For backwards compatibility
+  safe: safeConfig,
   rateLimit: rateLimitConfig,
 } as const;
 
 /**
  * Validate configuration on module load
- * This will throw an error if required variables are missing
  */
 export function validateConfig(): void {
   if (!relayerConfig.relayerPrivateKey.startsWith("0x")) {
@@ -331,7 +294,6 @@ export function validateConfig(): void {
     );
   }
 
-  // Validate it's valid hex
   if (!/^[0-9a-fA-F]{64}$/.test(encryptionConfig.key)) {
     throw new Error("ENCRYPTION_KEY must be a valid hexadecimal string");
   }
@@ -344,13 +306,13 @@ export function validateConfig(): void {
       );
     }
 
-    if (!chainConfig.factoryAddress.startsWith("0x")) {
+    if (chainConfig.factoryAddress && !chainConfig.factoryAddress.startsWith("0x")) {
       throw new Error(
         `Factory address for chain ${chainId} must be a valid Ethereum address`
       );
     }
 
-    if (!chainConfig.moduleAddress.startsWith("0x")) {
+    if (chainConfig.moduleAddress && !chainConfig.moduleAddress.startsWith("0x")) {
       throw new Error(
         `Module address for chain ${chainId} must be a valid Ethereum address`
       );
@@ -358,7 +320,7 @@ export function validateConfig(): void {
   }
 }
 
-// Validate on module load - fail startup if config is invalid
+// Validate on module load
 try {
   validateConfig();
 } catch (error) {
