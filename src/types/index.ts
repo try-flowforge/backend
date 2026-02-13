@@ -4,10 +4,9 @@ export interface User {
   address: string;
   email: string;
   onboarded_at: Date;
-  safe_wallet_address_testnet?: string;
-  safe_wallet_address_mainnet?: string;
-  safe_wallet_address_eth_sepolia?: string;
+  safe_wallets?: Record<string, string>; // ChainId -> SafeAddress
   remaining_sponsored_txs?: number;
+  selected_chains?: string[];
 }
 
 export interface CreateUserInput {

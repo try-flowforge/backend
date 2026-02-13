@@ -31,6 +31,10 @@ import * as migration027 from "./027_add_eth_sepolia_safe_wallet_and_chain_const
 import * as migration028 from "./028_add_uniswap_v4_swap_provider";
 import * as migration029 from "./029_add_remaining_sponsored_txs_to_users";
 import * as migration030 from "./030_create_user_ens_subdomains_table";
+import * as migration031 from "./031_add_selected_chains_to_users";
+import * as migration032 from "./032_migrate_safe_wallets_to_jsonb";
+import * as migration033 from "./033_restore_remaining_sponsored_txs_to_users";
+import * as migration034 from "./034_make_address_nullable_in_users";
 
 // Load environment variables
 dotenv.config();
@@ -230,6 +234,30 @@ const migrations: Migration[] = [
     name: "030_create_user_ens_subdomains_table",
     up: migration030.up,
     down: migration030.down,
+  },
+  {
+    id: 31,
+    name: "031_add_selected_chains_to_users",
+    up: migration031.up,
+    down: migration031.down,
+  },
+  {
+    id: 32,
+    name: "032_migrate_safe_wallets_to_jsonb",
+    up: migration032.up,
+    down: migration032.down,
+  },
+  {
+    id: 33,
+    name: "033_restore_remaining_sponsored_txs_to_users",
+    up: migration033.up,
+    down: migration033.down,
+  },
+  {
+    id: 34,
+    name: "034_make_address_nullable_in_users",
+    up: migration034.up,
+    down: migration034.down,
   },
 ];
 

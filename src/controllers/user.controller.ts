@@ -44,19 +44,21 @@ export class UserController {
         const safeResults = await SafeWalletService.createSafesForUserOnAllChains(userData.address);
 
         // Update user with wallet addresses
-        const testnetAddress = safeResults.testnet?.success ? safeResults.testnet.safeAddress : undefined;
-        const mainnetAddress = safeResults.mainnet?.success ? safeResults.mainnet.safeAddress : undefined;
-        const ethSepoliaAddress = safeResults.ethSepolia?.success ? safeResults.ethSepolia.safeAddress : undefined;
+        // Iterate through all results and update individually
+        for (const [key, result] of Object.entries(safeResults)) {
+          if (result && result.success && result.safeAddress) {
+            // Map key to chainId
+            let chainId: number | undefined;
+            if (key === 'testnet') chainId = 421614;
+            else if (key === 'mainnet') chainId = 42161;
+            else if (key === 'ethSepolia') chainId = 11155111;
 
-        if (testnetAddress || mainnetAddress || ethSepoliaAddress) {
-          const updatedUser = await UserModel.updateSafeWalletAddresses(
-            user.id,
-            testnetAddress,
-            mainnetAddress,
-            ethSepoliaAddress
-          );
-          if (updatedUser) {
-            user = updatedUser;
+            if (chainId) {
+              const updatedUser = await UserModel.updateSafeWallet(user.id, chainId, result.safeAddress);
+              if (updatedUser) {
+                user = updatedUser;
+              }
+            }
           }
         }
 
@@ -65,8 +67,7 @@ export class UserController {
             userId: user.id,
             testnet: safeResults.testnet?.success ? 'success' : 'failed',
             mainnet: safeResults.mainnet?.success ? 'success' : 'failed',
-            testnetAddress,
-            mainnetAddress,
+            ethSepolia: safeResults.ethSepolia?.success ? 'success' : 'failed',
           },
           'Safe wallet provisioning completed'
         );
@@ -203,8 +204,17 @@ export class UserController {
 
       const user = await UserModel.findById(userId);
 
+      // If user not found (new user), return success with null data
+      // This allows frontend to detect new user state without 404 errors
       if (!user) {
-        throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+        res.status(200).json({
+          success: true,
+          data: null,
+          meta: {
+            timestamp: new Date().toISOString(),
+          },
+        });
+        return;
       }
 
       const response: ApiResponse = {
@@ -242,6 +252,39 @@ export class UserController {
         data: {
           message: 'User deleted successfully',
         },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+  /**
+   * Update selected chains for a user
+   */
+  static async updateSelectedChains(req: Request, res: Response): Promise<void> {
+    try {
+      // This requires AuthenticatedRequest from privy-auth middleware
+      const userId = (req as any).userId;
+      const { chains } = req.body;
+
+      if (!userId) {
+        throw new AppError(401, 'Not authenticated', 'NOT_AUTHENTICATED');
+      }
+
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+      }
+
+      const updatedUser = await UserModel.updateSelectedChains(userId, chains);
+
+      const response: ApiResponse = {
+        success: true,
+        data: updatedUser,
         meta: {
           timestamp: new Date().toISOString(),
         },

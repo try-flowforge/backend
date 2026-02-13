@@ -11,9 +11,9 @@ export class UserModel {
     const onboardedDate = onboarded_at || new Date();
 
     const text = `
-      INSERT INTO users (id, address, email, onboarded_at)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      INSERT INTO users (id, address, email, onboarded_at, safe_wallets)
+      VALUES ($1, $2, $3, $4, '{}'::jsonb)
+      RETURNING id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs
     `;
     const values = [id, address, email, onboardedDate];
 
@@ -37,7 +37,7 @@ export class UserModel {
    */
   static async findById(id: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      SELECT id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs, selected_chains
       FROM users
       WHERE id = $1
     `;
@@ -60,7 +60,7 @@ export class UserModel {
    */
   static async findByAddress(address: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      SELECT id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs
       FROM users
       WHERE address = $1
     `;
@@ -83,7 +83,7 @@ export class UserModel {
    */
   static async findByEmail(email: string): Promise<User | null> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      SELECT id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs
       FROM users
       WHERE email = $1
     `;
@@ -106,7 +106,7 @@ export class UserModel {
    */
   static async findAll(limit = 50, offset = 0): Promise<User[]> {
     const text = `
-      SELECT id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      SELECT id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs
       FROM users
       ORDER BY onboarded_at DESC
       LIMIT $1 OFFSET $2
@@ -163,103 +163,32 @@ export class UserModel {
   }
 
   /**
-   * Update user's Safe wallet addresses
+   * Update Safe wallet address for a specific chain
+   * Uses JSONB jsonb_set to update a specific key
    */
-  static async updateSafeWalletAddresses(
+  static async updateSafeWallet(
     id: string,
-    testnetAddress?: string,
-    mainnetAddress?: string,
-    ethSepoliaAddress?: string
+    chainId: number | string,
+    address: string
   ): Promise<User | null> {
-    const updates: string[] = [];
-    const values: (string | undefined)[] = [];
-    let paramIndex = 1;
-
-    if (testnetAddress !== undefined) {
-      updates.push(`safe_wallet_address_testnet = $${paramIndex}`);
-      values.push(testnetAddress);
-      paramIndex++;
-    }
-
-    if (mainnetAddress !== undefined) {
-      updates.push(`safe_wallet_address_mainnet = $${paramIndex}`);
-      values.push(mainnetAddress);
-      paramIndex++;
-    }
-
-    if (ethSepoliaAddress !== undefined) {
-      updates.push(`safe_wallet_address_eth_sepolia = $${paramIndex}`);
-      values.push(ethSepoliaAddress);
-      paramIndex++;
-    }
-
-    if (updates.length === 0) {
-      return this.findById(id);
-    }
-
-    values.push(id);
-
     const text = `
       UPDATE users
-      SET ${updates.join(', ')}
-      WHERE id = $${paramIndex}
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
+      SET safe_wallets = jsonb_set(COALESCE(safe_wallets, '{}'::jsonb), ARRAY[$2::text], to_jsonb($3::text))
+      WHERE id = $1
+      RETURNING id, address, email, onboarded_at, safe_wallets
     `;
+    // Cast chainId to string ensures it works as a key in JSON structure
+    const values = [id, String(chainId), address];
 
     try {
       const result = await query(text, values);
       if (result.rows.length === 0) {
         return null;
       }
-      logger.info({ userId: id }, 'User Safe wallet addresses updated');
+      logger.info({ userId: id, chainId, address }, 'User Safe wallet updated');
       return result.rows[0];
     } catch (error) {
-      logger.error({ error, userId: id }, 'Failed to update Safe wallet addresses');
-      throw error;
-    }
-  }
-
-  /**
-   * Update Safe wallet address for a specific chain
-   * @param id User ID
-   * @param chainId 421614 (Arbitrum Sepolia), 42161 (Arbitrum Mainnet), 11155111 (Ethereum Sepolia)
-   * @param address Safe wallet address
-   */
-  static async updateSafeAddressForChain(
-    id: string,
-    chainId: number,
-    address: string
-  ): Promise<User | null> {
-    const column =
-      chainId === 421614
-        ? 'safe_wallet_address_testnet'
-        : chainId === 42161
-          ? 'safe_wallet_address_mainnet'
-          : chainId === 11155111
-            ? 'safe_wallet_address_eth_sepolia'
-            : null;
-
-    if (!column) {
-      logger.warn({ userId: id, chainId }, 'Unsupported chain ID for Safe address update');
-      return null;
-    }
-
-    const text = `
-      UPDATE users
-      SET ${column} = $1
-      WHERE id = $2
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia
-    `;
-
-    try {
-      const result = await query(text, [address, id]);
-      if (result.rows.length === 0) {
-        return null;
-      }
-      logger.info({ userId: id, chainId }, 'User Safe wallet address updated for chain');
-      return result.rows[0];
-    } catch (error) {
-      logger.error({ error, userId: id, chainId }, 'Failed to update Safe wallet address for chain');
+      logger.error({ error, userId: id }, 'Failed to update Safe wallet');
       throw error;
     }
   }
@@ -294,30 +223,19 @@ export class UserModel {
   /**
    * Get Safe wallet address for a user based on chain
    * @param userId User ID
-   * @param chainId Chain ID (421614 Arbitrum Sepolia, 42161 Arbitrum Mainnet, 11155111 Ethereum Sepolia)
+   * @param chainId Chain ID
    * @returns Safe wallet address or null if not found
    */
   static async getSafeAddressByChain(
     userId: string,
-    chainId: number
+    chainId: number | string
   ): Promise<string | null> {
     const user = await this.findById(userId);
-    if (!user) {
+    if (!user || !user.safe_wallets) {
       return null;
     }
 
-    if (chainId === 421614) {
-      return user.safe_wallet_address_testnet || null;
-    }
-    if (chainId === 42161) {
-      return user.safe_wallet_address_mainnet || null;
-    }
-    if (chainId === 11155111) {
-      return user.safe_wallet_address_eth_sepolia || null;
-    }
-
-    logger.warn({ userId, chainId }, 'Unsupported chain ID for Safe address lookup');
-    return null;
+    return user.safe_wallets[String(chainId)] || null;
   }
 
   /**
@@ -331,7 +249,7 @@ export class UserModel {
       UPDATE users
       SET remaining_sponsored_txs = $1
       WHERE id = $2
-      RETURNING id, address, email, onboarded_at, safe_wallet_address_testnet, safe_wallet_address_mainnet, safe_wallet_address_eth_sepolia, remaining_sponsored_txs
+      RETURNING id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs
     `;
     const values = [Math.max(0, count), userId];
 
@@ -376,6 +294,32 @@ export class UserModel {
       return { consumed: true, remaining };
     } catch (error) {
       logger.error({ error, userId }, 'Failed to consume sponsored tx');
+      throw error;
+    }
+  }
+
+  /**
+   * Update selected chains for a user
+   */
+  static async updateSelectedChains(
+    userId: string,
+    chains: string[]
+  ): Promise<User | null> {
+    const text = `
+      UPDATE users
+      SET selected_chains = $1
+      WHERE id = $2
+      RETURNING id, address, email, onboarded_at, safe_wallets, remaining_sponsored_txs, selected_chains
+    `;
+    const values = [chains, userId];
+
+    try {
+      const result = await query(text, values);
+      if (result.rows.length === 0) return null;
+      logger.info({ userId, chains }, 'Updated selected chains');
+      return result.rows[0];
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to update selected chains');
       throw error;
     }
   }

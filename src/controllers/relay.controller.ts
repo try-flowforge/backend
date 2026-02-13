@@ -81,7 +81,7 @@ async function ensureUserExistsAndUpdateSafe(
     }
 
     // Update the Safe wallet address for the specific chain
-    await UserModel.updateSafeAddressForChain(userId, chainId, safeAddress);
+    await UserModel.updateSafeWallet(userId, chainId, safeAddress);
     logger.info({ userId, safeAddress, chainId }, 'Updated user Safe wallet address for chain');
 
     result.safeAddressUpdated = true;
