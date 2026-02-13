@@ -48,6 +48,20 @@ export const NUMERIC_CHAIN_IDS = {
  */
 export type NumericChainId = (typeof NUMERIC_CHAIN_IDS)[keyof typeof NUMERIC_CHAIN_IDS];
 
+/**
+ * Numeric chain IDs where Safe relay flows are supported.
+ * Keep this explicit so relay endpoints never silently expand to unsupported chains.
+ */
+export const SAFE_RELAY_CHAIN_IDS = [
+    NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA,
+    NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA,
+    NUMERIC_CHAIN_IDS.ARBITRUM,
+] as const;
+
+export type SafeRelayNumericChainId = (typeof SAFE_RELAY_CHAIN_IDS)[number];
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 export interface ChainContracts {
     // Uniswap
     uniswapRouter?: string;
@@ -71,7 +85,7 @@ export interface ChainRegistryEntry {
     /** Internal string identifier, e.g. "ARBITRUM" */
     id: ChainId;
     /** EVM numeric chain ID */
-    chainId: number;
+    chainId: NumericChainId;
     /** Human-readable name */
     name: string;
     /** Primary RPC URL */
@@ -307,7 +321,7 @@ export function isValidChainId(id: string): id is ChainId {
 }
 
 /** Check if a numeric chain ID is supported */
-export function isSupportedNumericChainId(numericId: number): boolean {
+export function isSupportedNumericChainId(numericId: number): numericId is NumericChainId {
     return CHAIN_REGISTRY.some((c) => c.chainId === numericId);
 }
 
@@ -318,7 +332,7 @@ export function isMainnetChain(numericId: number): boolean {
 }
 
 /** Get numeric chain IDs of all active chains */
-export function getActiveNumericChainIds(): number[] {
+export function getActiveNumericChainIds(): NumericChainId[] {
     return CHAIN_REGISTRY.map((c) => c.chainId);
 }
 
@@ -336,12 +350,57 @@ export function stringToNumericId(stringId: string): number | undefined {
     return getChain(stringId)?.chainId;
 }
 
+/** Check if a Safe contract address is configured (non-empty and non-zero). */
+export function isConfiguredSafeAddress(address: string): boolean {
+    return Boolean(address) && address.toLowerCase() !== ZERO_ADDRESS;
+}
+
+/** Check whether a chain has both Safe factory + module configured. */
+export function hasSafeRelayContracts(chain: ChainRegistryEntry): boolean {
+    return (
+        isConfiguredSafeAddress(chain.safeFactoryAddress) &&
+        isConfiguredSafeAddress(chain.safeModuleAddress)
+    );
+}
+
+/** Check if numeric chain ID is allowed for Safe relay endpoints. */
+export function isSafeRelayChainId(numericId: number): numericId is SafeRelayNumericChainId {
+    return SAFE_RELAY_CHAIN_IDS.includes(numericId as SafeRelayNumericChainId);
+}
+
+/** Get numeric chain IDs allowed for Safe relay endpoints. */
+export function getSafeRelayChainIds(): SafeRelayNumericChainId[] {
+    return [...SAFE_RELAY_CHAIN_IDS];
+}
+
+/** Get relay-safe chain entries (regardless of runtime Safe address configuration). */
+export function getSafeRelayChains(): ChainRegistryEntry[] {
+    return SAFE_RELAY_CHAIN_IDS.map((chainId) => getChainOrThrow(chainId));
+}
+
+/** Human-readable labels for Safe relay chain IDs. */
+export function getSafeRelayChainLabels(): string[] {
+    return getSafeRelayChains().map((chain) => `${chain.chainId} (${chain.name})`);
+}
+
 /**
- * @deprecated Use ChainRegistryEntry instead. This alias exists for
- * backward compatibility with code that imported ChainConfig from
- * types/swap.types.ts
+ * Get Safe relay chain config and assert Safe contracts are configured.
+ * Throws when chain is unsupported for relay flows or contracts are missing.
  */
-export type ChainConfig = ChainRegistryEntry;
+export function getSafeRelayChainOrThrow(numericId: number): ChainRegistryEntry {
+    if (!isSafeRelayChainId(numericId)) {
+        throw new Error(`Unsupported Safe relay chain ID: ${numericId}`);
+    }
+
+    const chain = getChainOrThrow(numericId);
+    if (!hasSafeRelayContracts(chain)) {
+        throw new Error(
+            `Safe relay contracts are not configured for chain ${chain.name} (${chain.chainId})`
+        );
+    }
+
+    return chain;
+}
 
 /**
  * Backward-compatible CHAIN_CONFIGS keyed by string ChainId.

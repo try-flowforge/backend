@@ -5,18 +5,20 @@ import { getRelayerService } from "../services/relayer.service";
 import { safeRelayValidationService } from "../services/safeRelayValidation.service";
 import { acquireLock, releaseLock } from "../services/distributed-lock.service";
 import { logger } from "../utils/logger";
+import { config } from "../config/config";
 import {
-  config,
-  getChainConfig,
+  getSafeRelayChainLabels,
+  getSafeRelayChainOrThrow,
   isMainnetChain,
-  isSupportedChain,
-  SUPPORTED_CHAINS,
-  SupportedChainId,
-} from "../config/config";
+  isSafeRelayChainId,
+  type SafeRelayNumericChainId,
+} from "../config/chain-registry";
 import { UserModel } from "../models/users";
 import { PrivyClient } from "@privy-io/server-auth";
 import { checkRateLimit } from "../services/rate-limiter.service";
 import { RATE_LIMIT_CONSTANTS } from "../config/constants";
+
+const SUPPORTED_SAFE_RELAY_CHAINS = getSafeRelayChainLabels().join(", ");
 
 /**
  * Result of user creation/update operation
@@ -37,7 +39,7 @@ async function ensureUserExistsAndUpdateSafe(
   userId: string,
   walletAddress: string,
   safeAddress: string,
-  chainId: SupportedChainId
+  chainId: SafeRelayNumericChainId
 ): Promise<UserSyncResult> {
   const result: UserSyncResult = {
     success: false,
@@ -123,20 +125,20 @@ export const createSafe = async (
     const { chainId } = req.body;
 
     // Validate chain ID
-    if (!isSupportedChain(chainId)) {
+    if (!isSafeRelayChainId(chainId)) {
       res.status(400).json({
         success: false,
-        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ETHEREUM_SEPOLIA} (Ethereum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
+        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_SAFE_RELAY_CHAINS}`,
       });
       return;
     }
 
-    const supportedChainId = chainId as SupportedChainId;
+    const supportedChainId = chainId;
 
     const userAddress = req.userWalletAddress;
     const userId = req.userId;
 
-    const chainConfig = getChainConfig(supportedChainId);
+    const chainConfig = getSafeRelayChainOrThrow(supportedChainId);
 
     // Acquire distributed lock to prevent race conditions
     // Lock is per-user per-chain to allow parallel creation on different chains
@@ -165,7 +167,7 @@ export const createSafe = async (
     );
 
     // Get factory address for the chain
-    const factoryAddress = chainConfig.factoryAddress;
+    const factoryAddress = chainConfig.safeFactoryAddress;
 
     // Check if user already has a Safe wallet (idempotency check)
     const relayerService = getRelayerService();
@@ -363,16 +365,16 @@ export const enableModule = async (
     }
 
     // Validate chain ID
-    if (!isSupportedChain(chainId)) {
+    if (!isSafeRelayChainId(chainId)) {
       res.status(400).json({
         success: false,
-        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.ETHEREUM_SEPOLIA} (Ethereum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_SEPOLIA} (Arbitrum Sepolia), ${SUPPORTED_CHAINS.ARBITRUM_MAINNET} (Arbitrum Mainnet)`,
+        error: `Unsupported chain ID: ${chainId}. Supported chains: ${SUPPORTED_SAFE_RELAY_CHAINS}`,
       });
       return;
     }
 
-    const supportedChainId = chainId as SupportedChainId;
-    const chainConfig = getChainConfig(supportedChainId);
+    const supportedChainId = chainId;
+    const chainConfig = getSafeRelayChainOrThrow(supportedChainId);
 
     const userAddress = req.userWalletAddress;
     const userId = req.userId;

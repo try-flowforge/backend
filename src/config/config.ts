@@ -8,6 +8,8 @@ export {
   type ChainId,
   NUMERIC_CHAIN_IDS,
   type NumericChainId,
+  SAFE_RELAY_CHAIN_IDS,
+  type SafeRelayNumericChainId,
   type ChainRegistryEntry,
   type ChainContracts,
   CHAIN_REGISTRY,
@@ -21,14 +23,18 @@ export {
   isMainnetChain,
   getActiveNumericChainIds,
   getActiveChainIds,
+  isConfiguredSafeAddress,
+  hasSafeRelayContracts,
+  isSafeRelayChainId,
+  getSafeRelayChainIds,
+  getSafeRelayChains,
+  getSafeRelayChainLabels,
+  getSafeRelayChainOrThrow,
   numericToStringId,
   stringToNumericId,
 } from "./chain-registry";
 
-import {
-  NUMERIC_CHAIN_IDS,
-  getChainOrThrow,
-} from "./chain-registry";
+import { getAllChains } from "./chain-registry";
 
 /**
  * Centralized configuration for the backend
@@ -119,97 +125,6 @@ export const relayerConfig = {
 } as const;
 
 /**
- * @deprecated Import from chain-registry instead.
- * Kept for backward compatibility with existing consumers.
- */
-export const SUPPORTED_CHAINS = {
-  ETHEREUM_SEPOLIA: NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA,
-  ARBITRUM_SEPOLIA: NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA,
-  ARBITRUM_MAINNET: NUMERIC_CHAIN_IDS.ARBITRUM,
-  BASE_MAINNET: NUMERIC_CHAIN_IDS.BASE,
-} as const;
-
-/**
- * @deprecated Use NumericChainId from chain-registry instead.
- */
-export type SupportedChainId =
-  | typeof SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
-  | typeof SUPPORTED_CHAINS.ARBITRUM_SEPOLIA
-  | typeof SUPPORTED_CHAINS.ARBITRUM_MAINNET
-  | typeof SUPPORTED_CHAINS.BASE_MAINNET;
-
-/**
- * Old ChainConfig interface from config.ts — mapped to ChainRegistryEntry.
- * @deprecated Use ChainRegistryEntry from chain-registry.
- */
-export interface OldChainConfig {
-  chainId: SupportedChainId;
-  rpcUrl: string;
-  factoryAddress: string;
-  moduleAddress: string;
-  name: string;
-}
-
-/**
- * Backward-compatible chainConfigs keyed by numeric chain id.
- * Maps to the old shape (factoryAddress, moduleAddress).
- */
-export const chainConfigs: Record<SupportedChainId, OldChainConfig> = {
-  [SUPPORTED_CHAINS.ETHEREUM_SEPOLIA]: (() => {
-    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA);
-    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
-  })(),
-  [SUPPORTED_CHAINS.ARBITRUM_SEPOLIA]: (() => {
-    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA);
-    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
-  })(),
-  [SUPPORTED_CHAINS.ARBITRUM_MAINNET]: (() => {
-    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.ARBITRUM);
-    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
-  })(),
-  [SUPPORTED_CHAINS.BASE_MAINNET]: (() => {
-    const c = getChainOrThrow(NUMERIC_CHAIN_IDS.BASE);
-    return { chainId: c.chainId as SupportedChainId, rpcUrl: c.rpcUrl, factoryAddress: c.safeFactoryAddress, moduleAddress: c.safeModuleAddress, name: c.name };
-  })(),
-};
-
-/**
- * @deprecated Use getChainOrThrow from chain-registry.
- */
-export function getChainConfig(chainId: number): OldChainConfig {
-  if (chainId in chainConfigs) {
-    return chainConfigs[chainId as SupportedChainId];
-  }
-  throw new Error(`Unsupported chain ID: ${chainId}`);
-}
-
-/**
- * @deprecated Use isSupportedNumericChainId from chain-registry.
- */
-export function isSupportedChain(chainId: number): chainId is SupportedChainId {
-  return chainId in chainConfigs;
-}
-
-/**
- * @deprecated Use getActiveNumericChainIds from chain-registry.
- */
-export function getActiveChains(): SupportedChainId[] {
-  return Object.keys(chainConfigs).map(Number) as SupportedChainId[];
-}
-
-/**
- * @deprecated Use safeFactoryAddress / safeModuleAddress from chain-registry entry directly.
- */
-export const safeConfig = {
-  factoryAddress11155111: chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].factoryAddress,
-  moduleAddress11155111: chainConfigs[SUPPORTED_CHAINS.ETHEREUM_SEPOLIA].moduleAddress,
-  factoryAddress421614: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].factoryAddress,
-  moduleAddress421614: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_SEPOLIA].moduleAddress,
-  factoryAddress42161: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].factoryAddress,
-  moduleAddress42161: chainConfigs[SUPPORTED_CHAINS.ARBITRUM_MAINNET].moduleAddress,
-} as const;
-
-/**
  * Rate Limiting Configuration
  */
 export const rateLimitConfig = {
@@ -268,8 +183,6 @@ export const config = {
   privy: privyConfig,
   encryption: encryptionConfig,
   relayer: relayerConfig,
-  chains: chainConfigs,
-  safe: safeConfig,
   rateLimit: rateLimitConfig,
 } as const;
 
@@ -299,22 +212,28 @@ export function validateConfig(): void {
   }
 
   // Validate all chain configurations
-  for (const [chainId, chainConfig] of Object.entries(chainConfigs)) {
+  for (const chainConfig of getAllChains()) {
     if (!chainConfig.rpcUrl.startsWith("http")) {
       throw new Error(
-        `RPC URL for chain ${chainId} must be a valid HTTP/HTTPS URL`
+        `RPC URL for chain ${chainConfig.chainId} must be a valid HTTP/HTTPS URL`
       );
     }
 
-    if (chainConfig.factoryAddress && !chainConfig.factoryAddress.startsWith("0x")) {
+    if (
+      chainConfig.safeFactoryAddress &&
+      !chainConfig.safeFactoryAddress.startsWith("0x")
+    ) {
       throw new Error(
-        `Factory address for chain ${chainId} must be a valid Ethereum address`
+        `Safe factory address for chain ${chainConfig.chainId} must be a valid Ethereum address`
       );
     }
 
-    if (chainConfig.moduleAddress && !chainConfig.moduleAddress.startsWith("0x")) {
+    if (
+      chainConfig.safeModuleAddress &&
+      !chainConfig.safeModuleAddress.startsWith("0x")
+    ) {
       throw new Error(
-        `Module address for chain ${chainId} must be a valid Ethereum address`
+        `Safe module address for chain ${chainConfig.chainId} must be a valid Ethereum address`
       );
     }
   }

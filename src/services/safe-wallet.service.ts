@@ -2,10 +2,10 @@ import { ethers } from "ethers";
 import { getRelayerService } from "./relayer.service";
 import { logger } from "../utils/logger";
 import {
-    getChainConfig,
-    SUPPORTED_CHAINS,
-    SupportedChainId,
-} from "../config/config";
+    NUMERIC_CHAIN_IDS,
+    getSafeRelayChainOrThrow,
+    type SafeRelayNumericChainId,
+} from "../config/chain-registry";
 
 export interface SafeWalletResult {
     success: boolean;
@@ -30,11 +30,11 @@ export class SafeWalletService {
      */
     static async getExistingSafeWallet(
         userAddress: string,
-        chainId: SupportedChainId
+        chainId: SafeRelayNumericChainId
     ): Promise<string | null> {
         try {
-            const chainConfig = getChainConfig(chainId);
-            const factoryAddress = chainConfig.factoryAddress;
+            const chainConfig = getSafeRelayChainOrThrow(chainId);
+            const factoryAddress = chainConfig.safeFactoryAddress;
 
             const relayerService = getRelayerService();
             const provider = relayerService.getProvider(chainId);
@@ -71,10 +71,10 @@ export class SafeWalletService {
      */
     static async createSafeForUser(
         userAddress: string,
-        chainId: SupportedChainId
+        chainId: SafeRelayNumericChainId
     ): Promise<SafeWalletResult> {
         try {
-            const chainConfig = getChainConfig(chainId);
+            const chainConfig = getSafeRelayChainOrThrow(chainId);
 
             logger.info(
                 {
@@ -126,7 +126,7 @@ export class SafeWalletService {
             const relayerService = getRelayerService();
             const { txHash, receipt } = await relayerService.sendTransaction(
                 chainId,
-                chainConfig.factoryAddress,
+                chainConfig.safeFactoryAddress,
                 data
             );
 
@@ -202,7 +202,7 @@ export class SafeWalletService {
         try {
             results.testnet = await this.createSafeForUser(
                 userAddress,
-                SUPPORTED_CHAINS.ARBITRUM_SEPOLIA
+                NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA
             );
         } catch (error) {
             logger.error(
@@ -223,7 +223,7 @@ export class SafeWalletService {
         try {
             results.ethSepolia = await this.createSafeForUser(
                 userAddress,
-                SUPPORTED_CHAINS.ETHEREUM_SEPOLIA
+                NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA
             );
         } catch (error) {
             logger.error(

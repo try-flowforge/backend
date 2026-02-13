@@ -5,6 +5,12 @@
 
 import Joi from 'joi';
 import { VALIDATION_CONSTANTS } from '../config/constants';
+import {
+    SAFE_RELAY_CHAIN_IDS,
+    getSafeRelayChainLabels,
+} from '../config/chain-registry';
+
+const SAFE_RELAY_CHAIN_ERROR = `Chain ID must be one of: ${getSafeRelayChainLabels().join(', ')}`;
 
 // ===========================================
 // COMMON SCHEMAS
@@ -239,10 +245,10 @@ export const createUserSchema = Joi.object({
  */
 export const createSafeSchema = Joi.object({
     chainId: Joi.number()
-        .valid(11155111, 421614, 42161) // Ethereum Sepolia, Arbitrum Sepolia, Arbitrum Mainnet
+        .valid(...SAFE_RELAY_CHAIN_IDS)
         .required()
         .messages({
-            'any.only': 'Chain ID must be 11155111 (Ethereum Sepolia), 421614 (Arbitrum Sepolia), or 42161 (Arbitrum Mainnet)',
+            'any.only': SAFE_RELAY_CHAIN_ERROR,
         }),
 });
 
@@ -251,7 +257,7 @@ export const createSafeSchema = Joi.object({
  */
 export const enableModuleSchema = Joi.object({
     chainId: Joi.number()
-        .valid(11155111, 421614, 42161)
+        .valid(...SAFE_RELAY_CHAIN_IDS)
         .required(),
     safeAddress: Joi.string()
         .pattern(/^0x[a-fA-F0-9]{40}$/)
