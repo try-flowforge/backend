@@ -12,6 +12,7 @@ import { WalletNodeProcessor } from './WalletNodeProcessor';
 import { OracleNodeProcessor } from './OracleNodeProcessor';
 import { PythOracleNodeProcessor } from './PythOracleNodeProcessor';
 import { LlmTransformNodeProcessor } from './LlmTransformNodeProcessor';
+import { ApiNodeProcessor } from './ApiNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -67,6 +68,8 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
       // Register LLM Transform processor
       this.registerProcessor(new LlmTransformNodeProcessor());
 
+      // Register API processor
+      this.registerProcessor(new ApiNodeProcessor());
       logger.info(
         { processorCount: this.processors.size },
         'Node processors initialized'
