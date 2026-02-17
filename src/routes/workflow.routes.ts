@@ -17,6 +17,7 @@ import {
   getWorkflowVersions,
   getWorkflowVersion,
   restoreWorkflowVersion,
+  validateWorkflow,
 } from '../controllers/workflow.controller';
 import { subscribeToExecution } from '../services/ExecutionSSEService';
 import { verifyPrivyToken } from '../middleware/privy-auth';
@@ -96,6 +97,7 @@ router.get('/', validateQuery(listWorkflowsQuerySchema), listWorkflows);
 router.get('/:id', validateParams(idParamSchema), getWorkflow);
 router.put('/:id', validateParams(idParamSchema), validateBody(updateWorkflowSchema), updateWorkflow);
 router.put('/:id/full', validateParams(idParamSchema), validateBody(fullUpdateWorkflowSchema), fullUpdateWorkflow);
+router.post('/validate', validateBody(fullUpdateWorkflowSchema), validateWorkflow);
 router.delete('/:id', validateParams(idParamSchema), deleteWorkflow);
 
 // Workflow Version History

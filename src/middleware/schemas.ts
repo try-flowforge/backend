@@ -13,6 +13,17 @@ import {
 const SAFE_RELAY_CHAIN_ERROR = `Chain ID must be one of: ${getSafeRelayChainLabels().join(', ')}`;
 
 // ===========================================
+// CORE CONSTANTS
+// ===========================================
+
+/** Supported chains for swap/lending/oracle (includes BASE for LiFi cross-chain) */
+const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA', 'BASE'] as const;
+/** Swap providers */
+const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
+/** Lending providers */
+const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
+
+// ===========================================
 // COMMON SCHEMAS
 // ===========================================
 
@@ -44,15 +55,128 @@ const nodePositionSchema = Joi.object({
     y: Joi.number().required(),
 });
 
+// ===========================================
+// BLOCK CONFIG SCHEMAS
+// ===========================================
+
 /**
- * Schema for workflow node
+ * Uniswap/Swap block config schema
+ */
+const swapBlockConfigSchema = Joi.object({
+    swapProvider: Joi.string().valid(...SWAP_PROVIDERS).required(),
+    swapChain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    swapType: Joi.string().valid('EXACT_INPUT', 'EXACT_OUTPUT').required(),
+    sourceTokenAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    sourceTokenSymbol: Joi.string().required(),
+    sourceTokenDecimals: Joi.number().integer().min(0).max(18).required(),
+    destinationTokenAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    destinationTokenSymbol: Joi.string().required(),
+    destinationTokenDecimals: Joi.number().integer().min(0).max(18).required(),
+    swapAmount: Joi.string().required(),
+    slippageTolerance: Joi.number().min(0).max(50).default(0.5),
+    simulateFirst: Joi.boolean().default(true),
+    autoRetryOnFailure: Joi.boolean().default(true),
+    maxRetries: Joi.number().integer().min(0).max(10).default(3),
+    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).allow(''),
+}).unknown(true);
+
+/**
+ * Lending block config schema
+ */
+const lendingBlockConfigSchema = Joi.object({
+    provider: Joi.string().valid(...LENDING_PROVIDERS).required(),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    operation: Joi.string().valid('SUPPLY', 'WITHDRAW', 'BORROW', 'REPAY', 'ENABLE_COLLATERAL', 'DISABLE_COLLATERAL').required(),
+    asset: Joi.object({
+        address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+        symbol: Joi.string(),
+        decimals: Joi.number().integer().min(0).max(18),
+    }).required(),
+    amount: Joi.string().required(),
+    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).allow(''),
+}).unknown(true);
+
+/**
+ * Slack block config schema
+ */
+const slackBlockConfigSchema = Joi.object({
+    connectionId: Joi.string().uuid().required(),
+    message: Joi.string().required().max(4000),
+    connectionType: Joi.string().valid('webhook', 'oauth').required(),
+    channelId: Joi.string().when('connectionType', {
+        is: 'oauth',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+}).unknown(true);
+
+/**
+ * Telegram block config schema
+ */
+const telegramBlockConfigSchema = Joi.object({
+    connectionId: Joi.string().uuid().required(),
+    chatId: Joi.string().required(),
+    message: Joi.string().required().max(4096),
+}).unknown(true);
+
+/**
+ * Oracle block config schema
+ */
+const oracleBlockConfigSchema = Joi.object({
+    provider: Joi.string().valid('CHAINLINK', 'PYTH').required(),
+    feedId: Joi.string().required(),
+    description: Joi.string().allow(''),
+}).unknown(true);
+
+/**
+ * Trigger block config schema
+ */
+const triggerBlockConfigSchema = Joi.object({
+    triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').required(),
+    cronExpression: Joi.string().when('triggerType', { is: 'CRON', then: Joi.required() }),
+    webhookPath: Joi.string().when('triggerType', { is: 'WEBHOOK', then: Joi.required() }),
+}).unknown(true);
+
+/**
+ * Control (IF/Switch) block config schema
+ */
+const controlBlockConfigSchema = Joi.object({
+    // Generic for now, can be expanded based on specific logic
+}).unknown(true);
+
+/**
+ * Schema for workflow node with type-specific config validation
  */
 const workflowNodeSchema = Joi.object({
     id: Joi.string().required(),
     type: Joi.string().required(),
     name: Joi.string().max(255),
     description: Joi.string().max(1000),
-    config: Joi.object().default({}),
+    config: Joi.alternatives().conditional('type', [
+        { is: 'SWAP', then: swapBlockConfigSchema },
+        { is: 'uniswap', then: swapBlockConfigSchema },
+        { is: 'LENDING', then: lendingBlockConfigSchema },
+        { is: 'SLACK', then: slackBlockConfigSchema },
+        { is: 'slack', then: slackBlockConfigSchema },
+        { is: 'TELEGRAM', then: telegramBlockConfigSchema },
+        { is: 'telegram', then: telegramBlockConfigSchema },
+        { is: 'CHAINLINK_PRICE_ORACLE', then: oracleBlockConfigSchema },
+        { is: 'PYTH_PRICE_ORACLE', then: oracleBlockConfigSchema },
+        { is: 'TRIGGER', then: triggerBlockConfigSchema },
+        { is: 'trigger', then: triggerBlockConfigSchema },
+        {
+            is: 'START', then: triggerBlockConfigSchema.keys({
+                triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').optional().default('MANUAL')
+            })
+        },
+        {
+            is: 'start', then: triggerBlockConfigSchema.keys({
+                triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').optional().default('MANUAL')
+            })
+        },
+        { is: 'IF', then: controlBlockConfigSchema },
+        { is: 'SWITCH', then: controlBlockConfigSchema },
+    ]).default({}),
     position: nodePositionSchema,
     metadata: Joi.object().default({}),
 });
@@ -343,12 +467,6 @@ export const listTimeBlocksQuerySchema = Joi.object({
 // SWAP SCHEMAS
 // ===========================================
 
-/** Supported chains for swap/lending/oracle (includes BASE for LiFi cross-chain) */
-const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA', 'BASE'] as const;
-/** Swap providers */
-const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
-/** Lending providers */
-const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
 
 /** Params: provider + chain (for quote, build-transaction) */
 export const swapProviderChainParamsSchema = Joi.object({
