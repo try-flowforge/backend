@@ -274,6 +274,38 @@ export const enableModuleSchema = Joi.object({
 });
 
 // ===========================================
+// TIME BLOCK SCHEMAS
+// ===========================================
+
+export const createTimeBlockSchema = Joi.object({
+    workflowId: uuidSchema.required(),
+    runAt: Joi.date().iso().required(),
+    timezone: Joi.string().max(64).allow('', null),
+    recurrence: Joi.object({
+        type: Joi.string().valid('NONE', 'INTERVAL', 'CRON').default('NONE'),
+        intervalSeconds: Joi.number().integer().min(1),
+        cronExpression: Joi.string().max(256),
+        untilAt: Joi.date().iso(),
+        maxRuns: Joi.number().integer().min(1).max(100000),
+    }).default({ type: 'NONE' }),
+}).custom((value, helpers) => {
+    const type = value.recurrence?.type || 'NONE';
+    if (type === 'INTERVAL' && !value.recurrence.intervalSeconds) {
+        return helpers.error('any.invalid', { message: 'intervalSeconds is required for INTERVAL recurrence' });
+    }
+    if (type === 'CRON' && !value.recurrence.cronExpression) {
+        return helpers.error('any.invalid', { message: 'cronExpression is required for CRON recurrence' });
+    }
+    return value;
+});
+
+export const listTimeBlocksQuerySchema = Joi.object({
+    status: Joi.string().valid('ACTIVE', 'PAUSED', 'CANCELLED', 'COMPLETED'),
+    limit: Joi.number().integer().min(1).max(100).default(50),
+    offset: Joi.number().integer().min(0).default(0),
+});
+
+// ===========================================
 // SWAP SCHEMAS
 // ===========================================
 

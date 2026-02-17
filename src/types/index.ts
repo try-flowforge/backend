@@ -43,3 +43,5 @@ export * from './lending.types';
 // Re-export all oracle-related types
 export * from './oracle.types';
 
+// Re-export time block types
+export * from './timeblock.types';

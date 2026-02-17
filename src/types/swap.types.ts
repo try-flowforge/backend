@@ -42,6 +42,7 @@ export enum TriggerType {
   WEBHOOK = "WEBHOOK",
   MANUAL = "MANUAL",
   EVENT = "EVENT",
+  TIME_BLOCK = "TIME_BLOCK",
 }
 
 // Execution Status

@@ -9,6 +9,7 @@ import swapRoutes from './swap.routes';
 import lendingRoutes from './lending.routes';
 import metaRoutes from './meta.routes';
 import oracleRoutes from './oracle.routes';
+import timeBlockRoutes from './timeblock.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -125,6 +126,7 @@ router.use('/integrations/slack', slackRoutes);
 router.use('/integrations/telegram', telegramRoutes);
 router.use('/integrations/email', emailRoutes);
 router.use('/workflows', workflowRoutes);
+router.use('/time-blocks', timeBlockRoutes);
 router.use('/swaps', swapRoutes);
 router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);

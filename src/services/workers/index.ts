@@ -5,12 +5,16 @@ import {
   NodeExecutionJobData,
   SwapExecutionJobData,
   LLMExecutionJobData,
+  enqueueWorkflowExecution,
+  getQueue,
 } from '../../config/queues';
 import { workflowExecutionEngine } from '../workflow/WorkflowExecutionEngine';
 import { nodeProcessorFactory } from '../workflow/processors/NodeProcessorFactory';
 import { swapExecutionService } from '../swap/SwapExecutionService';
 import { logger } from '../../utils/logger';
 import { ExecutionStatus, TriggerType } from '../../types';
+import { pool } from '../../config/database';
+import { TimeBlockStatus } from '../../types/timeblock.types';
 
 // Worker Configuration
 const redisConnection = {
@@ -393,6 +397,128 @@ export class LLMExecutionWorker {
 }
 
 /**
+ * Workflow Trigger Worker
+ * Consumes scheduled trigger jobs (cron/time-block) and enqueues workflow executions
+ */
+export class WorkflowTriggerWorker {
+  private worker: Worker<WorkflowExecutionJobData>;
+
+  constructor() {
+    this.worker = new Worker<WorkflowExecutionJobData>(
+      QueueName.WORKFLOW_TRIGGER,
+      async (job: Job<WorkflowExecutionJobData>) => {
+        return await this.processJob(job);
+      },
+      {
+        ...defaultWorkerOptions,
+        connection: redisConnection,
+        concurrency: parseInt(process.env.TRIGGER_WORKER_CONCURRENCY || '5'),
+      }
+    );
+
+    this.setupEventListeners();
+  }
+
+  private async processJob(job: Job<WorkflowExecutionJobData>): Promise<any> {
+    const { workflowId, userId, triggeredBy, timeBlockId } = job.data;
+
+    // If this trigger is associated with a time block, enforce stop/cancel rules
+    if (timeBlockId) {
+      const tbRes = await pool.query(
+        'SELECT id, status, run_count, max_runs, until_at FROM time_blocks WHERE id = $1',
+        [timeBlockId]
+      );
+      if (tbRes.rows.length === 0) {
+        logger.warn({ timeBlockId, jobId: job.id }, 'Time block missing, skipping trigger');
+        return { skipped: true, reason: 'TIME_BLOCK_NOT_FOUND' };
+      }
+
+      const tb = tbRes.rows[0] as {
+        id: string;
+        status: TimeBlockStatus;
+        run_count: number;
+        max_runs: number | null;
+        until_at: string | null;
+      };
+
+      const untilAtMs = tb.until_at ? new Date(tb.until_at).getTime() : null;
+      const nowMs = Date.now();
+
+      if (tb.status !== TimeBlockStatus.ACTIVE) {
+        logger.info({ timeBlockId, status: tb.status }, 'Time block not active, skipping trigger');
+        return { skipped: true, reason: 'TIME_BLOCK_NOT_ACTIVE' };
+      }
+
+      if (untilAtMs !== null && nowMs > untilAtMs) {
+        await this.completeTimeBlock(timeBlockId, job);
+        return { skipped: true, reason: 'TIME_BLOCK_EXPIRED' };
+      }
+
+      if (tb.max_runs !== null && tb.run_count >= tb.max_runs) {
+        await this.completeTimeBlock(timeBlockId, job);
+        return { skipped: true, reason: 'TIME_BLOCK_MAX_RUNS_REACHED' };
+      }
+
+      // Increment run_count (best-effort)
+      await pool.query(
+        'UPDATE time_blocks SET run_count = run_count + 1, updated_at = NOW() WHERE id = $1',
+        [timeBlockId]
+      );
+    }
+
+    // Enqueue actual workflow execution
+    const executionId = job.id as string;
+    await enqueueWorkflowExecution({
+      workflowId,
+      userId,
+      triggeredBy: (triggeredBy || 'CRON') as string,
+      executionId,
+      initialInput: job.data.initialInput,
+    });
+
+    return { enqueued: true, executionId };
+  }
+
+  private async completeTimeBlock(timeBlockId: string, job: Job<WorkflowExecutionJobData>): Promise<void> {
+    await pool.query(
+      `UPDATE time_blocks
+       SET status = $2, completed_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [timeBlockId, TimeBlockStatus.COMPLETED]
+    );
+
+    // Remove repeat schedule (if any) so it stops firing
+    const queue = getQueue(QueueName.WORKFLOW_TRIGGER);
+    const repeatKey = (job as any)?.repeatJobKey as string | undefined;
+    if (repeatKey) {
+      try {
+        await (queue as any).removeRepeatableByKey(repeatKey);
+      } catch (_e) {
+        // ignore
+      }
+    }
+  }
+
+  private setupEventListeners(): void {
+    this.worker.on('completed', (job) => {
+      logger.debug({ jobId: job.id }, 'Trigger job processed');
+    });
+
+    this.worker.on('failed', (job, error) => {
+      logger.error({ jobId: job?.id, error }, 'Trigger job failed');
+    });
+
+    this.worker.on('error', (error) => {
+      logger.error({ error }, 'Workflow trigger worker error');
+    });
+  }
+
+  async close(): Promise<void> {
+    await this.worker.close();
+  }
+}
+
+/**
  * Initialize all workers
  */
 export const initializeWorkers = (): {
@@ -400,6 +526,7 @@ export const initializeWorkers = (): {
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
   llmWorker: LLMExecutionWorker;  
+  triggerWorker: WorkflowTriggerWorker;
 } => {
   logger.info('Initializing BullMQ workers...');
 
@@ -407,6 +534,7 @@ export const initializeWorkers = (): {
   const nodeWorker = new NodeExecutionWorker();
   const swapWorker = new SwapExecutionWorker();
   const llmWorker = new LLMExecutionWorker();
+  const triggerWorker = new WorkflowTriggerWorker();
   logger.info('BullMQ workers initialized');
 
   return {
@@ -414,6 +542,7 @@ export const initializeWorkers = (): {
     nodeWorker,
     swapWorker,
     llmWorker,
+    triggerWorker,
   };
 };
 
@@ -425,6 +554,7 @@ export const closeWorkers = async (workers: {
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
   llmWorker: LLMExecutionWorker;
+  triggerWorker: WorkflowTriggerWorker;
 }): Promise<void> => {
   logger.info('Closing BullMQ workers...');
 
@@ -433,6 +563,7 @@ export const closeWorkers = async (workers: {
     workers.nodeWorker.close(),
     workers.swapWorker.close(),
     workers.llmWorker.close(),
+    workers.triggerWorker.close(),
   ]);
 
   logger.info('BullMQ workers closed');
