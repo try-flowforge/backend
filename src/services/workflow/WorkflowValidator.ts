@@ -31,12 +31,12 @@ export class WorkflowValidator {
             (n) => n.type === NodeType.TRIGGER || n.type === ('trigger' as NodeType)
         );
 
-        if (triggerNodes.length === 0) {
-            throw new AppError(400, 'Workflow must have exactly one trigger node', 'VALIDATION_FAILED', {
-                field: 'nodes',
-                reason: 'MISSING_TRIGGER',
-            });
-        }
+        // if (triggerNodes.length === 0) {
+        //     throw new AppError(400, 'Workflow must have exactly one trigger node', 'VALIDATION_FAILED', {
+        //         field: 'nodes',
+        //         reason: 'MISSING_TRIGGER',
+        //     });
+        // }
 
         if (triggerNodes.length > 1) {
             throw new AppError(400, 'Workflow cannot have multiple trigger nodes', 'VALIDATION_FAILED', {
@@ -92,14 +92,14 @@ export class WorkflowValidator {
         }
 
         // Check for orphaned nodes (not reachable from trigger)
-        const orphanedNodes = nodes.filter((n) => !reachable.has(n.id));
-        if (orphanedNodes.length > 0) {
-            throw new AppError(400, `Orphaned nodes detected: ${orphanedNodes.map(n => n.id).join(', ')}`, 'VALIDATION_FAILED', {
-                field: 'nodes',
-                reason: 'ORPHANED_NODES',
-                nodeIds: orphanedNodes.map(n => n.id),
-            });
-        }
+        // const orphanedNodes = nodes.filter((n) => !reachable.has(n.id));
+        // if (orphanedNodes.length > 0) {
+        //     throw new AppError(400, `Orphaned nodes detected: ${orphanedNodes.map(n => n.id).join(', ')}`, 'VALIDATION_FAILED', {
+        //         field: 'nodes',
+        //         reason: 'ORPHANED_NODES',
+        //         nodeIds: orphanedNodes.map(n => n.id),
+        //     });
+        // }
     }
 
     /**

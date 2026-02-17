@@ -190,6 +190,32 @@ const controlBlockConfigSchema = Joi.object({
 }).unknown(true);
 
 /**
+ * API block config schema
+ */
+const apiBlockConfigSchema = Joi.object({
+    url: Joi.string().uri({ scheme: ['http', 'https'] }).required(),
+    method: Joi.string().valid('GET', 'POST', 'PUT', 'DELETE', 'PATCH').required(),
+    headers: Joi.array().items(Joi.object({
+        key: Joi.string().required(),
+        value: Joi.string().required(),
+    })).optional(),
+    queryParams: Joi.array().items(Joi.object({
+        key: Joi.string().required(),
+        value: Joi.string().required(),
+    })).optional(),
+    body: Joi.string().allow('').optional(),
+    auth: Joi.object({
+        type: Joi.string().valid('none', 'basic', 'bearer', 'apiKey').required(),
+        username: Joi.string().allow('').optional(),
+        password: Joi.string().allow('').optional(),
+        token: Joi.string().allow('').optional(),
+        apiKeyHeader: Joi.string().allow('').optional(),
+        apiKeyValue: Joi.string().allow('').optional(),
+        apiKeyType: Joi.string().valid('header', 'query').optional(),
+    }).optional(),
+}).unknown(true);
+
+/**
  * Permissive schema for blocks that don't have strict validation yet
  */
 const permissiveBlockConfigSchema = Joi.object({}).unknown(true);
@@ -232,7 +258,8 @@ const workflowNodeSchema = Joi.object({
         { is: 'SWITCH', then: controlBlockConfigSchema },
         // Permissive (wallet, api, etc.)
         { is: 'WALLET', then: permissiveBlockConfigSchema },
-        { is: 'API', then: permissiveBlockConfigSchema },
+        { is: 'WALLET', then: permissiveBlockConfigSchema },
+        { is: 'API', then: apiBlockConfigSchema },
     ]).default({}),
     position: nodePositionSchema,
     metadata: Joi.object().default({}),

@@ -40,6 +40,7 @@ export enum NodeType {
   TELEGRAM = "TELEGRAM",
   WALLET = "WALLET",
   LLM_TRANSFORM = "LLM_TRANSFORM",
+  API = "API",
 }
 
 // Trigger Types
