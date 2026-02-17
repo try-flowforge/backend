@@ -2,9 +2,21 @@ import { Router } from 'express';
 import { UserController } from '../controllers/user.controller';
 import { validateBody, validateParams, asyncHandler } from '../middleware';
 import { verifyPrivyToken } from '../middleware/privy-auth';
-import { createUserSchema, userIdSchema } from '../models/users';
+import { createUserSchema, userIdSchema, updateUserChainsSchema } from '../models/users';
 
 const router = Router();
+
+/**
+ * @route   PUT /api/v1/users/chains
+ * @desc    Update selected chains for authenticated user
+ * @access  Private (requires Privy token)
+ */
+router.put(
+  '/chains',
+  verifyPrivyToken,
+  validateBody(updateUserChainsSchema),
+  asyncHandler(UserController.updateSelectedChains)
+);
 
 /**
  * @route   POST /api/v1/users

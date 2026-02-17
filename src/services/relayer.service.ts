@@ -1,21 +1,26 @@
 import { ethers } from "ethers";
 import { logger } from "../utils/logger";
-import { config, getChainConfig, SupportedChainId } from "../config/config";
+import { config } from "../config/config";
+import {
+  getAllChains,
+  getChainOrThrow,
+  type NumericChainId,
+} from "../config/chain-registry";
 
 /**
  * Direct EOA relayer service
  * Supports multiple chains with separate providers and wallets per chain
  */
 export class RelayerService {
-  private providers: Map<SupportedChainId, ethers.JsonRpcProvider> = new Map();
-  private wallets: Map<SupportedChainId, ethers.Wallet> = new Map();
+  private providers: Map<NumericChainId, ethers.JsonRpcProvider> = new Map();
+  private wallets: Map<NumericChainId, ethers.Wallet> = new Map();
   private privateKey: string;
 
   constructor() {
     this.privateKey = config.relayer.relayerPrivateKey;
 
-    // Initialize providers and wallets for all supported chains
-    for (const chainConfig of Object.values(config.chains)) {
+    // Initialize providers and wallets for all configured chains
+    for (const chainConfig of getAllChains()) {
       const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
       const wallet = new ethers.Wallet(this.privateKey, provider);
 
@@ -36,7 +41,7 @@ export class RelayerService {
   /**
    * Get relayer wallet address (same for all chains)
    */
-  getAddress(chainId: SupportedChainId): string {
+  getAddress(chainId: NumericChainId): string {
     const wallet = this.wallets.get(chainId);
     if (!wallet) {
       throw new Error(`Relayer not initialized for chain ${chainId}`);
@@ -47,7 +52,7 @@ export class RelayerService {
   /**
    * Get current balance for a specific chain
    */
-  async getBalance(chainId: SupportedChainId): Promise<string> {
+  async getBalance(chainId: NumericChainId): Promise<string> {
     const wallet = this.wallets.get(chainId);
     const provider = this.providers.get(chainId);
 
@@ -64,7 +69,7 @@ export class RelayerService {
    * Includes timeout and retry logic for robustness
    */
   async sendTransaction(
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     to: string,
     data: string,
     value: bigint = 0n
@@ -78,7 +83,7 @@ export class RelayerService {
 
     const MAX_RETRIES = 3;
     const CONFIRMATION_TIMEOUT_MS = 120000; // Increased to 120s for slow chains like Ethereum Sepolia
-    const chainConfig = getChainConfig(chainId);
+    const chainConfig = getChainOrThrow(chainId);
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       let tx: ethers.TransactionResponse | undefined;
@@ -229,7 +234,7 @@ export class RelayerService {
   /**
    * Get provider for a specific chain (for reading contract state)
    */
-  getProvider(chainId: SupportedChainId): ethers.JsonRpcProvider {
+  getProvider(chainId: NumericChainId): ethers.JsonRpcProvider {
     const provider = this.providers.get(chainId);
     if (!provider) {
       throw new Error(`Provider not initialized for chain ${chainId}`);

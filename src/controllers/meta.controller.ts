@@ -1,9 +1,5 @@
 import { Request, Response } from 'express';
-import {
-  getActiveChains,
-  chainConfigs,
-  type SupportedChainId,
-} from '../config/config';
+import { getSafeRelayChains } from '../config/chain-registry';
 import { ApiResponse } from '../types';
 import { logger } from '../utils/logger';
 import { llmServiceClient } from '../services/llm/llm-service-client';
@@ -19,16 +15,16 @@ export class MetaController {
    */
   static async getRuntimeConfig(_req: Request, res: Response): Promise<void> {
     try {
-      const activeChains = getActiveChains();
+      const safeRelayChains = getSafeRelayChains();
+      const activeChains = safeRelayChains.map((chain) => chain.chainId);
 
       // Build chain configs for frontend validation
-      const chainDetails = activeChains.map((chainId: SupportedChainId) => {
-        const config = chainConfigs[chainId];
+      const chainDetails = safeRelayChains.map((config) => {
         return {
           chainId: config.chainId,
           name: config.name,
-          factoryAddress: config.factoryAddress,
-          moduleAddress: config.moduleAddress,
+          factoryAddress: config.safeFactoryAddress,
+          moduleAddress: config.safeModuleAddress,
           rpcUrl: config.rpcUrl,
         };
       });

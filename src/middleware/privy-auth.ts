@@ -134,12 +134,14 @@ export const verifyPrivyToken = async (
       }
 
       if (!canonicalWallet) {
-        logger.warn({ userId }, "User has no linked wallet after retries");
-        res.status(401).json({
-          success: false,
-          error:
-            "No wallet linked. Please create or connect a wallet in the app.",
-        });
+        // Allow email-only users for onboarding
+        logger.info({ userId }, "User has no linked wallet - proceeding as email-only user");
+
+        (req as AuthenticatedRequest).userId = userId;
+        // Set empty string for wallet address - handlers must handle this case
+        (req as AuthenticatedRequest).userWalletAddress = "";
+
+        next();
         return;
       }
 
@@ -152,7 +154,7 @@ export const verifyPrivyToken = async (
         {
           userId,
           walletAddress: canonicalWallet.address,
-          walletType: walletClientType(canonicalWallet) ?? "embedded",
+          walletType: canonicalWallet.walletClientType ?? "embedded",
         },
         "User authenticated via Privy"
       );

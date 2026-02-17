@@ -16,7 +16,7 @@ import { logger } from '../../utils/logger';
 import { pool } from '../../config/database';
 import { redisClient } from '../../config/redis';
 import { getRelayerService } from '../relayer.service';
-import { isMainnetChain, SupportedChainId } from '../../config/config';
+import { isMainnetChain, type NumericChainId } from '../../config/chain-registry';
 import { getSafeTransactionService } from '../safe-transaction.service';
 import { UserModel } from '../../models/users/user.model';
 import { ethers } from 'ethers';
@@ -170,7 +170,7 @@ export class SwapExecutionService {
     config: SwapInputConfig,
     userId: string
   ): Promise<SafeTransactionHashResult> {
-    const chainId = CHAIN_CONFIGS[chain].chainId as SupportedChainId;
+    const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
     const safeTransactionService = getSafeTransactionService();
 
     logger.info(
@@ -393,7 +393,7 @@ export class SwapExecutionService {
     signature: string // EIP-712 signature from user
   ): Promise<SwapExecutionResult> {
     const normalizedNodeExecutionId = this.normalizeNodeExecutionId(nodeExecutionId);
-    const chainId = CHAIN_CONFIGS[chain].chainId as SupportedChainId;
+    const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
     const safeTransactionService = getSafeTransactionService();
 
     logger.info(
@@ -484,7 +484,7 @@ export class SwapExecutionService {
         const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
         if (!sponsorResult.consumed) {
           throw new Error(
-            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
           );
         }
       }
@@ -616,7 +616,7 @@ export class SwapExecutionService {
   ): Promise<SwapExecutionResult> {
     const normalizedNodeExecutionId = this.normalizeNodeExecutionId(nodeExecutionId);
     // Get chainId for relayer service
-    const chainId = CHAIN_CONFIGS[chain].chainId as SupportedChainId;
+    const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
     const relayerService = getRelayerService();
     const safeTransactionService = getSafeTransactionService();
 
@@ -832,7 +832,7 @@ export class SwapExecutionService {
             const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
             if (!sponsorResult.consumed) {
               throw new Error(
-                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Gas sponsorship on mainnet is limited to 3 per user.`
+                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
               );
             }
           }
@@ -1142,4 +1142,3 @@ export class SwapExecutionService {
 
 // Export singleton instance
 export const swapExecutionService = new SwapExecutionService();
-

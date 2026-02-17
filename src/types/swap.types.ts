@@ -67,34 +67,8 @@ export enum SwapType {
 }
 
 // Chain Configuration
-export interface ChainConfig {
-  chainId: number;
-  name: string;
-  rpcUrl: string;
-  explorerUrl: string;
-  nativeCurrency: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  contracts?: {
-    uniswapRouter?: string;
-    uniswapFactory?: string;
-    weth?: string;
-    // Uniswap V4 contracts
-    uniswapV4Quoter?: string;
-    uniswapV4PoolSwapTest?: string;
-    universalRouter?: string;
-    permit2?: string;
-    // Aave V3 contracts
-    aavePool?: string;
-    aavePoolDataProvider?: string;
-    aaveWethGateway?: string;
-    // Compound V3 contracts
-    compoundComet?: string;
-    compoundConfigurator?: string;
-  };
-}
+// Re-exported from the central chain-registry for backward compatibility
+export type { ChainRegistryEntry as ChainConfig } from '../config/chain-registry';
 
 // Token Information
 export interface TokenInfo {

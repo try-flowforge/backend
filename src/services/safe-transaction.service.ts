@@ -1,14 +1,20 @@
 import { ethers } from "ethers";
 import { getRelayerService } from "./relayer.service";
 import { logger } from "../utils/logger";
-import { getChainConfig, SupportedChainId } from "../config/config";
+import {
+  NUMERIC_CHAIN_IDS,
+  getChainOrThrow,
+  isConfiguredSafeAddress,
+  isMainnetChain,
+  type NumericChainId,
+} from "../config/chain-registry";
 import { SupportedChain } from "../types";
 
 /**
  * MultiSend contract addresses for Safe
  * These are the official Gnosis Safe MultiSend contracts
  */
-const MULTISEND_ADDRESSES: Record<SupportedChainId, string> = {
+const MULTISEND_ADDRESSES: Partial<Record<NumericChainId, string>> = {
   11155111: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Ethereum Sepolia
   421614: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Sepolia
   42161: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Mainnet
@@ -41,7 +47,7 @@ export class SafeTransactionService {
    */
   async buildSafeTransactionHash(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     to: string,
     value: bigint,
     data: string,
@@ -84,13 +90,19 @@ export class SafeTransactionService {
    */
   async executeViaModule(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     to: string,
     value: bigint,
     data: string,
     operation: number = 0
   ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
-    const chainConfig = getChainConfig(chainId);
+    const chainConfig = getChainOrThrow(chainId);
+    const moduleAddress = chainConfig.safeModuleAddress;
+    if (!isConfiguredSafeAddress(moduleAddress)) {
+      throw new Error(
+        `Safe module address is not configured for chain ${chainConfig.name} (${chainId})`
+      );
+    }
     const relayerService = getRelayerService();
 
     logger.info(
@@ -108,12 +120,12 @@ export class SafeTransactionService {
     const moduleEnabled = await this.isModuleEnabled(
       safeAddress,
       chainId,
-      chainConfig.moduleAddress
+      moduleAddress
     );
 
     if (!moduleEnabled) {
       throw new Error(
-        `Module ${chainConfig.moduleAddress} is not enabled on Safe ${safeAddress}`
+        `Module ${moduleAddress} is not enabled on Safe ${safeAddress}`
       );
     }
 
@@ -156,7 +168,7 @@ export class SafeTransactionService {
    */
   async executeWithSignatures(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     to: string,
     value: bigint,
     data: string,
@@ -305,7 +317,7 @@ export class SafeTransactionService {
    */
   async isModuleEnabled(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     moduleAddress: string
   ): Promise<boolean> {
     const provider = getRelayerService().getProvider(chainId);
@@ -336,16 +348,16 @@ export class SafeTransactionService {
    * Get Safe address for a user based on chain
    * Helper method to convert SupportedChain to chainId and determine if testnet
    */
-  static getChainIdFromSupportedChain(chain: SupportedChain): SupportedChainId {
+  static getChainIdFromSupportedChain(chain: SupportedChain): NumericChainId {
     switch (chain) {
       case SupportedChain.ARBITRUM_SEPOLIA:
-        return 421614 as SupportedChainId;
+        return NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
       case SupportedChain.ARBITRUM:
-        return 42161 as SupportedChainId;
+        return NUMERIC_CHAIN_IDS.ARBITRUM;
       case SupportedChain.ETHEREUM_SEPOLIA:
-        return 11155111 as SupportedChainId;
+        return NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA;
       case SupportedChain.BASE:
-        return 8453 as SupportedChainId;
+        return NUMERIC_CHAIN_IDS.BASE;
       default:
         throw new Error(`Unsupported chain: ${chain}`);
     }
@@ -354,8 +366,8 @@ export class SafeTransactionService {
   /**
    * Check if chain is testnet
    */
-  static isTestnet(chainId: SupportedChainId): boolean {
-    return chainId === 421614 || chainId === 11155111;
+  static isTestnet(chainId: NumericChainId): boolean {
+    return !isMainnetChain(chainId);
   }
 
   /**
@@ -370,7 +382,7 @@ export class SafeTransactionService {
     tokenAddress: string,
     safeAddress: string,
     spenderAddress: string,
-    chainId: SupportedChainId
+    chainId: NumericChainId
   ): Promise<bigint> {
     const provider = getRelayerService().getProvider(chainId);
     const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
@@ -413,7 +425,7 @@ export class SafeTransactionService {
       value: bigint;
       data: string;
     },
-    chainId: SupportedChainId
+    chainId: NumericChainId
   ): {
     to: string; // MultiSend contract address
     value: bigint;
@@ -500,7 +512,7 @@ export class SafeTransactionService {
    */
   buildMulticallFromCalls(
     calls: Array<{ to: string; value: bigint; data: string }>,
-    chainId: SupportedChainId
+    chainId: NumericChainId
   ): { to: string; value: bigint; data: string } {
     const multisendAddress = MULTISEND_ADDRESSES[chainId];
     if (!multisendAddress) {
@@ -542,7 +554,7 @@ export class SafeTransactionService {
    */
   async executeMulticallViaModule(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     multicallData: {
       to: string;
       value: bigint;
@@ -564,7 +576,7 @@ export class SafeTransactionService {
    */
   async buildMulticallSafeTransactionHash(
     safeAddress: string,
-    chainId: SupportedChainId,
+    chainId: NumericChainId,
     multicallData: {
       to: string;
       value: bigint;

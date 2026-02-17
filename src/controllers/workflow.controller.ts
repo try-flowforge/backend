@@ -11,6 +11,7 @@ import { AppError } from '../middleware/error-handler';
 import { AuthenticatedRequest } from '../middleware/privy-auth';
 import crypto from 'crypto';
 import { generateSubscriptionToken } from '../services/subscription-token.service';
+import { WorkflowValidator } from '../services/workflow/WorkflowValidator';
 
 /**
  * Translate placeholder node IDs in templates from frontend IDs to database UUIDs.
@@ -105,6 +106,9 @@ export const createWorkflow = async (
         field: 'edges',
       });
     }
+
+    // Graph Integrity Validation
+    WorkflowValidator.validate({ nodes, edges });
 
     logger.info({ userId, userWalletAddress, name, nodeCount: nodes.length, edgeCount: edges.length }, 'Creating workflow for authenticated user');
 
@@ -291,6 +295,32 @@ export const createWorkflow = async (
     }
 
     // Generic error handling
+    next(error);
+  }
+};
+
+/**
+ * Validate a workflow without saving it
+ */
+export const validateWorkflow = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { nodes, edges } = req.body;
+
+    // This will throw AppError if validation fails
+    WorkflowValidator.validate({ nodes, edges });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        valid: true,
+        message: 'Workflow is valid',
+      },
+    });
+  } catch (error) {
     next(error);
   }
 };
@@ -579,6 +609,9 @@ export const fullUpdateWorkflow = async (
     } = req.body;
 
     logger.info({ workflowId: id, userId, nodeCount: nodes?.length, edgeCount: edges?.length }, 'Full update workflow requested');
+
+    // Graph Integrity Validation
+    WorkflowValidator.validate({ nodes, edges });
 
     const client = await pool.connect();
 

@@ -25,3 +25,10 @@ export const userIdSchema = Joi.object({
     'any.required': 'User ID is required',
   }),
 });
+// Validation schema for updating user chains
+export const updateUserChainsSchema = Joi.object({
+  chains: Joi.array().items(Joi.string()).required().messages({
+    'array.base': 'Chains must be an array of strings',
+    'any.required': 'Chains array is required',
+  }),
+});

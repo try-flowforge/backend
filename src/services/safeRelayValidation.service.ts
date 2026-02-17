@@ -1,7 +1,10 @@
 import { ethers } from "ethers";
 import { logger } from "../utils/logger";
 import { getRelayerService } from "./relayer.service";
-import { getChainConfig, SupportedChainId } from "../config/config";
+import {
+  getSafeRelayChainOrThrow,
+  type SafeRelayNumericChainId,
+} from "../config/chain-registry";
 
 interface SafeTxData {
   to: string;
@@ -28,9 +31,9 @@ export class SafeRelayValidationService {
   /**
    * Get Safe module address for a specific chain
    */
-  private getSafeModuleAddress(chainId: SupportedChainId): string {
-    const chainConfig = getChainConfig(chainId);
-    return chainConfig.moduleAddress.toLowerCase();
+  private getSafeModuleAddress(chainId: SafeRelayNumericChainId): string {
+    const chainConfig = getSafeRelayChainOrThrow(chainId);
+    return chainConfig.safeModuleAddress.toLowerCase();
   }
 
   /**
@@ -38,7 +41,7 @@ export class SafeRelayValidationService {
    */
   async readSafeInfo(
     safeAddress: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): Promise<{
     owners: string[];
     threshold: number;
@@ -80,7 +83,7 @@ export class SafeRelayValidationService {
  */
   async getSafeNonce(
     safeAddress: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): Promise<number> {
     const relayerService = getRelayerService();
     const provider = relayerService.getProvider(chainId);
@@ -110,7 +113,7 @@ export class SafeRelayValidationService {
   validateEnableModuleCalldata(
     safeTxData: SafeTxData,
     safeAddress: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): ValidationResult {
     const moduleAddress = this.getSafeModuleAddress(chainId);
 
@@ -170,7 +173,7 @@ export class SafeRelayValidationService {
     safeAddress: string,
     safeTxData: SafeTxData,
     signatures: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): Promise<ValidationResult> {
     try {
       // Read Safe info
@@ -346,7 +349,7 @@ export class SafeRelayValidationService {
   async validateUserIsOwner(
     safeAddress: string,
     userAddress: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): Promise<ValidationResult> {
     try {
       const { owners } = await this.readSafeInfo(safeAddress, chainId);
@@ -374,7 +377,7 @@ export class SafeRelayValidationService {
    */
   async isModuleEnabled(
     safeAddress: string,
-    chainId: SupportedChainId
+    chainId: SafeRelayNumericChainId
   ): Promise<{ enabled: boolean; error?: string }> {
     try {
       const moduleAddress = this.getSafeModuleAddress(chainId);
