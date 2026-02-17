@@ -60,24 +60,40 @@ const nodePositionSchema = Joi.object({
 // ===========================================
 
 /**
- * Uniswap/Swap block config schema
+ * Token info schema (used inside swap/lending block configs)
+ */
+const blockTokenInfoSchema = Joi.object({
+    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    symbol: Joi.string().allow(''),
+    decimals: Joi.number().integer().min(0).max(18),
+    name: Joi.string().allow(''),
+}).unknown(true);
+
+/**
+ * Swap inputConfig sub-schema (matches SwapInputConfig TypeScript type)
+ */
+const swapInputConfigBlockSchema = Joi.object({
+    sourceToken: blockTokenInfoSchema.required(),
+    destinationToken: blockTokenInfoSchema.required(),
+    amount: Joi.string().required(),
+    swapType: Joi.string().valid('EXACT_INPUT', 'EXACT_OUTPUT').required(),
+    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+    slippageTolerance: Joi.number().min(0).max(50),
+    toChain: Joi.string().valid(...SUPPORTED_CHAINS),
+}).unknown(true);
+
+/**
+ * Swap block config schema (matches SwapNodeConfig TypeScript type)
+ * Frontend sends: { provider, chain, inputConfig: { sourceToken, destinationToken, ... }, ... }
  */
 const swapBlockConfigSchema = Joi.object({
-    swapProvider: Joi.string().valid(...SWAP_PROVIDERS).required(),
-    swapChain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
-    swapType: Joi.string().valid('EXACT_INPUT', 'EXACT_OUTPUT').required(),
-    sourceTokenAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
-    sourceTokenSymbol: Joi.string().required(),
-    sourceTokenDecimals: Joi.number().integer().min(0).max(18).required(),
-    destinationTokenAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
-    destinationTokenSymbol: Joi.string().required(),
-    destinationTokenDecimals: Joi.number().integer().min(0).max(18).required(),
-    swapAmount: Joi.string().required(),
-    slippageTolerance: Joi.number().min(0).max(50).default(0.5),
+    provider: Joi.string().valid(...SWAP_PROVIDERS).required(),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    inputConfig: swapInputConfigBlockSchema.required(),
+    toChain: Joi.string().valid(...SUPPORTED_CHAINS),
     simulateFirst: Joi.boolean().default(true),
     autoRetryOnFailure: Joi.boolean().default(true),
     maxRetries: Joi.number().integer().min(0).max(10).default(3),
-    walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).allow(''),
 }).unknown(true);
 
 /**
@@ -88,12 +104,13 @@ const lendingBlockConfigSchema = Joi.object({
     chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
     operation: Joi.string().valid('SUPPLY', 'WITHDRAW', 'BORROW', 'REPAY', 'ENABLE_COLLATERAL', 'DISABLE_COLLATERAL').required(),
     asset: Joi.object({
-        address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
-        symbol: Joi.string(),
+        address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).allow('').required(),
+        symbol: Joi.string().allow(''),
         decimals: Joi.number().integer().min(0).max(18),
     }).required(),
-    amount: Joi.string().required(),
+    amount: Joi.string().allow('').required(),
     walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).allow(''),
+    interestRateMode: Joi.string().allow(''),
 }).unknown(true);
 
 /**
@@ -101,9 +118,9 @@ const lendingBlockConfigSchema = Joi.object({
  */
 const slackBlockConfigSchema = Joi.object({
     connectionId: Joi.string().uuid().required(),
-    message: Joi.string().required().max(4000),
+    message: Joi.string().allow('').required().max(4000),
     connectionType: Joi.string().valid('webhook', 'oauth').required(),
-    channelId: Joi.string().when('connectionType', {
+    channelId: Joi.string().allow('').when('connectionType', {
         is: 'oauth',
         then: Joi.required(),
         otherwise: Joi.optional(),
@@ -115,17 +132,45 @@ const slackBlockConfigSchema = Joi.object({
  */
 const telegramBlockConfigSchema = Joi.object({
     connectionId: Joi.string().uuid().required(),
-    chatId: Joi.string().required(),
-    message: Joi.string().required().max(4096),
+    chatId: Joi.string().allow('').required(),
+    message: Joi.string().allow('').required().max(4096),
 }).unknown(true);
 
 /**
  * Oracle block config schema
+ * Frontend sends: { provider, chain, aggregatorAddress|priceFeedId, staleAfterSeconds, ... }
  */
 const oracleBlockConfigSchema = Joi.object({
     provider: Joi.string().valid('CHAINLINK', 'PYTH').required(),
-    feedId: Joi.string().required(),
+    chain: Joi.string().valid(...SUPPORTED_CHAINS).required(),
+    // Chainlink uses aggregatorAddress, Pyth uses priceFeedId
+    aggregatorAddress: Joi.string().allow('').when('provider', { is: 'CHAINLINK', then: Joi.required(), otherwise: Joi.optional() }),
+    priceFeedId: Joi.string().allow('').when('provider', { is: 'PYTH', then: Joi.required(), otherwise: Joi.optional() }),
+    staleAfterSeconds: Joi.number().integer().min(0).default(3600),
     description: Joi.string().allow(''),
+}).unknown(true);
+
+/**
+ * Mail/Email block config schema
+ * Frontend sends: { to, subject, body }
+ */
+const mailBlockConfigSchema = Joi.object({
+    to: Joi.string().allow('').required(),
+    subject: Joi.string().allow('').required(),
+    body: Joi.string().allow('').required(),
+}).unknown(true);
+
+/**
+ * AI Transform (LLM) block config schema
+ * Frontend sends: { provider, model, userPromptTemplate, outputSchema, temperature, maxOutputTokens }
+ */
+const llmTransformBlockConfigSchema = Joi.object({
+    provider: Joi.string().required(),
+    model: Joi.string().required(),
+    userPromptTemplate: Joi.string().allow('').required(),
+    outputSchema: Joi.object().allow(null),
+    temperature: Joi.number().min(0).max(2),
+    maxOutputTokens: Joi.number().integer(),
 }).unknown(true);
 
 /**
@@ -145,7 +190,20 @@ const controlBlockConfigSchema = Joi.object({
 }).unknown(true);
 
 /**
+ * Permissive schema for blocks that don't have strict validation yet
+ */
+const permissiveBlockConfigSchema = Joi.object({}).unknown(true);
+
+/**
+ * Start block schema — triggerType is optional, defaults to MANUAL
+ */
+const startBlockConfigSchema = triggerBlockConfigSchema.keys({
+    triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').optional().default('MANUAL'),
+});
+
+/**
  * Schema for workflow node with type-specific config validation
+ * Backend types are UPPERCASE (from normalizeNodeType in the registry)
  */
 const workflowNodeSchema = Joi.object({
     id: Joi.string().required(),
@@ -153,29 +211,28 @@ const workflowNodeSchema = Joi.object({
     name: Joi.string().max(255),
     description: Joi.string().max(1000),
     config: Joi.alternatives().conditional('type', [
+        // DeFi
         { is: 'SWAP', then: swapBlockConfigSchema },
-        { is: 'uniswap', then: swapBlockConfigSchema },
         { is: 'LENDING', then: lendingBlockConfigSchema },
+        // Social / Messaging
         { is: 'SLACK', then: slackBlockConfigSchema },
-        { is: 'slack', then: slackBlockConfigSchema },
         { is: 'TELEGRAM', then: telegramBlockConfigSchema },
-        { is: 'telegram', then: telegramBlockConfigSchema },
+        { is: 'EMAIL', then: mailBlockConfigSchema },
+        // Oracle
         { is: 'CHAINLINK_PRICE_ORACLE', then: oracleBlockConfigSchema },
         { is: 'PYTH_PRICE_ORACLE', then: oracleBlockConfigSchema },
+        { is: 'PRICE_ORACLE', then: oracleBlockConfigSchema },
+        // AI
+        { is: 'LLM_TRANSFORM', then: llmTransformBlockConfigSchema },
+        // Triggers
         { is: 'TRIGGER', then: triggerBlockConfigSchema },
-        { is: 'trigger', then: triggerBlockConfigSchema },
-        {
-            is: 'START', then: triggerBlockConfigSchema.keys({
-                triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').optional().default('MANUAL')
-            })
-        },
-        {
-            is: 'start', then: triggerBlockConfigSchema.keys({
-                triggerType: Joi.string().valid('CRON', 'WEBHOOK', 'MANUAL', 'EVENT').optional().default('MANUAL')
-            })
-        },
+        { is: 'START', then: startBlockConfigSchema },
+        // Control
         { is: 'IF', then: controlBlockConfigSchema },
         { is: 'SWITCH', then: controlBlockConfigSchema },
+        // Permissive (wallet, api, etc.)
+        { is: 'WALLET', then: permissiveBlockConfigSchema },
+        { is: 'API', then: permissiveBlockConfigSchema },
     ]).default({}),
     position: nodePositionSchema,
     metadata: Joi.object().default({}),
