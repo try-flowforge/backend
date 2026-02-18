@@ -60,7 +60,8 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
       this.registerProcessor(new WalletNodeProcessor());
 
       // Register Chainlink Price Oracle processor
-      this.registerProcessor(new OracleNodeProcessor());
+      const oracleProcessor = new OracleNodeProcessor();
+      this.registerProcessor(oracleProcessor);
 
       // Register Pyth Price Oracle processor
       this.registerProcessor(new PythOracleNodeProcessor());

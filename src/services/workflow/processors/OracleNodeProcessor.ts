@@ -90,7 +90,8 @@ export class OracleNodeProcessor implements INodeProcessor {
         chain: chainlinkConfig.chain,
         aggregatorAddress: chainlinkConfig.aggregatorAddress,
         description,
-        decimals,
+        // Explicitly convert decimals to number (ethers returns bigint)
+        decimals: Number(decimals),
         roundId: round.roundId.toString(),
         answeredInRound: round.answeredInRound.toString(),
         startedAt: Number(round.startedAt),
@@ -172,7 +173,7 @@ export class OracleNodeProcessor implements INodeProcessor {
     // Type guard for Chainlink-specific validation
     if (oracleConfig.provider === OracleProvider.CHAINLINK) {
       const chainlinkConfig = oracleConfig as ChainlinkOracleConfig;
-      
+
       if (!chainlinkConfig.aggregatorAddress || typeof chainlinkConfig.aggregatorAddress !== 'string') {
         errors.push('aggregatorAddress is required');
       } else if (!isAddress(chainlinkConfig.aggregatorAddress)) {
