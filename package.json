@@ -11,7 +11,8 @@
     "db:reset": "ts-node src/migrations/clean.ts reset",
     "migrate:up": "npm run build && node dist/migrations/run.js up",
     "migrate:down": "npm run build && node dist/migrations/run.js down",
-    "worker": "node dist/services/workers/index.js"
+    "worker": "node dist/services/workers/index.js",
+    "telegram:setup": "export $(grep -v '^#' .env | xargs) && curl -s -X POST \"https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=$TELEGRAM_WEBHOOK_BASE_URL/api/v1/integrations/telegram/webhook/$TELEGRAM_WEBHOOK_SECRET\""
   },
   "keywords": [],
   "author": "",
