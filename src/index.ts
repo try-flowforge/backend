@@ -34,7 +34,7 @@ const startServer = async () => {
     const app = createApp();
 
     // Start server
-    const server = app.listen(config.server.port, () => {
+    const server = app.listen(config.server.port, async () => {
       logger.info(
         {
           port: config.server.port,
@@ -43,6 +43,35 @@ const startServer = async () => {
         },
         'Server started successfully'
       );
+
+      // Register Telegram Webhook if configured
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const baseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL;
+      const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+      if (botToken && baseUrl && secret) {
+        try {
+          const webhookUrl = `${baseUrl}/api/v1/integrations/telegram/webhook/${secret}`;
+          logger.info({ webhookUrl }, 'Registering Telegram webhook...');
+
+          const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: webhookUrl }),
+          });
+
+          const result = await response.json() as { ok: boolean; description?: string };
+          if (result.ok) {
+            logger.info('Telegram webhook registered successfully');
+          } else {
+            logger.error({ error: result.description }, 'Failed to register Telegram webhook');
+          }
+        } catch (error) {
+          logger.error({ error }, 'Error during Telegram webhook registration');
+        }
+      } else {
+        logger.warn('Telegram webhook skipped: Bot token, base URL, or secret not configured');
+      }
     });
 
     // Graceful shutdown
