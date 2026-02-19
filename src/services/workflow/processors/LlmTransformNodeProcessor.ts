@@ -14,7 +14,7 @@ import crypto from 'crypto';
  * LLM Transform Node Configuration
  */
 export interface LlmTransformNodeConfig {
-  provider: 'openai' | 'openrouter';
+  provider: 'openai' | 'openrouter' | 'eigencloud';
   model: string;
   userPromptTemplate: string; // Supports {{path}} templating
   outputSchema?: Record<string, any>;
@@ -62,7 +62,7 @@ export class LlmTransformNodeProcessor implements INodeProcessor {
 
       // Template the user prompt with input data
       const userPrompt = templateString(config.userPromptTemplate, input.inputData);
-      
+
       logger.debug(
         {
           nodeId: input.nodeId,
@@ -71,7 +71,7 @@ export class LlmTransformNodeProcessor implements INodeProcessor {
         },
         'LLM prompt templating'
       );
-      
+
       messages.push({
         role: 'user',
         content: userPrompt,
@@ -180,8 +180,8 @@ export class LlmTransformNodeProcessor implements INodeProcessor {
     // Validate provider
     if (!config.provider) {
       errors.push('Provider is required');
-    } else if (!['openai', 'openrouter'].includes(config.provider)) {
-      errors.push('Provider must be "openai" or "openrouter"');
+    } else if (!['openai', 'openrouter', 'eigencloud'].includes(config.provider)) {
+      errors.push('Provider must be "openai", "openrouter", or "eigencloud"');
     }
 
     // Validate model
