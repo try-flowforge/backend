@@ -716,6 +716,7 @@ export class SwapExecutionService {
       }
 
       // Create swap execution record (use Safe address if available)
+      // Create swap execution record (use Safe address if available)
       swapExecutionId = await this.createSwapExecutionRecord(
         normalizedNodeExecutionId,
         chain,
@@ -738,6 +739,7 @@ export class SwapExecutionService {
       if (swapConfig.simulateFirst !== false) {
         logger.debug('Simulating transaction...');
         const simulation = await swapProvider.simulateTransaction(chain, transaction);
+
 
         if (!simulation.success) {
           throw new Error(`Simulation failed: ${simulation.error}`);

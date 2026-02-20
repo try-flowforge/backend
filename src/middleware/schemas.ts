@@ -59,6 +59,10 @@ const nodePositionSchema = Joi.object({
 // BLOCK CONFIG SCHEMAS
 // ===========================================
 
+// ===========================================
+// BLOCK CONFIG SCHEMAS
+// ===========================================
+
 /**
  * Token info schema (used inside swap/lending block configs)
  */
@@ -228,6 +232,24 @@ const startBlockConfigSchema = triggerBlockConfigSchema.keys({
 });
 
 /**
+ * Time block node config (schedule / recurrence when used as a workflow node)
+ */
+const timeBlockNodeConfigSchema = Joi.object({
+    runAt: Joi.date().iso().optional(),
+    timezone: Joi.string().max(64).allow('', null).optional(),
+    recurrence: Joi.object({
+        type: Joi.string().valid('NONE', 'INTERVAL', 'CRON').default('NONE'),
+        intervalSeconds: Joi.number().integer().min(1),
+        cronExpression: Joi.string().max(256),
+        untilAt: Joi.date().iso(),
+        maxRuns: Joi.number().integer().min(1).max(100000),
+    }).optional(),
+    stopConditions: Joi.object({
+        untilAt: Joi.date().iso(),
+    }).optional(),
+}).unknown(true);
+
+/**
  * Schema for workflow node with type-specific config validation
  * Backend types are UPPERCASE (from normalizeNodeType in the registry)
  */
@@ -253,6 +275,7 @@ const workflowNodeSchema = Joi.object({
         // Triggers
         { is: 'TRIGGER', then: triggerBlockConfigSchema },
         { is: 'START', then: startBlockConfigSchema },
+        { is: 'TIME_BLOCK', then: timeBlockNodeConfigSchema },
         // Control
         { is: 'IF', then: controlBlockConfigSchema },
         { is: 'SWITCH', then: controlBlockConfigSchema },
@@ -513,6 +536,38 @@ export const registerSubdomainSchema = Joi.object({
         .messages({
             'any.only': 'Chain ID must be 1 (Ethereum mainnet) or 11155111 (Ethereum Sepolia)',
         }),
+});
+
+// ===========================================
+// TIME BLOCK SCHEMAS
+// ===========================================
+
+export const createTimeBlockSchema = Joi.object({
+    workflowId: uuidSchema.required(),
+    runAt: Joi.date().iso().required(),
+    timezone: Joi.string().max(64).allow('', null),
+    recurrence: Joi.object({
+        type: Joi.string().valid('NONE', 'INTERVAL', 'CRON').default('NONE'),
+        intervalSeconds: Joi.number().integer().min(1),
+        cronExpression: Joi.string().max(256),
+        untilAt: Joi.date().iso(),
+        maxRuns: Joi.number().integer().min(1).max(100000),
+    }).default({ type: 'NONE' }),
+}).custom((value, helpers) => {
+    const type = value.recurrence?.type || 'NONE';
+    if (type === 'INTERVAL' && !value.recurrence.intervalSeconds) {
+        return helpers.error('any.invalid', { message: 'intervalSeconds is required for INTERVAL recurrence' });
+    }
+    if (type === 'CRON' && !value.recurrence.cronExpression) {
+        return helpers.error('any.invalid', { message: 'cronExpression is required for CRON recurrence' });
+    }
+    return value;
+});
+
+export const listTimeBlocksQuerySchema = Joi.object({
+    status: Joi.string().valid('ACTIVE', 'PAUSED', 'CANCELLED', 'COMPLETED'),
+    limit: Joi.number().integer().min(1).max(100).default(50),
+    offset: Joi.number().integer().min(0).default(0),
 });
 
 // ===========================================

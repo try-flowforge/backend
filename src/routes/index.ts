@@ -13,6 +13,7 @@ import ensRoutes from './ens.routes';
 import intentRoutes from './intent/transaction_intents.routes';
 import executionSignRoutes from './execution/execution-sign.routes';
 import agentRoutes from './agent.routes';
+import timeBlockRoutes from './timeblock.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -129,6 +130,7 @@ router.use('/integrations/slack', slackRoutes);
 router.use('/integrations/telegram', telegramRoutes);
 router.use('/integrations/email', emailRoutes);
 router.use('/workflows', workflowRoutes);
+router.use('/time-blocks', timeBlockRoutes);
 router.use('/swaps', swapRoutes);
 router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);

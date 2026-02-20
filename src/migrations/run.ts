@@ -39,6 +39,9 @@ import * as migration035 from "./035_add_price_oracle_and_api_node_types";
 import * as migration036 from "./036_create_transaction_intents_table";
 import * as migration037 from "./037_add_execution_paused_state";
 import * as migration038 from "./038_add_safe_tx_to_intents";
+import * as migration039 from "./039_add_time_block_trigger_type";
+import * as migration040 from "./040_create_time_blocks_table";
+import * as migration041 from "./041_add_time_block_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -286,6 +289,24 @@ const migrations: Migration[] = [
     name: "038_add_safe_tx_to_intents",
     up: migration038.up,
     down: migration038.down,
+  },
+  {
+    id: 39,
+    name: "039_add_time_block_trigger_type",
+    up: migration039.up,
+    down: migration039.down,
+  },
+  {
+    id: 40,
+    name: "040_create_time_blocks_table",
+    up: migration040.up,
+    down: migration040.down,
+  },
+  {
+    id: 41,
+    name: "041_add_time_block_node_type",
+    up: migration041.up,
+    down: migration041.down,
   },
 ];
 

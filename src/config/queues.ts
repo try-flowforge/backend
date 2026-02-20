@@ -19,6 +19,7 @@ export interface WorkflowExecutionJobData {
   initialInput?: Record<string, any>;
   executionId?: string;
   versionNumber?: number;
+  timeBlockId?: string;
 }
 
 export interface NodeExecutionJobData {

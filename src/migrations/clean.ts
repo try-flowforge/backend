@@ -39,6 +39,9 @@ import * as migration035 from "./035_add_price_oracle_and_api_node_types";
 import * as migration036 from "./036_create_transaction_intents_table";
 import * as migration037 from "./037_add_execution_paused_state";
 import * as migration038 from "./038_add_safe_tx_to_intents";
+import * as migration039 from "./039_add_time_block_trigger_type";
+import * as migration040 from "./040_create_time_blocks_table";
+import * as migration041 from "./041_add_time_block_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -155,6 +158,9 @@ const resetDatabase = async (): Promise<void> => {
     await migration036.up(pool);
     await migration037.up(pool);
     await migration038.up(pool);
+    await migration039.up(pool);
+    await migration040.up(pool);
+    await migration041.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -315,6 +321,18 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [38, "038_add_safe_tx_to_intents"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [39, "039_add_time_block_trigger_type"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [40, "040_create_time_blocks_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [41, "041_add_time_block_node_type"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {
