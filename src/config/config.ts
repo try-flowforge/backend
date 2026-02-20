@@ -78,6 +78,7 @@ export const serverConfig = {
   isProduction: process.env.NODE_ENV === "production",
   isDevelopment:
     process.env.NODE_ENV === "development" || !process.env.NODE_ENV,
+  serviceKey: getOptionalEnv("AGENT_SERVICE_KEY", ""), // Used to authenticate requests from the Telegram agent
 } as const;
 
 /**
