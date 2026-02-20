@@ -59,6 +59,7 @@ export enum ExecutionStatus {
   FAILED = "FAILED",
   CANCELLED = "CANCELLED",
   RETRYING = "RETRYING",
+  WAITING_FOR_SIGNATURE = "WAITING_FOR_SIGNATURE",
 }
 
 // Swap Type (exact in vs exact out)
