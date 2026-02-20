@@ -401,7 +401,9 @@ export class SwapExecutionService {
     provider: SwapProvider,
     config: SwapInputConfig,
     userId: string,
-    signature: string // EIP-712 signature from user
+    signature: string, // EIP-712 signature from user
+    safeTxHash?: string,
+    safeTxData?: any
   ): Promise<SwapExecutionResult> {
     const normalizedNodeExecutionId = this.normalizeNodeExecutionId(nodeExecutionId);
     const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
@@ -470,9 +472,15 @@ export class SwapExecutionService {
         }
       }
 
-      // Use cached Safe transaction payload if available; otherwise fall back to rebuilding (may revert if provider tx changes).
-      const effectiveSafeTxData =
-        cachedSafe?.safeTxData?.to &&
+      // Use cached Safe transaction payload if available; passed from DB state or fallback to Redis
+      const effectiveSafeTxData = safeTxData
+        ? {
+          to: safeTxData.to as string,
+          value: BigInt(safeTxData.value as string),
+          data: safeTxData.data as string,
+          operation: Number(safeTxData.operation ?? 0),
+        }
+        : cachedSafe?.safeTxData?.to &&
           cachedSafe?.safeTxData?.data &&
           cachedSafe?.safeTxData?.value !== undefined
           ? {
@@ -482,6 +490,8 @@ export class SwapExecutionService {
             operation: Number(cachedSafe.safeTxData.operation ?? 0),
           }
           : null;
+
+      const effectiveSafeTxHash = safeTxHash || cachedSafe?.safeTxHash;
 
       if (!effectiveSafeTxData) {
         logger.warn(
@@ -518,7 +528,7 @@ export class SwapExecutionService {
         effectiveSafeTxData ? effectiveSafeTxData.data : '0x',
         effectiveSafeTxData ? effectiveSafeTxData.operation : 0,
         signature,
-        cachedSafe?.safeTxHash,
+        effectiveSafeTxHash,
         0n, // safeTxGas
         0n, // baseGas
         0n, // gasPrice
@@ -630,6 +640,8 @@ export class SwapExecutionService {
     config: SwapInputConfig,
     userId?: string, // User ID for Safe wallet lookup
     signature?: string, // Optional: If provided, uses signature-based execution
+    safeTxHash?: string,
+    safeTxData?: any
   ): Promise<SwapExecutionResult> {
     // If signature is provided, delegate to the signature-based flow
     // which uses the cached Safe tx payload (avoids rebuilding a different tx
@@ -641,7 +653,9 @@ export class SwapExecutionService {
         provider,
         config,
         userId,
-        signature
+        signature,
+        safeTxHash,
+        safeTxData
       );
     }
 
