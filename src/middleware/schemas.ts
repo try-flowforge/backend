@@ -228,6 +228,24 @@ const startBlockConfigSchema = triggerBlockConfigSchema.keys({
 });
 
 /**
+ * Time block node config (schedule / recurrence when used as a workflow node)
+ */
+const timeBlockNodeConfigSchema = Joi.object({
+    runAt: Joi.date().iso().optional(),
+    timezone: Joi.string().max(64).allow('', null).optional(),
+    recurrence: Joi.object({
+        type: Joi.string().valid('NONE', 'INTERVAL', 'CRON').default('NONE'),
+        intervalSeconds: Joi.number().integer().min(1),
+        cronExpression: Joi.string().max(256),
+        untilAt: Joi.date().iso(),
+        maxRuns: Joi.number().integer().min(1).max(100000),
+    }).optional(),
+    stopConditions: Joi.object({
+        untilAt: Joi.date().iso(),
+    }).optional(),
+}).unknown(true);
+
+/**
  * Schema for workflow node with type-specific config validation
  * Backend types are UPPERCASE (from normalizeNodeType in the registry)
  */
@@ -253,6 +271,7 @@ const workflowNodeSchema = Joi.object({
         // Triggers
         { is: 'TRIGGER', then: triggerBlockConfigSchema },
         { is: 'START', then: startBlockConfigSchema },
+        { is: 'TIME_BLOCK', then: timeBlockNodeConfigSchema },
         // Control
         { is: 'IF', then: controlBlockConfigSchema },
         { is: 'SWITCH', then: controlBlockConfigSchema },

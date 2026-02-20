@@ -41,6 +41,7 @@ export enum NodeType {
   WALLET = "WALLET",
   LLM_TRANSFORM = "LLM_TRANSFORM",
   API = "API",
+  TIME_BLOCK = "TIME_BLOCK",
 }
 
 // Trigger Types

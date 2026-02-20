@@ -66,8 +66,14 @@ const startServer = async () => {
           } else {
             logger.error({ error: result.description }, 'Failed to register Telegram webhook');
           }
-        } catch (error) {
-          logger.error({ error }, 'Error during Telegram webhook registration');
+        } catch (err) {
+          logger.error(
+            {
+              message: err instanceof Error ? err.message : String(err),
+              stack: err instanceof Error ? err.stack : undefined,
+            },
+            'Error during Telegram webhook registration'
+          );
         }
       } else {
         logger.warn('Telegram webhook skipped: Bot token, base URL, or secret not configured');

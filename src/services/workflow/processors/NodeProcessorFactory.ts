@@ -13,6 +13,7 @@ import { OracleNodeProcessor } from './OracleNodeProcessor';
 import { PythOracleNodeProcessor } from './PythOracleNodeProcessor';
 import { LlmTransformNodeProcessor } from './LlmTransformNodeProcessor';
 import { ApiNodeProcessor } from './ApiNodeProcessor';
+import { TimeBlockNodeProcessor } from './TimeBlockNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -71,6 +72,10 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
 
       // Register API processor
       this.registerProcessor(new ApiNodeProcessor());
+
+      // Register Time Block processor (passthrough during execution; scheduling is separate)
+      this.registerProcessor(new TimeBlockNodeProcessor());
+
       logger.info(
         { processorCount: this.processors.size },
         'Node processors initialized'

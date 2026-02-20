@@ -91,6 +91,11 @@ export const createTimeBlock = async (
 
       await client.query('COMMIT');
 
+      logger.info(
+        { timeBlockId: id, workflowId, userId, runAt: runAtDate.toISOString() },
+        'Time block created'
+      );
+
       // Schedule after commit so we don't enqueue jobs for rolled back records
       await scheduleTimeBlockJob({
         id,
@@ -158,6 +163,11 @@ export const listTimeBlocks = async (
       params
     );
 
+    logger.info(
+      { userId, status: status || 'ALL', count: result.rows.length },
+      'Time blocks listed'
+    );
+
     res.status(200).json({
       success: true,
       data: result.rows,
@@ -191,6 +201,8 @@ export const getTimeBlock = async (
     if (result.rows.length === 0) {
       throw new AppError(404, 'Time block not found', 'NOT_FOUND');
     }
+
+    logger.info({ timeBlockId: id, userId }, 'Time block fetched');
 
     res.status(200).json({
       success: true,
@@ -245,6 +257,8 @@ export const cancelTimeBlock = async (
       await client.query('COMMIT');
 
       await cancelTimeBlockJob(id);
+
+      logger.info({ timeBlockId: id, userId }, 'Time block cancelled');
 
       res.status(200).json({
         success: true,

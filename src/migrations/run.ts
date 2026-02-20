@@ -36,6 +36,7 @@ import * as migration032 from "./032_migrate_safe_wallets_to_jsonb";
 import * as migration033 from "./033_restore_remaining_sponsored_txs_to_users";
 import * as migration034 from "./034_make_address_nullable_in_users";
 import * as migration035 from "./035_add_price_oracle_and_api_node_types";
+import * as migration036 from "./036_add_time_block_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -265,6 +266,12 @@ const migrations: Migration[] = [
     name: "035_add_price_oracle_and_api_node_types",
     up: migration035.up,
     down: migration035.down,
+  },
+  {
+    id: 36,
+    name: "036_add_time_block_node_type",
+    up: migration036.up,
+    down: migration036.down,
   },
 ];
 
