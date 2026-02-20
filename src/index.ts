@@ -50,24 +50,68 @@ const startServer = async () => {
       const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
       if (botToken && baseUrl && secret) {
-        try {
-          const webhookUrl = `${baseUrl}/api/v1/integrations/telegram/webhook/${secret}`;
-          logger.info({ webhookUrl }, 'Registering Telegram webhook...');
+        const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/integrations/telegram/webhook/${secret}`;
+        const isHttps = /^https:\/\//i.test(webhookUrl);
 
-          const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: webhookUrl }),
-          });
+        if (!isHttps) {
+          logger.warn(
+            { webhookUrl },
+            'Telegram webhook skipped: only HTTPS URLs are allowed by Telegram. Use a tunnel (e.g. ngrok) or leave TELEGRAM_WEBHOOK_BASE_URL unset for local dev.'
+          );
+        } else {
+          const telegramApiUrl = `https://api.telegram.org/bot${botToken}/setWebhook`;
+          const maxAttempts = 3;
 
-          const result = await response.json() as { ok: boolean; description?: string };
-          if (result.ok) {
-            logger.info('Telegram webhook registered successfully');
-          } else {
-            logger.error({ error: result.description }, 'Failed to register Telegram webhook');
+          const doRegister = async (): Promise<boolean> => {
+            const response = await fetch(telegramApiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: webhookUrl }),
+              signal: AbortSignal.timeout(15_000),
+            });
+            const result = (await response.json()) as { ok?: boolean; description?: string };
+            if (result.ok) {
+              return true;
+            }
+            logger.warn({ status: response.status, error: result.description }, 'Telegram setWebhook returned not OK');
+            return false;
+          };
+
+          try {
+            logger.info({ webhookUrl }, 'Registering Telegram webhook...');
+
+            let success = false;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                success = await doRegister();
+                if (success) break;
+                // Telegram returned ok: false (e.g. bad URL); don't retry
+                break;
+              } catch (err) {
+                const cause = err instanceof Error && 'cause' in err ? (err as Error & { cause?: unknown }).cause : undefined;
+                logger.warn(
+                  { attempt, maxAttempts, error: err instanceof Error ? err.message : String(err), cause },
+                  'Telegram webhook registration attempt failed (network error)'
+                );
+                if (attempt < maxAttempts) {
+                  await new Promise((r) => setTimeout(r, 2000));
+                } else {
+                  throw err;
+                }
+              }
+            }
+
+            if (success) {
+              logger.info('Telegram webhook registered successfully');
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const cause = error instanceof Error && 'cause' in error ? (error as Error & { cause?: unknown }).cause : undefined;
+            logger.error(
+              { error: message, cause },
+              'Error during Telegram webhook registration (backend could not reach api.telegram.org; check network/DNS/firewall)'
+            );
           }
-        } catch (error) {
-          logger.error({ error }, 'Error during Telegram webhook registration');
         }
       } else {
         logger.warn('Telegram webhook skipped: Bot token, base URL, or secret not configured');
