@@ -29,6 +29,16 @@ import * as migration025 from "./025_add_lifi_node_type";
 import * as migration026 from "./026_add_lifi_swap_provider";
 import * as migration027 from "./027_add_eth_sepolia_safe_wallet_and_chain_constraints";
 import * as migration028 from "./028_add_uniswap_v4_swap_provider";
+import * as migration029 from "./029_add_remaining_sponsored_txs_to_users";
+import * as migration030 from "./030_create_user_ens_subdomains_table";
+import * as migration031 from "./031_add_selected_chains_to_users";
+import * as migration032 from "./032_migrate_safe_wallets_to_jsonb";
+import * as migration033 from "./033_restore_remaining_sponsored_txs_to_users";
+import * as migration034 from "./034_make_address_nullable_in_users";
+import * as migration035 from "./035_add_price_oracle_and_api_node_types";
+import * as migration036 from "./036_create_transaction_intents_table";
+import * as migration037 from "./037_add_execution_paused_state";
+import * as migration038 from "./038_add_safe_tx_to_intents";
 
 // Load environment variables
 dotenv.config();
@@ -135,6 +145,16 @@ const resetDatabase = async (): Promise<void> => {
     await migration026.up(pool);
     await migration027.up(pool);
     await migration028.up(pool);
+    await migration029.up(pool);
+    await migration030.up(pool);
+    await migration031.up(pool);
+    await migration032.up(pool);
+    await migration033.up(pool);
+    await migration034.up(pool);
+    await migration035.up(pool);
+    await migration036.up(pool);
+    await migration037.up(pool);
+    await migration038.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -255,6 +275,46 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [28, "028_add_uniswap_v4_swap_provider"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [29, "029_add_remaining_sponsored_txs_to_users"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [30, "030_create_user_ens_subdomains_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [31, "031_add_selected_chains_to_users"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [32, "032_migrate_safe_wallets_to_jsonb"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [33, "033_restore_remaining_sponsored_txs_to_users"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [34, "034_make_address_nullable_in_users"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [35, "035_add_price_oracle_and_api_node_types"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [36, "036_create_transaction_intents_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [37, "037_add_execution_paused_state"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [38, "038_add_safe_tx_to_intents"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {
