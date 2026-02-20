@@ -581,7 +581,13 @@ export class SwapExecutionService {
 
       return executionResult;
     } catch (error) {
-      logger.error({ error, nodeExecutionId }, 'Swap execution with signature failed');
+      logger.error(
+        {
+          err: error instanceof Error ? { message: error.message, stack: error.stack, code: (error as any).code } : error,
+          nodeExecutionId,
+        },
+        'Swap execution with signature failed'
+      );
 
       if (swapExecutionId) {
         await this.updateSwapExecution(swapExecutionId, {
@@ -620,6 +626,20 @@ export class SwapExecutionService {
     userId?: string, // User ID for Safe wallet lookup
     signature?: string, // Optional: If provided, uses signature-based execution
   ): Promise<SwapExecutionResult> {
+    // If signature is provided, delegate to the signature-based flow
+    // which uses the cached Safe tx payload (avoids rebuilding a different tx
+    // whose hash won't match the user's signature).
+    if (signature && userId) {
+      return this.executeSwapWithSignature(
+        nodeExecutionId,
+        chain,
+        provider,
+        config,
+        userId,
+        signature
+      );
+    }
+
     const normalizedNodeExecutionId = this.normalizeNodeExecutionId(nodeExecutionId);
     // Get chainId for relayer service
     const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
@@ -835,58 +855,48 @@ export class SwapExecutionService {
           };
         }
 
-        // Execute with signature if provided, otherwise throw error (signature required)
-        if (signature) {
-          // Sponsorship on mainnet only: consume one sponsored tx slot (testnet = unlimited)
-          if (userId && isMainnetChain(chainId)) {
-            const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
-            if (!sponsorResult.consumed) {
-              throw new Error(
-                `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
-              );
-            }
-          }
-
-          logger.info(
-            {
-              chainId,
-              safeAddress,
-              needsApproval,
-            },
-            'Executing Safe transaction with user signature'
-          );
-
-          const result = await safeTransactionService.executeWithSignatures(
-            safeAddress,
-            chainId,
-            safeTxData.to,
-            safeTxData.value,
-            safeTxData.data,
-            safeTxOperation,
-            signature,
-            undefined,
-            0n, // safeTxGas
-            0n, // baseGas
-            0n, // gasPrice
-            ethers.ZeroAddress, // gasToken
-            ethers.ZeroAddress // refundReceiver
-          );
-
-          txHash = result.txHash;
-          logger.info(
-            { txHash, safeAddress, needsApproval },
-            'Safe transaction executed with signature'
-          );
-        } else {
-          // No signature provided - need to build hash for user to sign
+        // No signature path – build hash for user to sign and cache the
+        // exact Safe tx payload so the resume step can reuse it.
+        {
           const safeTxHash = await safeTransactionService.buildSafeTransactionHash(
             safeAddress,
             chainId,
             safeTxData.to,
             safeTxData.value,
             safeTxData.data,
-            0 // CALL operation
+            safeTxOperation // use actual operation (may be DELEGATECALL for multicall)
           );
+
+          // Cache the Safe tx payload so executeSwapWithSignature can reuse
+          // the exact data the user signed (avoids LiFi quote drift / GS013).
+          try {
+            await redisClient.set(
+              this.safeTxCacheKey(normalizedNodeExecutionId),
+              JSON.stringify({
+                chain,
+                provider,
+                chainId,
+                safeAddress,
+                safeTxHash,
+                safeTxData: {
+                  to: safeTxData.to,
+                  value: safeTxData.value.toString(),
+                  data: safeTxData.data,
+                  operation: safeTxOperation,
+                },
+                needsApproval,
+                cachedAt: Date.now(),
+              }),
+              {
+                EX: 10 * 60, // 10 minutes
+              }
+            );
+          } catch (e) {
+            logger.warn(
+              { error: e, nodeExecutionId: normalizedNodeExecutionId },
+              'Failed to cache Safe tx payload'
+            );
+          }
 
           // Return result indicating signature is required
           return {
@@ -902,7 +912,7 @@ export class SwapExecutionService {
               to: safeTxData.to,
               value: safeTxData.value.toString(),
               data: safeTxData.data,
-              operation: 0,
+              operation: safeTxOperation,
             },
             errorMessage: 'User signature required. Please sign the transaction hash and call executeSwapWithSignature.',
             errorCode: 'SIGNATURE_REQUIRED',
@@ -978,7 +988,13 @@ export class SwapExecutionService {
 
       return result;
     } catch (error) {
-      logger.error({ error, nodeExecutionId }, 'Swap execution failed');
+      logger.error(
+        {
+          err: error instanceof Error ? { message: error.message, stack: error.stack, code: (error as any).code } : error,
+          nodeExecutionId,
+        },
+        'Swap execution failed'
+      );
 
       // Update swap execution record with error
       if (swapExecutionId) {

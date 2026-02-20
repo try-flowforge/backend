@@ -1126,7 +1126,13 @@ export class WorkflowExecutionEngine {
       return context;
 
     } catch (error) {
-      logger.error({ error, executionId }, 'Resumed workflow execution failed');
+      logger.error(
+        {
+          err: error instanceof Error ? { message: error.message, stack: error.stack, code: (error as any).code } : error,
+          executionId,
+        },
+        'Resumed workflow execution failed'
+      );
 
       context.status = ExecutionStatus.FAILED;
       context.error = {
