@@ -115,7 +115,15 @@ export class SwapExecutionService {
     }
 
     // Amount validation
-    const parsedAmount = parseAmount(config.amount, config.sourceToken.decimals);
+    let parsedAmount: bigint;
+    try {
+      parsedAmount = parseAmount(config.amount, config.sourceToken.decimals);
+      config.amount = parsedAmount.toString();
+    } catch (e) {
+      errors.push(`Invalid amount format: ${config.amount}`);
+      return { valid: false, errors };
+    }
+
     if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
@@ -200,10 +208,6 @@ export class SwapExecutionService {
       ...config,
       recipient: safeAddress,
     };
-
-    // Normalize amount to base units
-    const parsedAmount = parseAmount(swapConfig.amount, swapConfig.sourceToken.decimals);
-    swapConfig.amount = parsedAmount.toString();
 
     // Validate configuration
     const validation = await this.validateSwapConfig(chain, provider, swapConfig);
@@ -689,10 +693,6 @@ export class SwapExecutionService {
         ...config,
         recipient: safeAddress || config.recipient || config.walletAddress,
       };
-
-      // Normalize amount to base units
-      const parsedAmount = parseAmount(swapConfig.amount, swapConfig.sourceToken.decimals);
-      swapConfig.amount = parsedAmount.toString();
 
       // Validate configuration
       const validation = await this.validateSwapConfig(chain, provider, swapConfig);

@@ -41,7 +41,15 @@ export class LendingExecutionService {
     }
 
     // Amount validation
-    const parsedAmount = parseAmount(config.amount, config.asset.decimals);
+    let parsedAmount: bigint;
+    try {
+      parsedAmount = parseAmount(config.amount, config.asset.decimals);
+      config.amount = parsedAmount.toString();
+    } catch (e) {
+      errors.push(`Invalid amount format: ${config.amount}`);
+      return { valid: false, errors };
+    }
+
     if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
@@ -116,10 +124,6 @@ export class LendingExecutionService {
       if (!validation.valid) {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
-
-      // Normalize amount to base units
-      const parsedAmount = parseAmount(config.amount, config.asset.decimals);
-      config.amount = parsedAmount.toString();
 
       // Create lending execution record
       lendingExecutionId = await this.createLendingExecutionRecord(
