@@ -10,6 +10,8 @@ import lendingRoutes from './lending.routes';
 import metaRoutes from './meta.routes';
 import oracleRoutes from './oracle.routes';
 import ensRoutes from './ens.routes';
+import intentRoutes from './intent/transaction_intents.routes';
+import executionSignRoutes from './execution/execution-sign.routes';
 import agentRoutes from './agent.routes';
 
 import { pool } from '../config/database';
@@ -132,6 +134,8 @@ router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);
 router.use('/oracle', oracleRoutes);
 router.use('/ens', ensRoutes);
+router.use('/intents', intentRoutes);
+router.use('/executions', executionSignRoutes);
 router.use('/agent', agentRoutes);
 
 export default router;

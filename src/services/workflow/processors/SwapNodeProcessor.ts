@@ -45,12 +45,18 @@ export class SwapNodeProcessor implements INodeProcessor {
         ...config.inputConfig,
         ...(config.toChain != null && { toChain: config.toChain }),
       };
+
+      // If a signature was injected (from a resumed execution after user signing),
+      // pass it through so SwapExecutionService uses the signature-based execution path.
+      const userSignature = input.inputData?.__signature as string | undefined;
+
       const result = await swapExecutionService.executeSwap(
         nodeExecutionId,
         config.chain,
         config.provider,
         inputConfigWithToChain,
         input.executionContext.userId,
+        userSignature,
       );
 
       const endTime = new Date();

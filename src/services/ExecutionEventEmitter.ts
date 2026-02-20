@@ -10,7 +10,8 @@ export type ExecutionEventType =
     | 'execution:failed'
     | 'node:started'
     | 'node:completed'
-    | 'node:failed';
+    | 'node:failed'
+    | 'node:signature_required';
 
 /**
  * Execution Event Data
@@ -26,6 +27,14 @@ export interface ExecutionEvent {
     error?: {
         message: string;
         code?: string;
+    };
+    // Transaction signing data (for signature_required events)
+    safeTxHash?: string;
+    safeTxData?: {
+        to: string;
+        value: string;
+        data: string;
+        operation: number;
     };
     timestamp: Date;
 }
