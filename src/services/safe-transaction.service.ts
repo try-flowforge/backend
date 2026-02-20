@@ -42,6 +42,39 @@ const ERC20_ABI = [
  */
 export class SafeTransactionService {
   /**
+   * Adjust signature `v` value for Gnosis Safe compatibility.
+   *
+   * `personal_sign` / `eth_sign` prefix the message with
+   * "\x19Ethereum Signed Message:\n32" before ECDSA signing, producing v=27|28.
+   *
+   * Gnosis Safe interprets v=27|28 as a *raw* ECDSA sig (no prefix) and will
+   * ecrecover against the bare hash → wrong address → GS026.
+   *
+   * Adding +4 (v=31|32) tells the Safe contract this is an `eth_sign`
+   * signature so it re-hashes with the prefix before ecrecover.
+   */
+  private adjustSignatureForSafe(signature: string): string {
+    const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
+    if (sig.length < 130) return signature; // not a valid 65-byte sig
+
+    const r = sig.slice(0, 64);
+    const s = sig.slice(64, 128);
+    let v = parseInt(sig.slice(128, 130), 16);
+
+    // Normalise: some wallets return v=0|1 instead of 27|28
+    if (v === 0 || v === 1) {
+      v += 27;
+    }
+
+    // Add +4 for eth_sign type (27→31, 28→32)
+    if (v === 27 || v === 28) {
+      v += 4;
+    }
+
+    return "0x" + r + s + v.toString(16).padStart(2, "0");
+  }
+
+  /**
    * Build a Safe transaction hash for EIP-712 signing
    * This is used when the user needs to sign the transaction
    */
@@ -173,7 +206,7 @@ export class SafeTransactionService {
     value: bigint,
     data: string,
     operation: number,
-    signatures: string, // Concatenated signatures (EIP-712 format)
+    rawSignatures: string, // Concatenated signatures (from personal_sign / eth_sign)
     expectedSafeTxHash?: string,
     safeTxGas: bigint = 0n,
     baseGas: bigint = 0n,
@@ -181,6 +214,8 @@ export class SafeTransactionService {
     gasToken: string = ethers.ZeroAddress,
     refundReceiver: string = ethers.ZeroAddress
   ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
+    // Adjust v-value for eth_sign / personal_sign signatures (v+4 → 31|32)
+    const signatures = this.adjustSignatureForSafe(rawSignatures);
     const relayerService = getRelayerService();
     const provider = relayerService.getProvider(chainId);
 
@@ -243,6 +278,7 @@ export class SafeTransactionService {
           chainId,
           safeNonce: nonce?.toString?.() ?? String(nonce),
           threshold: threshold?.toString?.() ?? String(threshold),
+          owners: Array.isArray(owners) ? owners : undefined,
           ownersCount: Array.isArray(owners) ? owners.length : undefined,
           recoveredSigner: recovered,
           signatureCount: sigCount,
@@ -439,7 +475,7 @@ export class SafeTransactionService {
     // MultiSend expects transactions in a specific format:
     // Each transaction is encoded as: operation (1 byte) + to (20 bytes) + value (32 bytes) + dataLength (32 bytes) + data (variable)
     // operation: 0 = CALL, 1 = DELEGATECALL
-    
+
     const encodeTransaction = (
       operation: number,
       to: string,

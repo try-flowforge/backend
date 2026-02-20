@@ -961,6 +961,10 @@ export class WorkflowExecutionEngine {
       // Re-execute the paused node, this time with the signature in the input
       const inputData = this.collectInputData(pausedNode.id, workflow, context);
       inputData.__signature = signature; // Inject the signature
+      inputData.__safeTxHash = execution.safe_tx_hash;
+      inputData.__safeTxData = typeof execution.safe_tx_data === 'string'
+        ? JSON.parse(execution.safe_tx_data)
+        : execution.safe_tx_data;
 
       const nodeExecutionId = await this.createNodeExecution(
         executionId,
