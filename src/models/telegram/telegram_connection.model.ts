@@ -72,6 +72,27 @@ export class TelegramConnectionModel {
     }
 
     /**
+     * Find a connection by Telegram chat ID (for agent context lookup).
+     */
+    static async findByChatId(chatId: string): Promise<TelegramConnection | null> {
+        const text = `
+      SELECT * FROM telegram_connections
+      WHERE chat_id = $1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `;
+        const values = [chatId];
+
+        try {
+            const result = await query(text, values);
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error({ error, chatId }, 'Failed to find Telegram connection by chat ID');
+            throw error;
+        }
+    }
+
+    /**
      * Find all connections for a user
      */
     static async findByUserId(userId: string): Promise<TelegramConnection[]> {

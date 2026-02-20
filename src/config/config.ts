@@ -135,6 +135,14 @@ export const rateLimitConfig = {
 } as const;
 
 /**
+ * Agent service-to-service auth (optional).
+ * When set, POST /api/v1/agent/* accepts X-Service-Key + X-On-Behalf-Of instead of Privy.
+ */
+export const agentServiceConfig = {
+  serviceKey: process.env.AGENT_SERVICE_KEY || null,
+} as const;
+
+/**
  * ENS subdomain sponsorship: 3 sponsored txs per 0.5 USDC (per 1 week period).
  */
 export const SPONSORED_TXS_PER_PERIOD = 3;
@@ -184,6 +192,7 @@ export const config = {
   encryption: encryptionConfig,
   relayer: relayerConfig,
   rateLimit: rateLimitConfig,
+  agentService: agentServiceConfig,
 } as const;
 
 /**

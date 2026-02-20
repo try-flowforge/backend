@@ -10,6 +10,7 @@ import lendingRoutes from './lending.routes';
 import metaRoutes from './meta.routes';
 import oracleRoutes from './oracle.routes';
 import ensRoutes from './ens.routes';
+import agentRoutes from './agent.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -131,5 +132,6 @@ router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);
 router.use('/oracle', oracleRoutes);
 router.use('/ens', ensRoutes);
+router.use('/agent', agentRoutes);
 
 export default router;
