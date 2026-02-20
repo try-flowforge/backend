@@ -13,6 +13,7 @@ import { getProvider, waitForTransaction } from '../../config/providers';
 import { SECURITY_CONFIG, VALIDATION_CONFIG } from '../../config/chains';
 import { logger } from '../../utils/logger';
 import { pool } from '../../config/database';
+import { parseAmount } from '../../utils/amount';
 import { redisClient } from '../../config/redis';
 
 /**
@@ -40,7 +41,8 @@ export class LendingExecutionService {
     }
 
     // Amount validation
-    if (BigInt(config.amount) < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
+    const parsedAmount = parseAmount(config.amount, config.asset.decimals);
+    if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
 
@@ -115,6 +117,10 @@ export class LendingExecutionService {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
+      // Normalize amount to base units
+      const parsedAmount = parseAmount(config.amount, config.asset.decimals);
+      config.amount = parsedAmount.toString();
+
       // Create lending execution record
       lendingExecutionId = await this.createLendingExecutionRecord(
         nodeExecutionId,
@@ -138,7 +144,7 @@ export class LendingExecutionService {
       if (config.simulateFirst !== false) {
         logger.debug('Simulating transaction...');
         const simulation = await lendingProvider.simulateTransaction(chain, transaction);
-        
+
         if (!simulation.success) {
           throw new Error(`Simulation failed: ${simulation.error}`);
         }
@@ -384,7 +390,7 @@ export class LendingExecutionService {
 
     try {
       const current = await redisClient.incr(key);
-      
+
       if (current === 1) {
         await redisClient.expire(key, window);
       }
@@ -404,7 +410,7 @@ export class LendingExecutionService {
 
     try {
       const lastOpTime = await redisClient.get(key);
-      
+
       if (!lastOpTime) {
         return true;
       }
@@ -422,7 +428,7 @@ export class LendingExecutionService {
    */
   private async updateLastOperationTime(walletAddress: string): Promise<void> {
     const key = `lending:lastop:${walletAddress}`;
-    
+
     try {
       await redisClient.set(key, Date.now().toString(), {
         EX: 3600, // Expire after 1 hour
@@ -442,7 +448,7 @@ export class LendingExecutionService {
     `;
 
     const result = await pool.query(query, [executionId]);
-    
+
     if (result.rows.length === 0) {
       return null;
     }

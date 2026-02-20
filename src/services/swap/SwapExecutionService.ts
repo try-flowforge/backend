@@ -13,6 +13,7 @@ import { swapProviderFactory } from './providers/SwapProviderFactory';
 import { waitForTransaction } from '../../config/providers';
 import { SECURITY_CONFIG, VALIDATION_CONFIG, CHAIN_CONFIGS } from '../../config/chains';
 import { logger } from '../../utils/logger';
+import { parseAmount } from '../../utils/amount';
 import { pool } from '../../config/database';
 import { redisClient } from '../../config/redis';
 import { getRelayerService } from '../relayer.service';
@@ -86,7 +87,7 @@ export class SwapExecutionService {
     }
     return routerAddress;
   }
-  
+
   /**
    * Validate swap configuration
    */
@@ -114,7 +115,8 @@ export class SwapExecutionService {
     }
 
     // Amount validation
-    if (BigInt(config.amount) < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
+    const parsedAmount = parseAmount(config.amount, config.sourceToken.decimals);
+    if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
 
@@ -198,6 +200,10 @@ export class SwapExecutionService {
       ...config,
       recipient: safeAddress,
     };
+
+    // Normalize amount to base units
+    const parsedAmount = parseAmount(swapConfig.amount, swapConfig.sourceToken.decimals);
+    swapConfig.amount = parsedAmount.toString();
 
     // Validate configuration
     const validation = await this.validateSwapConfig(chain, provider, swapConfig);
@@ -462,14 +468,14 @@ export class SwapExecutionService {
       // Use cached Safe transaction payload if available; otherwise fall back to rebuilding (may revert if provider tx changes).
       const effectiveSafeTxData =
         cachedSafe?.safeTxData?.to &&
-        cachedSafe?.safeTxData?.data &&
-        cachedSafe?.safeTxData?.value !== undefined
+          cachedSafe?.safeTxData?.data &&
+          cachedSafe?.safeTxData?.value !== undefined
           ? {
-              to: cachedSafe.safeTxData.to as string,
-              value: BigInt(cachedSafe.safeTxData.value as string),
-              data: cachedSafe.safeTxData.data as string,
-              operation: Number(cachedSafe.safeTxData.operation ?? 0),
-            }
+            to: cachedSafe.safeTxData.to as string,
+            value: BigInt(cachedSafe.safeTxData.value as string),
+            data: cachedSafe.safeTxData.data as string,
+            operation: Number(cachedSafe.safeTxData.operation ?? 0),
+          }
           : null;
 
       if (!effectiveSafeTxData) {
@@ -663,7 +669,11 @@ export class SwapExecutionService {
         ...config,
         recipient: safeAddress || config.recipient || config.walletAddress,
       };
-      
+
+      // Normalize amount to base units
+      const parsedAmount = parseAmount(swapConfig.amount, swapConfig.sourceToken.decimals);
+      swapConfig.amount = parsedAmount.toString();
+
       // Validate configuration
       const validation = await this.validateSwapConfig(chain, provider, swapConfig);
       if (!validation.valid) {
