@@ -20,7 +20,7 @@ import {
   validateWorkflow,
 } from '../controllers/workflow.controller';
 import { subscribeToExecution } from '../services/ExecutionSSEService';
-import { verifyPrivyToken } from '../middleware/privy-auth';
+import { verifyServiceKeyOrPrivyToken } from '../middleware/service-auth';
 import { verifySubscriptionToken } from '../services/subscription-token.service';
 import { logger } from '../utils/logger';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation';
@@ -85,8 +85,8 @@ router.get('/executions/:executionId/subscribe', async (req: Request, res: Respo
   subscribeToExecution(executionId, res);
 });
 
-// Apply Privy authentication to all other workflow routes
-router.use(verifyPrivyToken);
+// Apply service-key or Privy authentication to all other workflow routes
+router.use(verifyServiceKeyOrPrivyToken);
 
 // Clone public workflow (authenticated)
 router.post('/public/:id/clone', validateParams(idParamSchema), clonePublicWorkflow);

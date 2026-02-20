@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyPrivyToken } from '../middleware/privy-auth';
+import { verifyServiceKeyOrPrivyToken } from '../middleware/service-auth';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation';
 import { idParamSchema, createTimeBlockSchema, listTimeBlocksQuerySchema } from '../middleware/schemas';
 import {
@@ -11,7 +11,7 @@ import {
 
 const router = Router();
 
-router.use(verifyPrivyToken);
+router.use(verifyServiceKeyOrPrivyToken);
 
 router.post('/', validateBody(createTimeBlockSchema), createTimeBlock);
 router.get('/', validateQuery(listTimeBlocksQuerySchema), listTimeBlocks);
