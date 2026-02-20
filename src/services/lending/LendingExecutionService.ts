@@ -31,16 +31,7 @@ export class LendingExecutionService {
   ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
 
-    // Get provider
-    const lendingProvider = lendingProviderFactory.getProvider(provider);
-
-    // Provider-specific validation
-    const providerValidation = await lendingProvider.validateConfig(chain, config);
-    if (!providerValidation.valid && providerValidation.errors) {
-      errors.push(...providerValidation.errors);
-    }
-
-    // Amount validation
+    // 1. Amount validation (MUST happen first before provider validations)
     let parsedAmount: bigint;
     try {
       parsedAmount = parseAmount(config.amount, config.asset.decimals);
@@ -53,6 +44,16 @@ export class LendingExecutionService {
     if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
+
+    // 2. Get provider
+    const lendingProvider = lendingProviderFactory.getProvider(provider);
+
+    // 3. Provider-specific validation
+    const providerValidation = await lendingProvider.validateConfig(chain, config);
+    if (!providerValidation.valid && providerValidation.errors) {
+      errors.push(...providerValidation.errors);
+    }
+
 
     // Rate limiting check
     const rateLimitOk = await this.checkRateLimit(config.walletAddress);

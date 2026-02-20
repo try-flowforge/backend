@@ -98,23 +98,7 @@ export class SwapExecutionService {
   ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
 
-    // Get provider
-    const swapProvider = swapProviderFactory.getProvider(provider);
-
-    // Provider-specific validation
-    const providerValidation = await swapProvider.validateConfig(chain, config);
-    if (!providerValidation.valid && providerValidation.errors) {
-      errors.push(...providerValidation.errors);
-    }
-
-    // Security validations
-    if (config.slippageTolerance && config.slippageTolerance > SECURITY_CONFIG.maxSlippageTolerance) {
-      errors.push(
-        `Slippage tolerance exceeds maximum: ${SECURITY_CONFIG.maxSlippageTolerance}%`
-      );
-    }
-
-    // Amount validation
+    // 1. Amount normalization (MUST happen first before provider validations)
     let parsedAmount: bigint;
     try {
       parsedAmount = parseAmount(config.amount, config.sourceToken.decimals);
@@ -127,6 +111,23 @@ export class SwapExecutionService {
     if (parsedAmount < BigInt(VALIDATION_CONFIG.minSwapAmount)) {
       errors.push(`Amount below minimum: ${VALIDATION_CONFIG.minSwapAmount}`);
     }
+
+    // 2. Get provider
+    const swapProvider = swapProviderFactory.getProvider(provider);
+
+    // 3. Provider-specific validation
+    const providerValidation = await swapProvider.validateConfig(chain, config);
+    if (!providerValidation.valid && providerValidation.errors) {
+      errors.push(...providerValidation.errors);
+    }
+
+    // 4. Security validations
+    if (config.slippageTolerance && config.slippageTolerance > SECURITY_CONFIG.maxSlippageTolerance) {
+      errors.push(
+        `Slippage tolerance exceeds maximum: ${SECURITY_CONFIG.maxSlippageTolerance}%`
+      );
+    }
+
 
     // Rate limiting check
     const rateLimitOk = await this.checkRateLimit(config.walletAddress);
