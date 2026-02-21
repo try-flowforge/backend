@@ -39,3 +39,25 @@ export const sendTelegramMessageSchema = Joi.object({
         'any.only': 'Parse mode must be one of: Markdown, MarkdownV2, HTML',
     }),
 });
+
+/**
+ * Validation schema for agent-forwarded verification (POST /verification/verify-from-agent)
+ */
+export const verifyFromAgentSchema = Joi.object({
+    code: Joi.string().required().messages({
+        'string.empty': 'Code is required',
+        'any.required': 'Code is required',
+    }),
+    chatId: Joi.string().required().messages({
+        'string.empty': 'Chat ID is required',
+        'any.required': 'Chat ID is required',
+    }),
+    chatTitle: Joi.string().required().messages({
+        'string.empty': 'Chat title is required',
+        'any.required': 'Chat title is required',
+    }),
+    chatType: Joi.string().valid('private', 'group', 'supergroup', 'channel').required().messages({
+        'any.only': 'Chat type must be one of: private, group, supergroup, channel',
+        'any.required': 'Chat type is required',
+    }),
+});

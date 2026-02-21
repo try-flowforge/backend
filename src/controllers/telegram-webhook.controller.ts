@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/privy-auth';
-import { TelegramConnectionModel } from '../models/telegram';
+import { TelegramConnectionModel, TelegramVerificationCodeModel } from '../models/telegram';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -225,6 +225,58 @@ async function sendTelegramMessage(chatId: string, text: string): Promise<void> 
         logger.error({ error, chatId }, 'Error sending verification response message');
     }
 }
+
+/**
+ * Verify a code from the agent (agent received verify-* in Telegram and forwards here).
+ * POST /api/v1/integrations/telegram/verification/verify-from-agent
+ * Body: { code, chatId, chatTitle, chatType }
+ * Returns: { success: true, message: "..." } or { success: false, message: "..." } for the agent to send to the user.
+ */
+export const verifyFromAgent = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { code, chatId, chatTitle, chatType } = req.body;
+
+        const verifiedCode = await TelegramVerificationCodeModel.verifyCode(
+            code,
+            chatId,
+            chatTitle,
+            chatType
+        );
+
+        if (!verifiedCode) {
+            res.status(200).json({
+                success: false,
+                message: 'Invalid or expired verification code. Please generate a new code from the dashboard.',
+            });
+            return;
+        }
+
+        await TelegramConnectionModel.upsert({
+            userId: verifiedCode.user_id,
+            chatId,
+            chatTitle,
+            chatType: chatType as 'private' | 'group' | 'supergroup' | 'channel',
+            name: `Verified: ${chatTitle}`,
+        });
+
+        logger.info(
+            { userId: verifiedCode.user_id, chatId, chatTitle },
+            'Chat verified and connection created via agent'
+        );
+
+        res.status(200).json({
+            success: true,
+            message:
+                '**Verified!** This chat is now connected to your account.\n\nYou can now use this chat in your workflows. Return to the dashboard and click "Refresh" to see your connected chat.',
+        });
+    } catch (error) {
+        logger.error({ error }, 'Error in verifyFromAgent');
+        res.status(500).json({
+            success: false,
+            message: 'Verification failed. Please try again.',
+        });
+    }
+};
 
 /**
  * Get recent messages for a connection

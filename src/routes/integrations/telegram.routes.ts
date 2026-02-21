@@ -1,9 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { verifyPrivyToken, AuthenticatedRequest } from '../../middleware/privy-auth';
+import { verifyServiceKeyOnly } from '../../middleware/service-auth';
 import { validateBody } from '../../middleware/validation';
 import {
     createTelegramConnectionSchema,
     sendTelegramMessageSchema,
+    verifyFromAgentSchema,
 } from '../../models/telegram';
 import * as telegramController from '../../controllers/telegram.controller';
 import * as telegramWebhookController from '../../controllers/telegram-webhook.controller';
@@ -21,6 +23,19 @@ const router = Router();
 router.post('/webhook/:secret', (req: Request, res: Response) => {
     telegramWebhookController.handleIncomingWebhook(req, res);
 });
+
+/**
+ * Agent forwards verify-* messages here (service-key only)
+ * POST /verification/verify-from-agent
+ */
+router.post(
+    '/verification/verify-from-agent',
+    verifyServiceKeyOnly,
+    validateBody(verifyFromAgentSchema),
+    (req: Request, res: Response) => {
+        telegramWebhookController.verifyFromAgent(req, res);
+    }
+);
 
 // ============================================
 // AUTHENTICATED ROUTES

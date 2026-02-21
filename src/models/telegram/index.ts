@@ -3,5 +3,6 @@ export { TelegramVerificationCodeModel, type TelegramVerificationCode, type Veri
 export {
     createTelegramConnectionSchema,
     sendTelegramMessageSchema,
+    verifyFromAgentSchema,
 } from './telegram_schema';
 

@@ -4,6 +4,33 @@ import { logger } from "../utils/logger";
 import { config } from "../config/config";
 
 /**
+ * Middleware that allows only service key authentication (no user context).
+ * Use for agent-only endpoints like verification forwarding where x-on-behalf-of is not needed.
+ */
+export const verifyServiceKeyOnly = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    const serviceKeyHeader = req.headers["x-service-key"];
+    if (!serviceKeyHeader) {
+        res.status(401).json({ success: false, error: "Missing x-service-key header" });
+        return;
+    }
+    if (!config.server.serviceKey) {
+        logger.warn("Service key received but not configured on the server");
+        res.status(401).json({ success: false, error: "Service key auth not configured" });
+        return;
+    }
+    if (serviceKeyHeader !== config.server.serviceKey) {
+        logger.warn("Invalid service key attempt");
+        res.status(401).json({ success: false, error: "Invalid service key" });
+        return;
+    }
+    next();
+};
+
+/**
  * Middleware that allows authentication via a configured Service Key or falls back to Privy.
  * This is useful for backend agents/services to act on behalf of a user.
  *
