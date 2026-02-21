@@ -14,6 +14,7 @@ import intentRoutes from './intent/transaction_intents.routes';
 import executionSignRoutes from './execution/execution-sign.routes';
 import agentRoutes from './agent.routes';
 import timeBlockRoutes from './timeblock.routes';
+import ostiumRoutes from './ostium.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -135,6 +136,7 @@ router.use('/swaps', swapRoutes);
 router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);
 router.use('/oracle', oracleRoutes);
+router.use('/ostium', ostiumRoutes);
 router.use('/ens', ensRoutes);
 router.use('/intents', intentRoutes);
 router.use('/executions', executionSignRoutes);

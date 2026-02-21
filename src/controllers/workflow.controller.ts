@@ -12,6 +12,7 @@ import { AuthenticatedRequest } from '../middleware/privy-auth';
 import crypto from 'crypto';
 import { generateSubscriptionToken } from '../services/subscription-token.service';
 import { WorkflowValidator } from '../services/workflow/WorkflowValidator';
+import { ostiumDelegationService } from '../services/ostium/ostium-delegation.service';
 
 /**
  * Translate placeholder node IDs in templates from frontend IDs to database UUIDs.
@@ -309,9 +310,46 @@ export const validateWorkflow = async (
 ): Promise<void> => {
   try {
     const { nodes, edges } = req.body;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.userId;
 
     // This will throw AppError if validation fails
     WorkflowValidator.validate({ nodes, edges });
+
+    // Additional runtime preflight for PERPS write actions: delegation must be ACTIVE.
+    const perpsWriteActions = new Set(['OPEN_POSITION', 'CLOSE_POSITION', 'UPDATE_SL', 'UPDATE_TP']);
+    if (userId && Array.isArray(nodes)) {
+      for (const node of nodes) {
+        if (node?.type !== 'PERPS') {
+          continue;
+        }
+
+        const config = (node?.config || {}) as {
+          action?: string;
+          network?: 'testnet' | 'mainnet';
+        };
+
+        if (!config.action || !perpsWriteActions.has(config.action)) {
+          continue;
+        }
+
+        const network = config.network || 'testnet';
+        const status = await ostiumDelegationService.getStatus(userId, network);
+        if (!status || status.status !== 'ACTIVE') {
+          throw new AppError(
+            400,
+            `Ostium delegation is not active for ${network}. Approve delegation before running PERPS write actions.`,
+            'VALIDATION_ERROR',
+            [
+              {
+                field: 'nodes[].config.action',
+                message: 'Delegation must be ACTIVE for Ostium OPEN/CLOSE/UPDATE actions',
+              },
+            ],
+          );
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,

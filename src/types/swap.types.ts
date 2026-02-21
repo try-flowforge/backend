@@ -27,6 +27,7 @@ export enum NodeType {
   TRIGGER = "TRIGGER",
   START = "START",
   SWAP = "SWAP",
+  PERPS = "PERPS",
   CHAINLINK_PRICE_ORACLE = "CHAINLINK_PRICE_ORACLE",
   PYTH_PRICE_ORACLE = "PYTH_PRICE_ORACLE",
   IF = "IF",
@@ -197,6 +198,36 @@ export interface SwapNodeConfig {
   outputMapping?: Record<string, string>;
 }
 
+export type PerpsAction =
+  | "MARKETS"
+  | "PRICE"
+  | "BALANCE"
+  | "LIST_POSITIONS"
+  | "OPEN_POSITION"
+  | "CLOSE_POSITION"
+  | "UPDATE_SL"
+  | "UPDATE_TP";
+
+export interface PerpsNodeConfig {
+  provider: "OSTIUM";
+  network: "testnet" | "mainnet";
+  action: PerpsAction;
+  market?: string;
+  base?: string;
+  quote?: string;
+  address?: string;
+  traderAddress?: string;
+  side?: "long" | "short";
+  collateral?: number;
+  leverage?: number;
+  pairId?: number;
+  tradeIndex?: number;
+  slPrice?: number;
+  tpPrice?: number;
+  idempotencyKey?: string;
+  outputMapping?: Record<string, string>;
+}
+
 // Slack Node Configuration
 export interface SlackNodeConfig {
   connectionId: string;
@@ -220,7 +251,7 @@ export interface WorkflowNodeDefinition {
   description?: string;
 
   // Node-specific configuration
-  config: SwapNodeConfig | TriggerNodeConfig | Record<string, any>;
+  config: SwapNodeConfig | PerpsNodeConfig | TriggerNodeConfig | Record<string, any>;
 
   // Position in UI (for visual editor)
   position?: { x: number; y: number };

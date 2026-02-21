@@ -46,3 +46,6 @@ export * from './oracle.types';
 
 // Re-export time block types
 export * from './timeblock.types';
+
+// Re-export Ostium types
+export * from './ostium.types';

@@ -22,6 +22,8 @@ const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA', 'B
 const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
 /** Lending providers */
 const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
+/** Ostium networks */
+const OSTIUM_NETWORKS = ['testnet', 'mainnet'] as const;
 
 // ===========================================
 // COMMON SCHEMAS
@@ -220,6 +222,76 @@ const apiBlockConfigSchema = Joi.object({
 }).unknown(true);
 
 /**
+ * Perps block config schema (Ostium)
+ */
+const perpsBlockConfigSchema = Joi.object({
+    provider: Joi.string().valid('OSTIUM').default('OSTIUM'),
+    network: Joi.string().valid(...OSTIUM_NETWORKS).required(),
+    action: Joi.string()
+        .valid('MARKETS', 'PRICE', 'BALANCE', 'LIST_POSITIONS', 'OPEN_POSITION', 'CLOSE_POSITION', 'UPDATE_SL', 'UPDATE_TP')
+        .required(),
+    market: Joi.string().max(50).when('action', {
+        is: Joi.valid('OPEN_POSITION'),
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    base: Joi.string().max(20).when('action', {
+        is: 'PRICE',
+        then: Joi.optional(),
+        otherwise: Joi.optional(),
+    }),
+    quote: Joi.string().max(20),
+    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
+    side: Joi.string().valid('long', 'short').when('action', {
+        is: 'OPEN_POSITION',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    collateral: Joi.number().positive().when('action', {
+        is: 'OPEN_POSITION',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    leverage: Joi.number().positive().when('action', {
+        is: 'OPEN_POSITION',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    pairId: Joi.number().integer().min(0).when('action', {
+        is: Joi.valid('CLOSE_POSITION', 'UPDATE_SL', 'UPDATE_TP'),
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    tradeIndex: Joi.number().integer().min(0).when('action', {
+        is: Joi.valid('CLOSE_POSITION', 'UPDATE_SL', 'UPDATE_TP'),
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    slPrice: Joi.number().positive().when('action', {
+        is: 'UPDATE_SL',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    tpPrice: Joi.number().positive().when('action', {
+        is: 'UPDATE_TP',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+    }),
+    idempotencyKey: Joi.string().max(128),
+    outputMapping: Joi.object().pattern(Joi.string(), Joi.string()),
+}).custom((value, helpers) => {
+    if (value.action === 'PRICE' && !value.base && !value.market) {
+        return helpers.error('any.custom', {
+            customMessage: 'For PRICE action, either base or market is required',
+        });
+    }
+    return value;
+}).messages({
+    'any.custom': '{{#customMessage}}',
+}).unknown(true);
+
+/**
  * Permissive schema for blocks that don't have strict validation yet
  */
 const permissiveBlockConfigSchema = Joi.object({}).unknown(true);
@@ -272,6 +344,8 @@ const workflowNodeSchema = Joi.object({
         { is: 'PRICE_ORACLE', then: oracleBlockConfigSchema },
         // AI
         { is: 'LLM_TRANSFORM', then: llmTransformBlockConfigSchema },
+        // Perps
+        { is: 'PERPS', then: perpsBlockConfigSchema },
         // Triggers
         { is: 'TRIGGER', then: triggerBlockConfigSchema },
         { is: 'START', then: startBlockConfigSchema },
@@ -280,7 +354,6 @@ const workflowNodeSchema = Joi.object({
         { is: 'IF', then: controlBlockConfigSchema },
         { is: 'SWITCH', then: controlBlockConfigSchema },
         // Permissive (wallet, api, etc.)
-        { is: 'WALLET', then: permissiveBlockConfigSchema },
         { is: 'WALLET', then: permissiveBlockConfigSchema },
         { is: 'API', then: apiBlockConfigSchema },
     ]).default({}),
@@ -746,4 +819,86 @@ export const sendSlackMessageSchema = Joi.object({
     connectionId: uuidSchema.required(),
     message: Joi.string().max(4000).required(),
     channelId: Joi.string(),
+});
+
+// ===========================================
+// OSTIUM SCHEMAS
+// ===========================================
+
+const ostiumNetworkSchema = Joi.string().valid(...OSTIUM_NETWORKS).required().messages({
+    'any.only': `network must be one of: ${OSTIUM_NETWORKS.join(', ')}`,
+});
+
+const ethereumAddressSchema = Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
+    'string.pattern.base': 'Invalid Ethereum address format',
+});
+
+export const ostiumMarketsListSchema = Joi.object({
+    network: ostiumNetworkSchema,
+});
+
+export const ostiumPriceSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    base: Joi.string().min(1).max(20).required(),
+    quote: Joi.string().min(1).max(20).default('USD'),
+});
+
+export const ostiumBalanceSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    address: ethereumAddressSchema,
+});
+
+export const ostiumPositionsListSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    traderAddress: ethereumAddressSchema,
+});
+
+export const ostiumPositionOpenSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    market: Joi.string().min(1).max(50).required(),
+    side: Joi.string().valid('long', 'short').required(),
+    collateral: Joi.number().positive().required(),
+    leverage: Joi.number().positive().required(),
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    idempotencyKey: Joi.string().max(128).optional(),
+});
+
+export const ostiumPositionCloseSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
+    tradeIndex: Joi.number().integer().min(0).required(),
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    idempotencyKey: Joi.string().max(128).optional(),
+});
+
+export const ostiumPositionUpdateSlSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
+    tradeIndex: Joi.number().integer().min(0).required(),
+    slPrice: Joi.number().positive().required(),
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+});
+
+export const ostiumPositionUpdateTpSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
+    tradeIndex: Joi.number().integer().min(0).required(),
+    tpPrice: Joi.number().positive().required(),
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+});
+
+export const ostiumDelegationPrepareSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+});
+
+export const ostiumDelegationExecuteSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    signature: Joi.string().min(10).required(),
+    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+});
+
+export const ostiumDelegationStatusSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
 });

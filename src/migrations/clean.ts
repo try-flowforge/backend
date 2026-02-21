@@ -42,6 +42,9 @@ import * as migration038 from "./038_add_safe_tx_to_intents";
 import * as migration039 from "./039_add_time_block_trigger_type";
 import * as migration040 from "./040_create_time_blocks_table";
 import * as migration041 from "./041_add_time_block_node_type";
+import * as migration042 from "./042_create_ostium_delegations_table";
+import * as migration043 from "./043_create_perps_executions_table";
+import * as migration044 from "./044_add_perps_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -161,6 +164,9 @@ const resetDatabase = async (): Promise<void> => {
     await migration039.up(pool);
     await migration040.up(pool);
     await migration041.up(pool);
+    await migration042.up(pool);
+    await migration043.up(pool);
+    await migration044.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -333,6 +339,18 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [41, "041_add_time_block_node_type"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [42, "042_create_ostium_delegations_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [43, "043_create_perps_executions_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [44, "044_add_perps_node_type"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {
