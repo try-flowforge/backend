@@ -12,12 +12,12 @@ export interface OstiumPriceRequest {
 
 export interface OstiumBalanceRequest {
   network: OstiumNetwork;
-  address: string;
+  address?: string;
 }
 
 export interface OstiumPositionsListRequest {
   network: OstiumNetwork;
-  traderAddress: string;
+  traderAddress?: string;
 }
 
 export interface OstiumPositionOpenRequest {

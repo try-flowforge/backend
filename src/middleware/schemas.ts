@@ -829,10 +829,6 @@ const ostiumNetworkSchema = Joi.string().valid(...OSTIUM_NETWORKS).required().me
     'any.only': `network must be one of: ${OSTIUM_NETWORKS.join(', ')}`,
 });
 
-const ethereumAddressSchema = Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
-    'string.pattern.base': 'Invalid Ethereum address format',
-});
-
 export const ostiumMarketsListSchema = Joi.object({
     network: ostiumNetworkSchema,
 });
@@ -845,12 +841,12 @@ export const ostiumPriceSchema = Joi.object({
 
 export const ostiumBalanceSchema = Joi.object({
     network: ostiumNetworkSchema,
-    address: ethereumAddressSchema,
+    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
 
 export const ostiumPositionsListSchema = Joi.object({
     network: ostiumNetworkSchema,
-    traderAddress: ethereumAddressSchema,
+    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
 
 export const ostiumPositionOpenSchema = Joi.object({
