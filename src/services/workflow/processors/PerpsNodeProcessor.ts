@@ -8,7 +8,7 @@ import {
 import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { ostiumServiceClient } from '../../ostium/ostium-service-client';
 import { perpsExecutionService } from '../../ostium/perps-execution.service';
-import { ostiumDelegationService } from '../../ostium/ostium-delegation.service';
+import { ostiumSetupService } from '../../ostium/ostium-setup.service';
 import { logger } from '../../../utils/logger';
 import { pool } from '../../../config/database';
 import { UserModel } from '../../../models/users';
@@ -94,7 +94,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           );
           break;
         case 'OPEN_POSITION': {
-          await this.ensureActiveDelegation(input.executionContext.userId, config.network);
+          await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
           result = await ostiumServiceClient.openPosition(
             {
               network: config.network,
@@ -114,7 +114,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           break;
         }
         case 'CLOSE_POSITION': {
-          await this.ensureActiveDelegation(input.executionContext.userId, config.network);
+          await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
           result = await ostiumServiceClient.closePosition(
             {
               network: config.network,
@@ -132,7 +132,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           break;
         }
         case 'UPDATE_SL': {
-          await this.ensureActiveDelegation(input.executionContext.userId, config.network);
+          await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
           result = await ostiumServiceClient.updateStopLoss(
             {
               network: config.network,
@@ -150,7 +150,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           break;
         }
         case 'UPDATE_TP': {
-          await this.ensureActiveDelegation(input.executionContext.userId, config.network);
+          await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
           result = await ostiumServiceClient.updateTakeProfit(
             {
               network: config.network,
@@ -334,16 +334,33 @@ export class PerpsNodeProcessor implements INodeProcessor {
     );
   }
 
-  private async ensureActiveDelegation(userId: string, network: 'testnet' | 'mainnet', action?: PerpsAction): Promise<void> {
-    if (action && !this.actionRequiresActiveDelegation(action)) {
+  private readinessKeysForAction(action: PerpsAction): Array<'safeWallet' | 'delegation' | 'usdcBalance' | 'allowance' | 'delegateGas'> {
+    if (action === 'OPEN_POSITION') {
+      return ['safeWallet', 'delegation', 'usdcBalance', 'allowance', 'delegateGas'];
+    }
+    if (action === 'CLOSE_POSITION' || action === 'UPDATE_SL' || action === 'UPDATE_TP') {
+      return ['safeWallet', 'delegation', 'delegateGas'];
+    }
+    return [];
+  }
+
+  private async ensureWriteReadiness(
+    userId: string,
+    network: 'testnet' | 'mainnet',
+    action: PerpsAction,
+  ): Promise<void> {
+    if (!this.actionRequiresActiveDelegation(action)) {
       return;
     }
 
-    const status = await ostiumDelegationService.getStatus(userId, network);
-    if (!status || status.status !== 'ACTIVE') {
-      throw new Error(
-        `Ostium delegation is not active for ${network}. Approve delegation first via /api/v1/ostium/delegations/prepare and /execute`,
-      );
+    const readiness = await ostiumSetupService.getReadiness(userId, network);
+    const failedMessages = this.readinessKeysForAction(action)
+      .map((key) => readiness.checks[key])
+      .filter((entry) => !entry.ok)
+      .map((entry) => entry.message);
+
+    if (failedMessages.length > 0) {
+      throw new Error(`Ostium readiness checks failed: ${failedMessages.join(' | ')}`);
     }
   }
 
