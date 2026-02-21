@@ -42,7 +42,20 @@ const ERC20_ABI = [
  */
 export class SafeTransactionService {
   /**
-   * Adjust signature `v` value for Gnosis Safe compatibility.
+   * Normalize signature blob to a canonical 0x-hex string.
+   */
+  private normalizeSignatures(rawSignatures: string): string {
+    const sig = rawSignatures.startsWith("0x")
+      ? rawSignatures.slice(2)
+      : rawSignatures;
+    if (!sig || sig.length % 2 !== 0 || /[^0-9a-fA-F]/.test(sig)) {
+      throw new Error("Invalid signature format");
+    }
+    return `0x${sig}`;
+  }
+
+  /**
+   * Adjust ECDSA `v` values for Gnosis Safe eth_sign compatibility.
    *
    * `personal_sign` / `eth_sign` prefix the message with
    * "\x19Ethereum Signed Message:\n32" before ECDSA signing, producing v=27|28.
@@ -53,25 +66,58 @@ export class SafeTransactionService {
    * Adding +4 (v=31|32) tells the Safe contract this is an `eth_sign`
    * signature so it re-hashes with the prefix before ecrecover.
    */
-  private adjustSignatureForSafe(signature: string): string {
+  private adjustSignaturesForEthSign(rawSignatures: string): string {
+    const signatures = this.normalizeSignatures(rawSignatures);
+    const sig = signatures.slice(2);
+
+    // Only rewrite fixed-size ECDSA concatenations (65 bytes each).
+    // For dynamic signature containers, keep as-is.
+    if (sig.length % 130 !== 0) {
+      return signatures;
+    }
+
+    let adjusted = "";
+    for (let i = 0; i < sig.length; i += 130) {
+      const chunk = sig.slice(i, i + 130);
+      const r = chunk.slice(0, 64);
+      const s = chunk.slice(64, 128);
+      let v = parseInt(chunk.slice(128, 130), 16);
+
+      // Normalise: some wallets return v=0|1 instead of 27|28
+      if (v === 0 || v === 1) {
+        v += 27;
+      }
+
+      // Add +4 for eth_sign type (27→31, 28→32)
+      if (v === 27 || v === 28) {
+        v += 4;
+      }
+
+      adjusted += r + s + v.toString(16).padStart(2, "0");
+    }
+
+    return "0x" + adjusted;
+  }
+
+  private normalizeSignatureForRecover(signature: string): string | null {
     const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
-    if (sig.length < 130) return signature; // not a valid 65-byte sig
+    if (sig.length !== 130) return null;
 
     const r = sig.slice(0, 64);
     const s = sig.slice(64, 128);
     let v = parseInt(sig.slice(128, 130), 16);
 
-    // Normalise: some wallets return v=0|1 instead of 27|28
-    if (v === 0 || v === 1) {
-      v += 27;
-    }
-
-    // Add +4 for eth_sign type (27→31, 28→32)
-    if (v === 27 || v === 28) {
-      v += 4;
-    }
+    if (v === 0 || v === 1) v += 27;
+    if (v === 31 || v === 32) v -= 4; // Safe eth_sign adjusted signatures
+    if (v !== 27 && v !== 28) return null;
 
     return "0x" + r + s + v.toString(16).padStart(2, "0");
+  }
+
+  private extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    return String(error);
   }
 
   /**
@@ -214,8 +260,18 @@ export class SafeTransactionService {
     gasToken: string = ethers.ZeroAddress,
     refundReceiver: string = ethers.ZeroAddress
   ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
-    // Adjust v-value for eth_sign / personal_sign signatures (v+4 → 31|32)
-    const signatures = this.adjustSignatureForSafe(rawSignatures);
+    const normalizedSignatures = this.normalizeSignatures(rawSignatures);
+    const ethSignAdjustedSignatures = this.adjustSignaturesForEthSign(normalizedSignatures);
+    const signatureCandidates: Array<{ mode: "safe_sdk" | "eth_sign"; signatures: string }> = [
+      { mode: "safe_sdk", signatures: normalizedSignatures },
+    ];
+    if (ethSignAdjustedSignatures.toLowerCase() !== normalizedSignatures.toLowerCase()) {
+      signatureCandidates.push({ mode: "eth_sign", signatures: ethSignAdjustedSignatures });
+    }
+
+    let signaturesForExecution = normalizedSignatures;
+    let signatureMode: "safe_sdk" | "eth_sign" = "safe_sdk";
+
     const relayerService = getRelayerService();
     const provider = relayerService.getProvider(chainId);
 
@@ -260,13 +316,18 @@ export class SafeTransactionService {
         nonce
       );
 
-      const sigHex = signatures.startsWith("0x") ? signatures.slice(2) : signatures;
+      const sigHex = normalizedSignatures.startsWith("0x")
+        ? normalizedSignatures.slice(2)
+        : normalizedSignatures;
       const sigCount = Math.floor(sigHex.length / 130); // 65 bytes per signature
       let recovered: string | null = null;
       if (expectedSafeTxHash && sigHex.length >= 130) {
         const firstSig = ("0x" + sigHex.slice(0, 130)) as string;
+        const recoverableSig = this.normalizeSignatureForRecover(firstSig);
         try {
-          recovered = ethers.recoverAddress(expectedSafeTxHash, firstSig);
+          recovered = recoverableSig
+            ? ethers.recoverAddress(expectedSafeTxHash, recoverableSig)
+            : null;
         } catch {
           recovered = null;
         }
@@ -292,20 +353,59 @@ export class SafeTransactionService {
         "Safe exec diagnostics"
       );
 
-      // Validate signatures on-chain against the computed hash (will throw with GS0xx if invalid)
-      try {
-        await safeContract.checkSignatures(computedTxHash, "0x", signatures);
-        logger.info(
-          { safeAddress, chainId, computedSafeTxHash: computedTxHash },
-          "Safe signature preflight passed (checkSignatures)"
-        );
-      } catch (sigErr) {
+      // Validate signatures on-chain and auto-select matching signature mode.
+      const preflightFailures: Record<string, string> = {};
+      let preflightPassed = false;
+      for (const candidate of signatureCandidates) {
+        try {
+          await safeContract.checkSignatures(computedTxHash, "0x", candidate.signatures);
+          signaturesForExecution = candidate.signatures;
+          signatureMode = candidate.mode;
+          preflightPassed = true;
+          logger.info(
+            {
+              safeAddress,
+              chainId,
+              computedSafeTxHash: computedTxHash,
+              signatureMode: candidate.mode,
+            },
+            "Safe signature preflight passed (checkSignatures)"
+          );
+          break;
+        } catch (sigErr) {
+          preflightFailures[candidate.mode] = this.extractErrorMessage(sigErr);
+          logger.warn(
+            {
+              safeAddress,
+              chainId,
+              computedSafeTxHash: computedTxHash,
+              signatureMode: candidate.mode,
+              error: sigErr,
+            },
+            "Safe signature preflight failed for signature mode"
+          );
+        }
+      }
+
+      if (!preflightPassed) {
+        const detail = Object.entries(preflightFailures)
+          .map(([mode, msg]) => `${mode}: ${msg}`)
+          .join("; ");
         logger.error(
-          { safeAddress, chainId, computedSafeTxHash: computedTxHash, error: sigErr },
-          "Safe signature preflight failed (checkSignatures)"
+          {
+            safeAddress,
+            chainId,
+            computedSafeTxHash: computedTxHash,
+            preflightFailures,
+          },
+          "Safe signature preflight failed (all modes)"
         );
+        throw new Error(`Safe signature validation failed (${detail || "unknown error"})`);
       }
     } catch (e) {
+      if (e instanceof Error && e.message.startsWith("Safe signature validation failed")) {
+        throw e;
+      }
       logger.warn({ error: e, safeAddress, chainId }, "Safe exec diagnostics failed");
     }
 
@@ -325,7 +425,7 @@ export class SafeTransactionService {
       gasPrice,
       gasToken,
       refundReceiver,
-      signatures,
+      signaturesForExecution,
     ]);
 
     // Execute via relayer
@@ -341,6 +441,7 @@ export class SafeTransactionService {
         safeAddress,
         chainId,
         txHash,
+        signatureMode,
       },
       "Safe transaction executed with signatures"
     );
