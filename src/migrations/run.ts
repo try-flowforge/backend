@@ -42,6 +42,9 @@ import * as migration038 from "./038_add_safe_tx_to_intents";
 import * as migration039 from "./039_add_time_block_trigger_type";
 import * as migration040 from "./040_create_time_blocks_table";
 import * as migration041 from "./041_add_time_block_node_type";
+import * as migration042 from "./042_create_ostium_delegations_table";
+import * as migration043 from "./043_create_perps_executions_table";
+import * as migration044 from "./044_add_perps_node_type";
 
 // Load environment variables
 dotenv.config();
@@ -307,6 +310,24 @@ const migrations: Migration[] = [
     name: "041_add_time_block_node_type",
     up: migration041.up,
     down: migration041.down,
+  },
+  {
+    id: 42,
+    name: "042_create_ostium_delegations_table",
+    up: migration042.up,
+    down: migration042.down,
+  },
+  {
+    id: 43,
+    name: "043_create_perps_executions_table",
+    up: migration043.up,
+    down: migration043.down,
+  },
+  {
+    id: 44,
+    name: "044_add_perps_node_type",
+    up: migration044.up,
+    down: migration044.down,
   },
 ];
 
