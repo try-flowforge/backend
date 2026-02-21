@@ -73,7 +73,14 @@ export class OstiumServiceClient {
       } catch (error) {
         const isAxiosError = axios.isAxiosError(error);
         const status = isAxiosError ? error.response?.status : undefined;
-        const shouldRetry = attempt < maxRetries && (status == null || status >= 500);
+        const serviceError = isAxiosError ? error.response?.data?.error : undefined;
+        const retryableFromService =
+          serviceError && typeof serviceError.retryable === 'boolean'
+            ? serviceError.retryable
+            : undefined;
+        const shouldRetry =
+          attempt < maxRetries &&
+          (status == null || (status >= 500 && retryableFromService !== false));
 
         if (shouldRetry) {
           const waitMs = retryDelaysMs[attempt] ?? retryDelaysMs[retryDelaysMs.length - 1];
@@ -83,6 +90,8 @@ export class OstiumServiceClient {
               attempt: attempt + 1,
               waitMs,
               status,
+              serviceErrorCode: serviceError?.code,
+              retryableFromService,
               error: error instanceof Error ? error.message : String(error),
             },
             'Ostium service call failed, retrying',
@@ -91,12 +100,12 @@ export class OstiumServiceClient {
           continue;
         }
 
-        if (isAxiosError && error.response?.data?.error) {
-          const serviceError = error.response.data.error;
+        if (serviceError) {
+          const fallbackMessage = error instanceof Error ? error.message : String(error);
           throw new OstiumServiceClientError(
             serviceError.code || 'OSTIUM_SERVICE_ERROR',
-            serviceError.message || error.message,
-            error.response.status,
+            serviceError.message || fallbackMessage,
+            status || 500,
             serviceError.retryable,
             serviceError.details,
           );
