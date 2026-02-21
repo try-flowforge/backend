@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { NUMERIC_CHAIN_IDS, type NumericChainId } from '../../config/chain-registry';
 import { UserModel } from '../../models/users';
 import { getSafeTransactionService } from '../safe-transaction.service';
-import { ostiumDelegationService, type OstiumNetwork } from './ostium-delegation.service';
+import { ostiumDelegationService, type DelegationStatus, type OstiumNetwork } from './ostium-delegation.service';
 import { ostiumServiceClient } from './ostium-service-client';
 
 interface SafeTxData {
@@ -38,6 +38,21 @@ interface ReadinessResponse {
   };
   readyForOpenPosition: boolean;
   readyForPositionManagement: boolean;
+  refreshedAt: string;
+}
+
+interface SetupActionItem {
+  id: 'SAFE_WALLET' | 'DELEGATION' | 'SAFE_USDC_BALANCE' | 'USDC_ALLOWANCE' | 'DELEGATE_GAS';
+  label: string;
+  done: boolean;
+  message: string;
+}
+
+interface SetupOverviewResponse {
+  network: OstiumNetwork;
+  delegation: DelegationStatus | null;
+  readiness: ReadinessResponse;
+  actionItems: SetupActionItem[];
   refreshedAt: string;
 }
 
@@ -188,14 +203,70 @@ export class OstiumSetupService {
     return { spender, amount };
   }
 
-  async getReadiness(userId: string, network: OstiumNetwork): Promise<ReadinessResponse> {
+  private buildActionItems(readiness: ReadinessResponse): SetupActionItem[] {
+    return [
+      {
+        id: 'SAFE_WALLET',
+        label: 'Safe Wallet',
+        done: readiness.checks.safeWallet.ok,
+        message: readiness.checks.safeWallet.message,
+      },
+      {
+        id: 'DELEGATION',
+        label: 'Delegation',
+        done: readiness.checks.delegation.ok,
+        message: readiness.checks.delegation.message,
+      },
+      {
+        id: 'SAFE_USDC_BALANCE',
+        label: 'Safe USDC Balance',
+        done: readiness.checks.usdcBalance.ok,
+        message: readiness.checks.usdcBalance.message,
+      },
+      {
+        id: 'USDC_ALLOWANCE',
+        label: 'USDC Allowance',
+        done: readiness.checks.allowance.ok,
+        message: readiness.checks.allowance.message,
+      },
+      {
+        id: 'DELEGATE_GAS',
+        label: 'Delegate Gas',
+        done: readiness.checks.delegateGas.ok,
+        message: readiness.checks.delegateGas.message,
+      },
+    ];
+  }
+
+  async getSetupOverview(userId: string, network: OstiumNetwork): Promise<SetupOverviewResponse> {
+    const delegation = await ostiumDelegationService.getStatus(userId, network).catch(() => null);
+    const readiness = await this.getReadiness(userId, network, { delegationStatus: delegation });
+    const actionItems = this.buildActionItems(readiness);
+
+    return {
+      network,
+      delegation,
+      readiness,
+      actionItems,
+      refreshedAt: readiness.refreshedAt,
+    };
+  }
+
+  async getReadiness(
+    userId: string,
+    network: OstiumNetwork,
+    options?: { delegationStatus?: DelegationStatus | null },
+  ): Promise<ReadinessResponse> {
     const contracts = this.getContracts(network);
     const chainId = this.networkToChainId(network);
+    const hasProvidedDelegationStatus = options && Object.prototype.hasOwnProperty.call(options, 'delegationStatus');
 
     const [safeAddress, delegateAddress, delegationStatus] = await Promise.all([
       this.getSafeAddressByNetwork(userId, network),
       Promise.resolve(this.getDelegateAddress()),
-      ostiumDelegationService.getStatus(userId, network).catch(() => null),
+      hasProvidedDelegationStatus
+        ? Promise.resolve(options?.delegationStatus ?? null)
+        : ostiumDelegationService.getStatus(userId, network).catch(() => null),
     ]);
 
     const checks: ReadinessResponse['checks'] = {

@@ -319,10 +319,13 @@ export class PerpsNodeProcessor implements INodeProcessor {
     userId: string,
     network: 'testnet' | 'mainnet',
   ): Promise<string> {
+    const safeAddress = await this.getSafeAddressByNetwork(userId, network);
     if (providedAddress && providedAddress.trim().length > 0) {
-      return providedAddress;
+      if (providedAddress.toLowerCase() !== safeAddress.toLowerCase()) {
+        throw new Error(`Provided address must match your Safe wallet address for ${network}`);
+      }
     }
-    return this.getSafeAddressByNetwork(userId, network);
+    return safeAddress;
   }
 
   private actionRequiresActiveDelegation(action: PerpsAction): boolean {

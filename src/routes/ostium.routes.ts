@@ -8,6 +8,7 @@ import {
   getOstiumDelegationStatus,
   getOstiumPrice,
   getOstiumReadiness,
+  getOstiumSetupOverview,
   listOstiumMarkets,
   listOstiumPositions,
   openOstiumPosition,
@@ -29,6 +30,7 @@ import {
   ostiumDelegationPrepareSchema,
   ostiumDelegationStatusSchema,
   ostiumDelegationExecuteSchema,
+  ostiumSetupOverviewSchema,
   ostiumReadinessSchema,
   ostiumPositionsListSchema,
   ostiumPositionUpdateSlSchema,
@@ -57,6 +59,26 @@ const ensureOstiumEnabled = (_req: Request, res: Response, next: NextFunction): 
   next();
 };
 
+const isOstiumSetupOverviewEnabled = (): boolean =>
+  (process.env.OSTIUM_SETUP_OVERVIEW_ENABLED || 'true').toLowerCase() !== 'false';
+
+const ensureSetupOverviewEnabled = (_req: Request, res: Response, next: NextFunction): void => {
+  if (!isOstiumSetupOverviewEnabled()) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'OSTIUM_SETUP_OVERVIEW_DISABLED',
+        message: 'Ostium setup overview is disabled',
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+    return;
+  }
+  next();
+};
+
 router.use(verifyServiceKeyOrPrivyToken);
 router.use(ensureOstiumEnabled);
 
@@ -73,6 +95,7 @@ router.post('/delegations/execute', validateBody(ostiumDelegationExecuteSchema),
 router.post('/delegations/status', validateBody(ostiumDelegationStatusSchema), getOstiumDelegationStatus);
 router.post('/delegations/revoke/prepare', validateBody(ostiumDelegationPrepareSchema), prepareOstiumDelegationRevoke);
 router.post('/delegations/revoke/execute', validateBody(ostiumDelegationExecuteSchema), executeOstiumDelegationRevoke);
+router.post('/setup/overview', ensureSetupOverviewEnabled, validateBody(ostiumSetupOverviewSchema), getOstiumSetupOverview);
 router.post('/readiness', validateBody(ostiumReadinessSchema), getOstiumReadiness);
 router.post('/allowance/prepare', validateBody(ostiumAllowancePrepareSchema), prepareOstiumAllowanceApproval);
 router.post('/allowance/execute', validateBody(ostiumAllowanceExecuteSchema), executeOstiumAllowanceApproval);

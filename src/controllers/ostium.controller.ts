@@ -17,6 +17,7 @@ import {
 import { ostiumServiceClient, OstiumServiceClientError } from '../services/ostium/ostium-service-client';
 import { ostiumDelegationService } from '../services/ostium/ostium-delegation.service';
 import { ostiumSetupService } from '../services/ostium/ostium-setup.service';
+import { logger } from '../utils/logger';
 
 function sendSuccess(res: Response, data: any): void {
   const response: ApiResponse = {
@@ -312,10 +313,16 @@ export const prepareOstiumDelegationApproval = async (
   try {
     const userId = resolveUserId(req);
     const { network, delegateAddress } = req.body as { network: 'testnet' | 'mainnet'; delegateAddress?: string };
+    logger.info({ userId, network, delegateAddress }, 'Preparing Ostium delegation approval');
     const data = await ostiumDelegationService.prepareApproval(userId, network, delegateAddress);
+    logger.info({ userId, network, safeAddress: data.safeAddress }, 'Prepared Ostium delegation approval');
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {
+      logger.warn(
+        { userId: (req as AuthenticatedRequest).userId, network: req.body?.network, error: error.message },
+        'Failed to prepare Ostium delegation approval',
+      );
       sendGenericError(res, 400, 'DELEGATION_PREPARE_FAILED', error.message);
       return;
     }
@@ -335,10 +342,16 @@ export const executeOstiumDelegationApproval = async (
       signature: string;
       delegateAddress?: string;
     };
+    logger.info({ userId, network, delegateAddress }, 'Executing Ostium delegation approval');
     const data = await ostiumDelegationService.executeApproval(userId, network, signature, delegateAddress);
+    logger.info({ userId, network, safeAddress: data.safeAddress, txHash: data.approvalTxHash }, 'Executed Ostium delegation approval');
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {
+      logger.warn(
+        { userId: (req as AuthenticatedRequest).userId, network: req.body?.network, error: error.message },
+        'Failed to execute Ostium delegation approval',
+      );
       sendGenericError(res, 400, 'DELEGATION_EXECUTE_FAILED', error.message);
       return;
     }
@@ -426,6 +439,39 @@ export const getOstiumReadiness = async (
   }
 };
 
+export const getOstiumSetupOverview = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = resolveUserId(req);
+    const { network } = req.body as { network: OstiumNetwork };
+    logger.info({ userId, network }, 'Fetching Ostium setup overview');
+    const data = await ostiumSetupService.getSetupOverview(userId, network);
+    logger.info(
+      {
+        userId,
+        network,
+        readyForOpenPosition: data.readiness.readyForOpenPosition,
+        readyForPositionManagement: data.readiness.readyForPositionManagement,
+      },
+      'Fetched Ostium setup overview',
+    );
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error) {
+      logger.warn(
+        { userId: (req as AuthenticatedRequest).userId, network: req.body?.network, error: error.message },
+        'Failed to fetch Ostium setup overview',
+      );
+      sendGenericError(res, 400, 'OSTIUM_SETUP_OVERVIEW_FAILED', error.message);
+      return;
+    }
+    next(error);
+  }
+};
+
 export const prepareOstiumAllowanceApproval = async (
   req: Request,
   res: Response,
@@ -434,10 +480,16 @@ export const prepareOstiumAllowanceApproval = async (
   try {
     const userId = resolveUserId(req);
     const { network } = req.body as { network: OstiumNetwork };
+    logger.info({ userId, network }, 'Preparing Ostium allowance approval');
     const data = await ostiumSetupService.prepareAllowance(userId, network);
+    logger.info({ userId, network, safeAddress: data.safeAddress }, 'Prepared Ostium allowance approval');
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {
+      logger.warn(
+        { userId: (req as AuthenticatedRequest).userId, network: req.body?.network, error: error.message },
+        'Failed to prepare Ostium allowance approval',
+      );
       sendGenericError(res, 400, 'ALLOWANCE_PREPARE_FAILED', error.message);
       return;
     }
@@ -463,6 +515,7 @@ export const executeOstiumAllowanceApproval = async (
         operation: number;
       };
     };
+    logger.info({ userId, network }, 'Executing Ostium allowance approval');
     const data = await ostiumSetupService.executeAllowance(
       userId,
       network,
@@ -470,9 +523,14 @@ export const executeOstiumAllowanceApproval = async (
       safeTxHash,
       safeTxData,
     );
+    logger.info({ userId, network, safeAddress: data.safeAddress, txHash: data.txHash }, 'Executed Ostium allowance approval');
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {
+      logger.warn(
+        { userId: (req as AuthenticatedRequest).userId, network: req.body?.network, error: error.message },
+        'Failed to execute Ostium allowance approval',
+      );
       sendGenericError(res, 400, 'ALLOWANCE_EXECUTE_FAILED', error.message);
       return;
     }

@@ -907,6 +907,10 @@ export const ostiumReadinessSchema = Joi.object({
     network: ostiumNetworkSchema,
 });
 
+export const ostiumSetupOverviewSchema = Joi.object({
+    network: ostiumNetworkSchema,
+});
+
 export const ostiumAllowancePrepareSchema = Joi.object({
     network: ostiumNetworkSchema,
 });
