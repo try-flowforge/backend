@@ -17,6 +17,13 @@ const OSTIUM_SERVICE_BASE_URL = process.env.OSTIUM_SERVICE_BASE_URL || 'http://l
 const OSTIUM_SERVICE_HMAC_SECRET = process.env.OSTIUM_SERVICE_HMAC_SECRET || process.env.HMAC_SECRET || '';
 const REQUEST_TIMEOUT = Number(process.env.OSTIUM_REQUEST_TIMEOUT_MS || 30000);
 
+interface RawServiceError {
+  code?: string;
+  message?: string;
+  details?: any;
+  retryable?: boolean;
+}
+
 export class OstiumServiceClientError extends Error {
   constructor(
     public readonly code: string,
@@ -31,6 +38,86 @@ export class OstiumServiceClientError extends Error {
 }
 
 export class OstiumServiceClient {
+  private getNestedError(details: unknown): string | null {
+    if (!details || typeof details !== 'object') return null;
+    const maybeDetails = details as { error?: unknown };
+    return typeof maybeDetails.error === 'string' ? maybeDetails.error : null;
+  }
+
+  private normalizeServiceError(
+    serviceError: RawServiceError,
+    fallbackStatusCode?: number,
+  ): {
+    code: string;
+    message: string;
+    statusCode: number;
+    retryable?: boolean;
+    details?: any;
+  } {
+    const code = serviceError.code || 'OSTIUM_SERVICE_ERROR';
+    const message = serviceError.message || 'Ostium request failed';
+    const nested = this.getNestedError(serviceError.details);
+    const haystack = `${message} ${nested ?? ''}`.toLowerCase();
+
+    if (haystack.includes('sufficient allowance') || haystack.includes('allowance for')) {
+      return {
+        code: 'ALLOWANCE_MISSING',
+        message: 'Sufficient allowance not present. Approve the Ostium trading storage contract to spend USDC.',
+        statusCode: 400,
+        retryable: false,
+        details: serviceError.details,
+      };
+    }
+
+    if (haystack.includes('delegation is not active') || haystack.includes('delegation not active')) {
+      return {
+        code: 'DELEGATION_NOT_ACTIVE',
+        message: 'Delegation is not active. Approve delegation before running write actions.',
+        statusCode: 400,
+        retryable: false,
+        details: serviceError.details,
+      };
+    }
+
+    if (haystack.includes('safe wallet not found')) {
+      return {
+        code: 'SAFE_WALLET_MISSING',
+        message: 'Safe wallet not found for selected network.',
+        statusCode: 400,
+        retryable: false,
+        details: serviceError.details,
+      };
+    }
+
+    if (haystack.includes('delegate wallet gas is low') || haystack.includes('insufficient funds for gas')) {
+      return {
+        code: 'DELEGATE_GAS_LOW',
+        message: 'Delegate wallet gas is low. Fund delegate wallet with ETH.',
+        statusCode: 400,
+        retryable: false,
+        details: serviceError.details,
+      };
+    }
+
+    if (haystack.includes('timeout of') || haystack.includes('timed out') || haystack.includes('timeout')) {
+      return {
+        code: 'OSTIUM_SERVICE_TIMEOUT',
+        message: 'Ostium service timed out.',
+        statusCode: 504,
+        retryable: true,
+        details: serviceError.details,
+      };
+    }
+
+    return {
+      code,
+      message,
+      statusCode: fallbackStatusCode || 500,
+      retryable: serviceError.retryable,
+      details: serviceError.details,
+    };
+  }
+
   private async signedPost<TRequest extends object, TResponse>(
     path: string,
     payload: TRequest,
@@ -58,14 +145,16 @@ export class OstiumServiceClient {
         const responseData = response.data as OstiumServiceEnvelope<TResponse>;
 
         if (!responseData.success || !responseData.data) {
-          const errorCode = responseData.error?.code || 'OSTIUM_SERVICE_ERROR';
-          const errorMessage = responseData.error?.message || 'Invalid response from Ostium service';
-          throw new OstiumServiceClientError(
-            errorCode,
-            errorMessage,
+          const normalized = this.normalizeServiceError(
+            (responseData.error || {}) as RawServiceError,
             response.status,
-            responseData.error?.retryable,
-            responseData.error?.details,
+          );
+          throw new OstiumServiceClientError(
+            normalized.code,
+            normalized.message,
+            normalized.statusCode,
+            normalized.retryable,
+            normalized.details,
           );
         }
 
@@ -73,14 +162,16 @@ export class OstiumServiceClient {
       } catch (error) {
         const isAxiosError = axios.isAxiosError(error);
         const status = isAxiosError ? error.response?.status : undefined;
-        const serviceError = isAxiosError ? error.response?.data?.error : undefined;
+        const serviceError = isAxiosError ? (error.response?.data?.error as RawServiceError | undefined) : undefined;
+        const normalizedServiceError = serviceError ? this.normalizeServiceError(serviceError, status) : undefined;
         const retryableFromService =
-          serviceError && typeof serviceError.retryable === 'boolean'
-            ? serviceError.retryable
+          normalizedServiceError && typeof normalizedServiceError.retryable === 'boolean'
+            ? normalizedServiceError.retryable
             : undefined;
+        const normalizedStatus = normalizedServiceError?.statusCode ?? status;
         const shouldRetry =
           attempt < maxRetries &&
-          (status == null || (status >= 500 && retryableFromService !== false));
+          (normalizedStatus == null || (normalizedStatus >= 500 && retryableFromService !== false));
 
         if (shouldRetry) {
           const waitMs = retryDelaysMs[attempt] ?? retryDelaysMs[retryDelaysMs.length - 1];
@@ -89,8 +180,8 @@ export class OstiumServiceClient {
               path,
               attempt: attempt + 1,
               waitMs,
-              status,
-              serviceErrorCode: serviceError?.code,
+              status: normalizedStatus,
+              serviceErrorCode: normalizedServiceError?.code,
               retryableFromService,
               error: error instanceof Error ? error.message : String(error),
             },
@@ -100,14 +191,14 @@ export class OstiumServiceClient {
           continue;
         }
 
-        if (serviceError) {
+        if (normalizedServiceError) {
           const fallbackMessage = error instanceof Error ? error.message : String(error);
           throw new OstiumServiceClientError(
-            serviceError.code || 'OSTIUM_SERVICE_ERROR',
-            serviceError.message || fallbackMessage,
-            status || 500,
-            serviceError.retryable,
-            serviceError.details,
+            normalizedServiceError.code || 'OSTIUM_SERVICE_ERROR',
+            normalizedServiceError.message || fallbackMessage,
+            normalizedServiceError.statusCode || status || 500,
+            normalizedServiceError.retryable,
+            normalizedServiceError.details,
           );
         }
 
