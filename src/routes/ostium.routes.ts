@@ -1,14 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   closeOstiumPosition,
+  executeOstiumAllowanceApproval,
   executeOstiumDelegationApproval,
   executeOstiumDelegationRevoke,
   getOstiumBalance,
   getOstiumDelegationStatus,
   getOstiumPrice,
+  getOstiumReadiness,
   listOstiumMarkets,
   listOstiumPositions,
   openOstiumPosition,
+  prepareOstiumAllowanceApproval,
   prepareOstiumDelegationApproval,
   prepareOstiumDelegationRevoke,
   updateOstiumStopLoss,
@@ -18,12 +21,15 @@ import { verifyServiceKeyOrPrivyToken } from '../middleware/service-auth';
 import { validateBody } from '../middleware/validation';
 import {
   ostiumBalanceSchema,
+  ostiumAllowanceExecuteSchema,
+  ostiumAllowancePrepareSchema,
   ostiumMarketsListSchema,
   ostiumPositionCloseSchema,
   ostiumPositionOpenSchema,
   ostiumDelegationPrepareSchema,
   ostiumDelegationStatusSchema,
   ostiumDelegationExecuteSchema,
+  ostiumReadinessSchema,
   ostiumPositionsListSchema,
   ostiumPositionUpdateSlSchema,
   ostiumPositionUpdateTpSchema,
@@ -67,5 +73,8 @@ router.post('/delegations/execute', validateBody(ostiumDelegationExecuteSchema),
 router.post('/delegations/status', validateBody(ostiumDelegationStatusSchema), getOstiumDelegationStatus);
 router.post('/delegations/revoke/prepare', validateBody(ostiumDelegationPrepareSchema), prepareOstiumDelegationRevoke);
 router.post('/delegations/revoke/execute', validateBody(ostiumDelegationExecuteSchema), executeOstiumDelegationRevoke);
+router.post('/readiness', validateBody(ostiumReadinessSchema), getOstiumReadiness);
+router.post('/allowance/prepare', validateBody(ostiumAllowancePrepareSchema), prepareOstiumAllowanceApproval);
+router.post('/allowance/execute', validateBody(ostiumAllowanceExecuteSchema), executeOstiumAllowanceApproval);
 
 export default router;

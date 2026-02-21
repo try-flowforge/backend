@@ -902,3 +902,23 @@ export const ostiumDelegationStatusSchema = Joi.object({
     network: ostiumNetworkSchema,
     delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
+
+export const ostiumReadinessSchema = Joi.object({
+    network: ostiumNetworkSchema,
+});
+
+export const ostiumAllowancePrepareSchema = Joi.object({
+    network: ostiumNetworkSchema,
+});
+
+export const ostiumAllowanceExecuteSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    signature: Joi.string().min(10).required(),
+    safeTxHash: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+    safeTxData: Joi.object({
+        to: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+        value: Joi.string().pattern(/^\d+$/).required(),
+        data: Joi.string().pattern(/^0x[a-fA-F0-9]*$/).required(),
+        operation: Joi.number().valid(0, 1).required(),
+    }).required(),
+});

@@ -6,6 +6,7 @@ import { NUMERIC_CHAIN_IDS } from '../config/chain-registry';
 import {
   OstiumBalanceRequest,
   OstiumMarketsListRequest,
+  OstiumNetwork,
   OstiumPositionCloseRequest,
   OstiumPositionOpenRequest,
   OstiumPositionsListRequest,
@@ -15,6 +16,7 @@ import {
 } from '../types/ostium.types';
 import { ostiumServiceClient, OstiumServiceClientError } from '../services/ostium/ostium-service-client';
 import { ostiumDelegationService } from '../services/ostium/ostium-delegation.service';
+import { ostiumSetupService } from '../services/ostium/ostium-setup.service';
 
 function sendSuccess(res: Response, data: any): void {
   const response: ApiResponse = {
@@ -399,6 +401,79 @@ export const executeOstiumDelegationRevoke = async (
   } catch (error) {
     if (error instanceof Error) {
       sendGenericError(res, 400, 'DELEGATION_REVOKE_EXECUTE_FAILED', error.message);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const getOstiumReadiness = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = resolveUserId(req);
+    const { network } = req.body as { network: OstiumNetwork };
+    const data = await ostiumSetupService.getReadiness(userId, network);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error) {
+      sendGenericError(res, 400, 'OSTIUM_READINESS_FAILED', error.message);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const prepareOstiumAllowanceApproval = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = resolveUserId(req);
+    const { network } = req.body as { network: OstiumNetwork };
+    const data = await ostiumSetupService.prepareAllowance(userId, network);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error) {
+      sendGenericError(res, 400, 'ALLOWANCE_PREPARE_FAILED', error.message);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const executeOstiumAllowanceApproval = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = resolveUserId(req);
+    const { network, signature, safeTxHash, safeTxData } = req.body as {
+      network: OstiumNetwork;
+      signature: string;
+      safeTxHash: string;
+      safeTxData: {
+        to: string;
+        value: string;
+        data: string;
+        operation: number;
+      };
+    };
+    const data = await ostiumSetupService.executeAllowance(
+      userId,
+      network,
+      signature,
+      safeTxHash,
+      safeTxData,
+    );
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error) {
+      sendGenericError(res, 400, 'ALLOWANCE_EXECUTE_FAILED', error.message);
       return;
     }
     next(error);
