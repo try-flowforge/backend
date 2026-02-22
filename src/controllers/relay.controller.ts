@@ -176,6 +176,7 @@ export const createSafe = async (
       factoryAddress,
       [
         "function getSafeWallets(address user) view returns (address[])",
+        "function predictSafeAddress(address user) view returns (address)",
       ],
       provider
     );
@@ -212,6 +213,35 @@ export const createSafe = async (
         },
       });
       return;
+    }
+
+    // If factory says no Safe but CREATE2 target already has code, factory state is out of sync
+    // (e.g. a previous createSafeWallet deployed the proxy but tx reverted before state update).
+    try {
+      const predictedAddress = await factoryContract.predictSafeAddress(userAddress);
+      const code = await provider.getCode(predictedAddress);
+      if (code && code !== "0x" && code.length > 2) {
+        logger.info(
+          { userAddress, predictedAddress, chainId: supportedChainId },
+          "Safe already exists at predicted address (factory state out of sync), returning it"
+        );
+        await ensureUserExistsAndUpdateSafe(userId, userAddress, predictedAddress, supportedChainId);
+        await releaseLock(lockKey, lockValue!);
+        res.json({
+          success: true,
+          data: {
+            safeAddress: predictedAddress,
+            txHash: null,
+            alreadyExisted: true,
+          },
+        });
+        return;
+      }
+    } catch (predictErr) {
+      logger.warn(
+        { userAddress, error: predictErr instanceof Error ? predictErr.message : String(predictErr) },
+        "predictSafeAddress/getCode check failed, proceeding with create"
+      );
     }
 
     // Rate limiting: max Safe creations per user per day
@@ -336,9 +366,18 @@ export const createSafe = async (
       "Failed to create Safe wallet"
     );
 
+    // Surface revert reason and hint for "Create2 call failed" (SafeProxyFactory)
+    let clientError = errorMessage || "Failed to create Safe wallet";
+    if (clientError.includes("Create2 call failed")) {
+      clientError =
+        "Safe creation reverted: Create2 call failed. " +
+        "Ensure FlowForgeSafeFactory on this chain was deployed with the correct Safe ProxyFactory and Safe singleton for this chain (see contracts/src/FlowForgeSafeFactory.sol). " +
+        "Common causes: wrong SAFE_SINGLETON/SAFE_PROXY_FACTORY for this chain, or singleton not deployed here.";
+    }
+
     res.status(500).json({
       success: false,
-      error: errorMessage || "Failed to create Safe wallet",
+      error: clientError,
     });
   }
 };
