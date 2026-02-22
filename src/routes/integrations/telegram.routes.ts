@@ -13,15 +13,22 @@ import * as telegramWebhookController from '../../controllers/telegram-webhook.c
 const router = Router();
 
 // ============================================
-// PUBLIC ROUTES (no auth - called by Telegram)
+// Telegram architecture: the AGENT service is the single receiver for Telegram
+// updates (webhook). Frontend and backend use these routes; the agent calls
+// /ingest (forward updates) and /verification/verify-from-agent (verify codes).
+// ============================================
+
+// ============================================
+// AGENT-ONLY ROUTES (service key - agent forwards Telegram updates here)
 // ============================================
 
 /**
- * Webhook endpoint for Telegram updates
- * POST /webhook/:secret
+ * Ingest: agent forwards each Telegram update here for message storage and chat discovery.
+ * Verification (verify-*) is handled by the agent calling verify-from-agent.
+ * POST /ingest
  */
-router.post('/webhook/:secret', (req: Request, res: Response) => {
-    telegramWebhookController.handleIncomingWebhook(req, res);
+router.post('/ingest', verifyServiceKeyOnly, (req: Request, res: Response) => {
+    telegramWebhookController.ingestFromAgent(req, res);
 });
 
 /**
@@ -34,6 +41,18 @@ router.post(
     validateBody(verifyFromAgentSchema),
     (req: Request, res: Response) => {
         telegramWebhookController.verifyFromAgent(req, res);
+    }
+);
+
+/**
+ * Agent looks up connection by chat ID (service-key only). No user Bearer token required.
+ * GET /connection-by-chat/:chatId
+ */
+router.get(
+    '/connection-by-chat/:chatId',
+    verifyServiceKeyOnly,
+    (req: Request, res: Response) => {
+        telegramWebhookController.getConnectionByChatId(req, res);
     }
 );
 

@@ -25,21 +25,6 @@ interface TelegramChat {
     type: 'private' | 'group' | 'supergroup' | 'channel';
 }
 
-interface TelegramUpdate {
-    update_id: number;
-    message?: {
-        chat: TelegramChat;
-        from?: { id: number; first_name: string };
-        text?: string;
-    };
-    channel_post?: {
-        chat: TelegramChat;
-    };
-    my_chat_member?: {
-        chat: TelegramChat;
-    };
-}
-
 /**
  * Helper to call Telegram Bot API using centralized token
  */
@@ -135,11 +120,10 @@ async function verifyChatAccess(chatId: string): Promise<TelegramChat | null> {
 /**
  * Get available chats where the bot has been added
  * GET /api/v1/integrations/telegram/chats
- * 
- * Uses discovered chats from webhook events. If webhooks aren't set up,
- * falls back to getUpdates API (only works when webhooks are disabled).
- * 
- * Note: Telegram's getUpdates doesn't work when webhooks are active.
+ *
+ * Chats are discovered by the agent service (which receives all Telegram updates via webhook)
+ * and forwarded to the backend via POST /ingest. This endpoint returns those discovered chats.
+ * No getUpdates fallback: the agent is the single receiver for Telegram updates.
  */
 export const getAvailableChats = async (
     _req: AuthenticatedRequest,
@@ -147,133 +131,44 @@ export const getAvailableChats = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        // Import the getDiscoveredChats function from webhook controller
         const { getDiscoveredChats } = await import('./telegram-webhook.controller');
-
-        // First, check if we have chats discovered via webhooks
         const webhookChats = getDiscoveredChats();
 
-        if (webhookChats.length > 0) {
-            // Verify each chat is still accessible (bot not removed)
-            const verifiedChats: Array<{
-                id: string;
-                title: string;
-                username?: string;
-                type: string;
-            }> = [];
-
-            // Check each chat in parallel for speed
-            const verificationPromises = webhookChats.map(async (chat) => {
-                const verifiedChat = await verifyChatAccess(chat.id);
-                if (verifiedChat) {
-                    return {
-                        id: chat.id,
-                        title: chat.title,
-                        username: chat.username,
-                        type: chat.type,
-                    };
-                }
-                return null;
-            });
-
-            const results = await Promise.all(verificationPromises);
-
-            for (const result of results) {
-                if (result) {
-                    verifiedChats.push(result);
-                }
-            }
-
-            res.json({
-                success: true,
-                data: {
-                    chats: verifiedChats,
-                    source: 'webhook', // Indicates chats came from webhook discovery
-                },
-            });
-            return;
-        }
-
-        // Fallback: Try getUpdates (only works when webhooks are NOT configured)
-        try {
-            const updates = await callTelegramApi<TelegramUpdate[]>('getUpdates', {
-                limit: 100,
-                allowed_updates: ['message', 'channel_post', 'my_chat_member'],
-            });
-
-            // Extract unique chat IDs
-            const chatIds = new Set<string>();
-
-            for (const update of updates) {
-                let chat: TelegramChat | undefined;
-
-                if (update.message?.chat) {
-                    chat = update.message.chat;
-                } else if (update.channel_post?.chat) {
-                    chat = update.channel_post.chat;
-                } else if (update.my_chat_member?.chat) {
-                    chat = update.my_chat_member.chat;
-                }
-
-                if (chat) {
-                    chatIds.add(String(chat.id));
-                }
-            }
-
-            // Verify each chat is still accessible (bot not removed)
-            const verifiedChats: Array<{
-                id: string;
-                title: string;
-                username?: string;
-                type: string;
-            }> = [];
-
-            // Check each chat in parallel for speed
-            const verificationPromises = Array.from(chatIds).map(async (chatId) => {
-                const chat = await verifyChatAccess(chatId);
-                if (chat) {
-                    return {
-                        id: String(chat.id),
-                        title: chat.title || chat.first_name || chat.username || 'Unknown',
-                        username: chat.username,
-                        type: chat.type,
-                    };
-                }
-                return null;
-            });
-
-            const results = await Promise.all(verificationPromises);
-
-            for (const result of results) {
-                if (result) {
-                    verifiedChats.push(result);
-                }
-            }
-
-            res.json({
-                success: true,
-                data: {
-                    chats: verifiedChats,
-                    source: 'polling', // Indicates chats came from getUpdates
-                },
-            });
-        } catch (pollingError) {
-            // getUpdates failed (likely because webhook is active)
-            // Return empty list with helpful message
-            logger.warn(
-                { error: pollingError },
-                'getUpdates failed - this is expected when webhooks are active. Add bot to chats and send a message to discover them.'
-            );
-
+        if (webhookChats.length === 0) {
             res.json({
                 success: true,
                 data: {
                     chats: [],
                     source: 'none',
-                    message: 'No chats discovered yet. Add the bot to a chat/channel and send a message to discover it.',
+                    message: 'No chats discovered yet. Add the bot to a chat/channel, send a message (or use /plan in the agent), then refresh. The agent service receives updates and forwards them here.',
                 },
             });
+            return;
         }
+
+        const verificationPromises = webhookChats.map(async (chat) => {
+            const verifiedChat = await verifyChatAccess(chat.id);
+            if (verifiedChat) {
+                return {
+                    id: chat.id,
+                    title: chat.title,
+                    username: chat.username,
+                    type: chat.type,
+                };
+            }
+            return null;
+        });
+
+        const results = await Promise.all(verificationPromises);
+        const verifiedChats = results.filter((r): r is NonNullable<typeof r> => r !== null);
+
+        res.json({
+            success: true,
+            data: {
+                chats: verifiedChats,
+                source: 'agent',
+            },
+        });
     } catch (error) {
         next(error);
     }

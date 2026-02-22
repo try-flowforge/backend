@@ -2,9 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/privy-auth';
 import { TelegramConnectionModel, TelegramVerificationCodeModel } from '../models/telegram';
 import { logger } from '../utils/logger';
-import crypto from 'crypto';
 
-// In-memory store for incoming messages (per chat)
+// In-memory store for incoming messages (per chat); populated via ingest from agent
 // In production, use Redis or database
 const incomingMessagesStore = new Map<string, Array<{
     updateId: number;
@@ -14,8 +13,7 @@ const incomingMessagesStore = new Map<string, Array<{
     date: number;
 }>>();
 
-// In-memory store for discovered chats (from webhooks)
-// Maps chatId -> chat info
+// In-memory store for discovered chats; populated via ingest from agent
 interface DiscoveredChat {
     id: string;
     title: string;
@@ -27,9 +25,6 @@ interface DiscoveredChat {
 
 const discoveredChatsStore = new Map<string, DiscoveredChat>();
 
-// Webhook secret for verification (optional security layer)
-const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
-
 /**
  * Get discovered chats from the in-memory store
  * Called by telegram.controller.ts as a fallback when getUpdates fails
@@ -40,40 +35,29 @@ export function getDiscoveredChats(): DiscoveredChat[] {
 }
 
 /**
- * Handle incoming webhook updates from Telegram
- * POST /api/v1/integrations/telegram/webhook/:secret
- * 
- * This is a PUBLIC endpoint - Telegram calls it directly
+ * Ingest: agent forwards each Telegram update here (service-key only).
+ * Stores messages and discovers chats. Verification (verify-*) is handled by the agent.
+ * POST /api/v1/integrations/telegram/ingest
  */
-export const handleIncomingWebhook = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
+export const ingestFromAgent = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { secret } = req.params;
-
-        // Verify webhook secret if configured
-        if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
-            logger.warn({ providedSecret: secret }, 'Invalid webhook secret');
-            res.status(401).json({ ok: false });
+        const update = req.body as Record<string, unknown>;
+        if (!update || typeof update !== 'object') {
+            res.status(400).json({ ok: false, error: 'Missing update body' });
             return;
         }
-
-        const update = req.body;
 
         // Extract chat info from various update types
         let chat: { id: number | string; title?: string; username?: string; first_name?: string; type: 'private' | 'group' | 'supergroup' | 'channel' } | undefined;
 
-        if (update.message?.chat) {
-            chat = update.message.chat;
-        } else if (update.channel_post?.chat) {
-            chat = update.channel_post.chat;
-        } else if (update.my_chat_member?.chat) {
-            // Bot was added/removed from a chat
-            chat = update.my_chat_member.chat;
+        if (update.message && typeof update.message === 'object' && (update.message as { chat?: unknown }).chat) {
+            chat = (update.message as { chat: typeof chat }).chat;
+        } else if (update.channel_post && typeof update.channel_post === 'object' && (update.channel_post as { chat?: unknown }).chat) {
+            chat = (update.channel_post as { chat: typeof chat }).chat;
+        } else if (update.my_chat_member && typeof update.my_chat_member === 'object' && (update.my_chat_member as { chat?: unknown }).chat) {
+            chat = (update.my_chat_member as { chat: typeof chat }).chat;
         }
 
-        // Store discovered chat
         if (chat) {
             const chatId = String(chat.id);
             const now = Date.now();
@@ -88,57 +72,57 @@ export const handleIncomingWebhook = async (
                 lastActivityAt: now,
             });
 
-            logger.debug({ chatId, title: chat.title || chat.first_name }, 'Chat discovered/updated via webhook');
+            logger.debug({ chatId, title: chat.title || chat.first_name }, 'Chat discovered/updated via ingest');
         }
 
-        // Extract message for message store
-        const message = update.message || update.channel_post;
+        const message = (update.message || update.channel_post) as { chat?: { id: number }; message_id?: number; text?: string; from?: { id: number; first_name?: string; username?: string }; date?: number } | undefined;
         if (!message) {
-            // Acknowledge other update types but don't process further
             res.json({ ok: true });
             return;
         }
 
-        const chatId = String(message.chat.id);
+        const chatId = String(message.chat?.id);
+        if (!chatId) {
+            res.json({ ok: true });
+            return;
+        }
 
-        // Store the message
         const messages = incomingMessagesStore.get(chatId) || [];
         messages.push({
-            updateId: update.update_id,
+            updateId: (update.update_id as number) ?? 0,
             messageId: message.message_id,
             text: message.text,
             from: message.from ? {
                 id: message.from.id,
-                firstName: message.from.first_name,
+                firstName: message.from.first_name ?? '',
                 username: message.from.username,
             } : undefined,
-            date: message.date,
+            date: message.date ?? 0,
         });
 
-        // Keep only last 100 messages per chat
         if (messages.length > 100) {
             messages.shift();
         }
         incomingMessagesStore.set(chatId, messages);
 
-        // Check if this is a verification message
-        const messageText = message.text?.trim().toLowerCase();
-        if (messageText && messageText.startsWith('verify-')) {
-            await handleVerificationMessage(
-                messageText,
+        // If user sent a verification code (e.g. pasted from dashboard), handle it
+        const text = message.text?.trim();
+        if (text && text.startsWith('verify-')) {
+            const discovered = discoveredChatsStore.get(chatId);
+            void handleVerificationMessage(
+                text,
                 chatId,
-                chat?.title || chat?.first_name || chat?.username || 'Unknown',
-                chat?.type || 'private'
+                discovered?.title ?? 'Unknown',
+                discovered?.type ?? 'private'
             );
         }
 
-        logger.info({ chatId, updateId: update.update_id, text: message.text?.substring(0, 50) }, 'Telegram webhook received');
+        logger.debug({ chatId, updateId: update.update_id, text: message.text?.substring(0, 50) }, 'Telegram update ingested');
 
         res.json({ ok: true });
     } catch (error) {
-        logger.error({ error }, 'Error processing Telegram webhook');
-        // Always respond 200 to Telegram to prevent retries
-        res.json({ ok: true });
+        logger.error({ error }, 'Error ingesting Telegram update');
+        res.status(500).json({ ok: false });
     }
 };
 
@@ -328,24 +312,63 @@ export const getRecentMessages = async (
 };
 
 /**
+ * Get connection by Telegram chat ID (agent-only, service key).
+ * Used by the agent to resolve chatId → connectionId and userId for /execute (no user Bearer token).
+ * GET /api/v1/integrations/telegram/connection-by-chat/:chatId
+ */
+export const getConnectionByChatId = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const chatId = Array.isArray(req.params.chatId) ? req.params.chatId[0] : req.params.chatId;
+        if (!chatId) {
+            res.status(400).json({ success: false, error: 'Missing chatId' });
+            return;
+        }
+
+        const connection = await TelegramConnectionModel.findByChatId(chatId);
+        if (!connection) {
+            logger.info({ chatId }, 'Agent connection-by-chat: no linked connection');
+            res.status(404).json({
+                success: false,
+                error: 'No linked connection for this chat',
+                data: { linked: false },
+            });
+            return;
+        }
+
+        logger.info(
+            { chatId, connectionId: connection.id, userId: connection.user_id },
+            'Agent connection-by-chat: found linked connection'
+        );
+        res.json({
+            success: true,
+            data: {
+                linked: true,
+                connectionId: connection.id,
+                userId: connection.user_id,
+            },
+        });
+    } catch (error) {
+        logger.error({ error }, 'Error in getConnectionByChatId');
+        res.status(500).json({ success: false, error: 'Lookup failed' });
+    }
+};
+
+/**
  * Generate webhook URL info
  * GET /api/v1/integrations/telegram/webhook-info
+ * Note: Telegram updates are received by the agent service. Configure APP_BASE_URL and
+ * TELEGRAM_WEBHOOK_PATH on the agent; the agent registers the webhook with Telegram.
  */
 export const getWebhookInfo = async (
     _req: Request,
     res: Response
 ): Promise<void> => {
-    const baseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL;
-    const secret = WEBHOOK_SECRET || crypto.randomBytes(16).toString('hex');
-
     res.json({
         success: true,
         data: {
-            configured: !!baseUrl,
-            webhookUrl: baseUrl ? `${baseUrl}/api/v1/integrations/telegram/webhook/${secret}` : null,
-            note: baseUrl ?
-                'Use this URL when setting up webhook via setWebhook API' :
-                'Set TELEGRAM_WEBHOOK_BASE_URL in .env to enable webhooks',
+            configured: true,
+            webhookUrl: null,
+            note: 'Telegram webhook is handled by the agent service. Set APP_BASE_URL and TELEGRAM_WEBHOOK_PATH (and optionally TELEGRAM_MODE=webhook) on the agent so it registers the webhook.',
         },
     });
 };
