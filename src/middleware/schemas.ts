@@ -855,6 +855,8 @@ export const ostiumPositionOpenSchema = Joi.object({
     side: Joi.string().valid('long', 'short').required(),
     collateral: Joi.number().positive().required(),
     leverage: Joi.number().positive().required(),
+    slPrice: Joi.number().positive().optional(),
+    tpPrice: Joi.number().positive().optional(),
     traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
     idempotencyKey: Joi.string().max(128).optional(),
 });

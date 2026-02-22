@@ -95,6 +95,8 @@ export class PerpsNodeProcessor implements INodeProcessor {
           break;
         case 'OPEN_POSITION': {
           await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
+          const slPrice = config.slPrice;
+          const tpPrice = config.tpPrice;
           result = await ostiumServiceClient.openPosition(
             {
               network: config.network,
@@ -102,6 +104,8 @@ export class PerpsNodeProcessor implements INodeProcessor {
               side: this.required(config.side, 'side is required for OPEN_POSITION'),
               collateral: this.required(config.collateral, 'collateral is required for OPEN_POSITION'),
               leverage: this.required(config.leverage, 'leverage is required for OPEN_POSITION'),
+              ...(slPrice != null ? { slPrice } : {}),
+              ...(tpPrice != null ? { tpPrice } : {}),
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -260,6 +264,12 @@ export class PerpsNodeProcessor implements INodeProcessor {
         }
         if (perpsConfig.leverage == null || perpsConfig.leverage <= 0) {
           errors.push('leverage must be > 0 for OPEN_POSITION');
+        }
+        if (perpsConfig.slPrice != null && perpsConfig.slPrice <= 0) {
+          errors.push('slPrice must be > 0 for OPEN_POSITION when provided');
+        }
+        if (perpsConfig.tpPrice != null && perpsConfig.tpPrice <= 0) {
+          errors.push('tpPrice must be > 0 for OPEN_POSITION when provided');
         }
         break;
       case 'CLOSE_POSITION':

@@ -26,6 +26,8 @@ export interface OstiumPositionOpenRequest {
   side: 'long' | 'short';
   collateral: number;
   leverage: number;
+  slPrice?: number;
+  tpPrice?: number;
   traderAddress?: string;
   idempotencyKey?: string;
 }
