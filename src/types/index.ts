@@ -11,7 +11,7 @@ export interface User {
 
 export interface CreateUserInput {
   id: string;
-  address: string;
+  address?: string | null;
   email: string;
   onboarded_at?: Date;
 }

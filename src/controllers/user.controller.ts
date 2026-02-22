@@ -2,9 +2,12 @@ import { Request, Response } from 'express';
 import { UserModel } from '../models/users';
 import { CreateUserInput, ApiResponse } from '../types';
 import { AppError } from '../middleware';
+import { AuthenticatedRequest } from '../middleware/privy-auth';
 import { SafeWalletService } from '../services/safe-wallet.service';
 import { logger } from '../utils/logger';
 import { NUMERIC_CHAIN_IDS } from '../config/chain-registry';
+import { PrivyClient } from '@privy-io/server-auth';
+import { config } from '../config/config';
 
 export class UserController {
   /**
@@ -21,10 +24,12 @@ export class UserController {
         throw new AppError(409, 'User already exists', 'USER_EXISTS');
       }
 
-      // Check if address is already used
-      const existingAddress = await UserModel.findByAddress(userData.address);
-      if (existingAddress) {
-        throw new AppError(409, 'Address already in use', 'ADDRESS_EXISTS');
+      // Check if address is already used (only when address provided)
+      if (userData.address) {
+        const existingAddress = await UserModel.findByAddress(userData.address);
+        if (existingAddress) {
+          throw new AppError(409, 'Address already in use', 'ADDRESS_EXISTS');
+        }
       }
 
       // Check if email is already used
@@ -36,13 +41,14 @@ export class UserController {
       // Create user first
       let user = await UserModel.create(userData);
 
-      // Auto-provision Safe wallets on both chains
+      // Auto-provision Safe wallets on both chains (only when address is present)
       // This is done asynchronously and errors are logged but not thrown
       // Missing wallets can be created later via the relay endpoint
-      try {
-        logger.info({ userId: user.id, userAddress: userData.address }, 'Auto-provisioning Safe wallets');
+      if (userData.address) {
+        try {
+          logger.info({ userId: user.id, userAddress: userData.address }, 'Auto-provisioning Safe wallets');
 
-        const safeResults = await SafeWalletService.createSafesForUserOnAllChains(userData.address);
+          const safeResults = await SafeWalletService.createSafesForUserOnAllChains(userData.address);
 
         // Update user with wallet addresses
         // Iterate through all results and update individually
@@ -81,6 +87,7 @@ export class UserController {
           },
           'Failed to auto-provision Safe wallets, user created without wallets'
         );
+      }
       }
 
       const response: ApiResponse = {
@@ -227,7 +234,15 @@ export class UserController {
       };
 
       res.status(200).json(response);
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      if (err?.code === '42703' && typeof err?.message === 'string' && err.message.includes('safe_wallets')) {
+        throw new AppError(
+          503,
+          'Database schema outdated: missing safe_wallets column. Run migrations in backend: npm run migrate:up',
+          'SCHEMA_OUTDATED'
+        );
+      }
       throw error;
     }
   }
@@ -264,21 +279,61 @@ export class UserController {
     }
   }
   /**
+   * Ensure user exists for onboarding (e.g. email-only or first request).
+   * Creates user via findOrCreate with Privy email when missing.
+   */
+  static async ensureUserForOnboarding(
+    userId: string,
+    walletAddress: string
+  ): Promise<void> {
+    const existing = await UserModel.findById(userId);
+    if (existing) return;
+
+    let email = `${userId}@privy.local`;
+    try {
+      const privyClient = new PrivyClient(config.privy.appId, config.privy.appSecret);
+      const privyUser = await privyClient.getUser(userId);
+      const emailAccount = privyUser.linkedAccounts?.find(
+        (account) => account.type === 'email'
+      );
+      if (emailAccount && 'address' in emailAccount) {
+        email = emailAccount.address;
+      }
+    } catch (privyError) {
+      logger.warn({ privyError, userId }, 'Could not fetch email from Privy, using fallback');
+    }
+
+    const address = walletAddress && walletAddress.trim() !== '' ? walletAddress : undefined;
+    await UserModel.findOrCreate({
+      id: userId,
+      address,
+      email,
+      onboarded_at: new Date(),
+    });
+    logger.info({ userId, hasAddress: !!address }, 'User created for onboarding');
+  }
+
+  /**
    * Update selected chains for a user
    */
   static async updateSelectedChains(req: Request, res: Response): Promise<void> {
     try {
-      // This requires AuthenticatedRequest from privy-auth middleware
-      const userId = (req as any).userId;
+      const authReq = req as AuthenticatedRequest;
+      const userId = authReq.userId;
+      const walletAddress = authReq.userWalletAddress ?? '';
       const { chains } = req.body;
 
       if (!userId) {
         throw new AppError(401, 'Not authenticated', 'NOT_AUTHENTICATED');
       }
 
-      const user = await UserModel.findById(userId);
+      let user = await UserModel.findById(userId);
       if (!user) {
-        throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+        await UserController.ensureUserForOnboarding(userId, walletAddress);
+        user = await UserModel.findById(userId);
+        if (!user) {
+          throw new AppError(500, 'Failed to create user for onboarding', 'USER_CREATE_FAILED');
+        }
       }
 
       const updatedUser = await UserModel.updateSelectedChains(userId, chains);

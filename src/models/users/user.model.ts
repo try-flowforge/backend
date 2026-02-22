@@ -7,7 +7,8 @@ export class UserModel {
    * Create a new user
    */
   static async create(userData: CreateUserInput): Promise<User> {
-    const { id, address, email, onboarded_at } = userData;
+    const { id, email, onboarded_at } = userData;
+    const address = userData.address === undefined || userData.address === '' ? null : userData.address;
     const onboardedDate = onboarded_at || new Date();
 
     const text = `
