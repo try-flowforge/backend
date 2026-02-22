@@ -46,7 +46,7 @@ export class IfNodeProcessor implements INodeProcessor {
     logger.info({ nodeId: input.nodeId }, 'Executing IF node');
 
     try {
-      const config: IfNodeConfig = input.nodeConfig;
+      const config: IfNodeConfig = this.normalizeConfig(input.nodeConfig);
 
       // Validate configuration
       const validation = await this.validate(config);
@@ -128,6 +128,54 @@ export class IfNodeProcessor implements INodeProcessor {
   }
 
   /**
+   * Normalize config: if planner (or client) sent condition as string (e.g. "ETH/USD < 1750"),
+   * parse into leftPath, operator, rightValue so validation and execution succeed.
+   */
+  private normalizeConfig(raw: any): IfNodeConfig {
+    const hasStructured =
+      typeof raw?.leftPath === 'string' &&
+      raw?.operator &&
+      (raw?.operator === 'isEmpty' || raw?.rightValue !== undefined);
+    if (hasStructured) {
+      return raw as IfNodeConfig;
+    }
+    const conditionStr = typeof raw?.condition === 'string' ? raw.condition.trim() : '';
+    if (conditionStr) {
+      const parsed = this.parseConditionString(conditionStr);
+      if (parsed) {
+        return {
+          leftPath: parsed.leftPath,
+          operator: parsed.operator as IfOperator,
+          rightValue: parsed.rightValue,
+        };
+      }
+    }
+    return (raw ?? {}) as IfNodeConfig;
+  }
+
+  private parseConditionString(
+    condition: string,
+  ): { leftPath: string; operator: string; rightValue: string } | null {
+    const opMatch = condition.match(/\s*(<=|>=|==|!=|<|>|=)\s*/);
+    if (!opMatch) return null;
+    const opMap: Record<string, string> = {
+      '<': 'lt',
+      '>': 'gt',
+      '<=': 'lte',
+      '>=': 'gte',
+      '==': 'equals',
+      '=': 'equals',
+      '!=': 'notEquals',
+    };
+    const operator = opMap[opMatch[1]];
+    if (!operator) return null;
+    const [left, right] = condition.split(opMatch[0], 2).map((s) => s.trim());
+    if (left === undefined || right === undefined) return null;
+    const leftPath = /^[A-Z0-9]+\/[A-Z0-9]+$/i.test(left) ? 'formattedAnswer' : left;
+    return { leftPath, operator, rightValue: right };
+  }
+
+  /**
    * Resolve a value - either as a path lookup from input data or as a literal value
    * 
    * If the value looks like a path (contains dots or matches a key in input data),
@@ -143,21 +191,51 @@ export class IfNodeProcessor implements INodeProcessor {
     if (!valueOrPath) return undefined;
 
     // First, try to resolve as a path from input data
-    const resolvedFromPath = this.getValueByPath(inputData, valueOrPath);
-    
-    // If we found a value in input data, use it
-    if (resolvedFromPath !== undefined) {
-      return resolvedFromPath;
+    let resolved = this.getValueByPath(inputData, valueOrPath);
+
+    // If path didn't resolve and it looks like a price-feed label (planner sent "ETH/USD price", "ETHUSD", etc.),
+    // or path is "formattedAnswer" (oracle output key), resolve the actual price from oracle output.
+    if (resolved === undefined && (this.looksLikePriceFeedPath(valueOrPath) || valueOrPath.trim() === 'formattedAnswer')) {
+      resolved =
+        this.getValueByPath(inputData, 'formattedAnswer') ??
+        this.getValueByPath(inputData, 'price');
+      // Fallback: price may live only in inputData.blocks (e.g. when direct merge is empty)
+      if (resolved === undefined && inputData?.blocks && typeof inputData.blocks === 'object') {
+        for (const block of Object.values(inputData.blocks) as any[]) {
+          if (block && typeof block === 'object') {
+            const v = block.formattedAnswer ?? block.price;
+            if (v !== undefined && v !== null) {
+              resolved = v;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (resolved !== undefined) {
+      return resolved;
     }
 
     // Otherwise, treat the value as a literal
-    // Try to parse as number if it looks like a number
     if (!isNaN(Number(valueOrPath)) && valueOrPath !== '') {
       return Number(valueOrPath);
     }
 
-    // Return as string literal
     return valueOrPath;
+  }
+
+  /** True if leftPath looks like a price feed label (e.g. "ETH/USD price", "ETHUSD", "ETH/USD") from the planner. */
+  private looksLikePriceFeedPath(path: string): boolean {
+    if (!path || typeof path !== 'string') return false;
+    const s = path.trim();
+    // "ETH/USD", "ETHUSD", "ETH/USD price", "BTC/USD", "price", etc.
+    return (
+      /^[A-Z0-9]+\/[A-Z0-9]+$/i.test(s) ||
+      /^[A-Z0-9]+\/[A-Z0-9]+\s+price$/i.test(s) ||
+      /^[A-Z0-9]+USD$/i.test(s) ||
+      s.toLowerCase() === 'price'
+    );
   }
 
   /**

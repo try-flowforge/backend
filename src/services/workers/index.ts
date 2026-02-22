@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Worker, Job } from 'bullmq';
 import {
   QueueName,
@@ -63,13 +64,19 @@ export class WorkflowExecutionWorker {
       'Processing workflow execution job'
     );
 
+    const rawId = job.data.executionId ?? job.id;
+    const executionId =
+      typeof rawId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawId)
+        ? rawId
+        : randomUUID();
+
     try {
       const context = await workflowExecutionEngine.executeWorkflow(
         workflowId,
         userId,
         triggeredBy as TriggerType,
         initialInput,
-        job.data.executionId || job.id as string // Use execution ID from job data or job ID as fallback
+        executionId
       );
 
       if (context.status === ExecutionStatus.FAILED) {
@@ -450,8 +457,8 @@ export class WorkflowTriggerWorker {
       );
     }
 
-    // Enqueue actual workflow execution
-    const executionId = job.id as string;
+    // Enqueue actual workflow execution (use fresh UUID; job.id is BullMQ repeat id for recurring triggers)
+    const executionId = randomUUID();
     await enqueueWorkflowExecution({
       workflowId,
       userId,

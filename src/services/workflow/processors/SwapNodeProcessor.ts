@@ -82,10 +82,10 @@ export class SwapNodeProcessor implements INodeProcessor {
         };
       }
 
-      // Map output if configured
-      let output = result;
+      // Map output if configured; include chain so agents can build block explorer links
+      let output = { ...result, chain: config.chain };
       if (config.outputMapping) {
-        output = this.applyOutputMapping(result, config.outputMapping);
+        output = this.applyOutputMapping(output, config.outputMapping);
       }
 
       logger.info({ nodeId: input.nodeId, txHash: result.txHash }, 'Swap node executed successfully');
