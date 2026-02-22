@@ -33,6 +33,7 @@ const MULTISEND_ABI = [
  */
 const ERC20_ABI = [
   "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
 ];
 
@@ -539,6 +540,34 @@ export class SafeTransactionService {
         "Failed to check token allowance"
       );
       throw new Error(`Failed to check token allowance: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Check ERC20 token balance for an address (e.g. Safe wallet).
+   * Used to fail fast with a clear message when swap would revert due to insufficient balance.
+   */
+  async checkTokenBalance(
+    tokenAddress: string,
+    ownerAddress: string,
+    chainId: NumericChainId
+  ): Promise<bigint> {
+    const provider = getRelayerService().getProvider(chainId);
+    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    try {
+      const balance = await tokenContract.balanceOf(ownerAddress);
+      return BigInt(balance.toString());
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          tokenAddress,
+          ownerAddress,
+          chainId,
+        },
+        "Failed to check token balance"
+      );
+      throw new Error(`Failed to check token balance: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

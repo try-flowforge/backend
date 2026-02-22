@@ -150,6 +150,58 @@ export class SwapExecutionService {
   }
 
   /**
+   * Heuristic: error likely means the provider's API does not support this chain
+   * (e.g. LiFi returns "fromChain must be equal to one of the allowed values" for testnets).
+   */
+  private isProviderChainNotSupportedError(error: unknown): boolean {
+    const msg = error instanceof Error ? error.message : String(error);
+    return (
+      /must be equal to one of the allowed values/i.test(msg) ||
+      /fromChain.*must match/i.test(msg) ||
+      /oneOf/i.test(msg) ||
+      /chain.*not supported/i.test(msg)
+    );
+  }
+
+  /**
+   * Get quote from the requested provider; on "chain not supported" style errors,
+   * retry with other providers that support the chain (fix-and-retry policy).
+   */
+  private async getQuoteWithFallback(
+    chain: SupportedChain,
+    provider: SwapProvider,
+    config: SwapInputConfig
+  ): Promise<{ quote: SwapQuote; effectiveProvider: SwapProvider }> {
+    const swapProvider = swapProviderFactory.getProvider(provider);
+    try {
+      const quote = await swapProvider.getQuote(chain, config);
+      return { quote, effectiveProvider: provider };
+    } catch (firstError) {
+      if (!this.isProviderChainNotSupportedError(firstError)) {
+        throw firstError;
+      }
+      const fallbacks = swapProviderFactory
+        .getProvidersForChain(chain)
+        .map((p) => p.getName())
+        .filter((p) => p !== provider);
+      for (const fallback of fallbacks) {
+        try {
+          const fallbackProvider = swapProviderFactory.getProvider(fallback);
+          const quote = await fallbackProvider.getQuote(chain, config);
+          logger.info(
+            { chain, requestedProvider: provider, effectiveProvider: fallback },
+            'Swap quote: retried with fallback provider after chain-not-supported error'
+          );
+          return { quote, effectiveProvider: fallback };
+        } catch {
+          continue;
+        }
+      }
+      throw firstError;
+    }
+  }
+
+  /**
    * Get quote from provider
    */
   async getQuote(
@@ -716,7 +768,6 @@ export class SwapExecutionService {
       }
 
       // Create swap execution record (use Safe address if available)
-      // Create swap execution record (use Safe address if available)
       swapExecutionId = await this.createSwapExecutionRecord(
         normalizedNodeExecutionId,
         chain,
@@ -724,14 +775,34 @@ export class SwapExecutionService {
         swapConfig
       );
 
-      // Get provider
-      const swapProvider = swapProviderFactory.getProvider(provider);
+      // Fail fast with a clear error if Safe has insufficient source token balance (common on testnets)
+      if (safeAddress && !this.isNativeToken(swapConfig.sourceToken.address, chain)) {
+        const requiredAmount = BigInt(swapConfig.amount);
+        const balance = await safeTransactionService.checkTokenBalance(
+          swapConfig.sourceToken.address,
+          safeAddress,
+          chainId
+        );
+        if (balance < requiredAmount) {
+          const symbol = swapConfig.sourceToken.symbol || 'token';
+          const decimals = swapConfig.sourceToken.decimals ?? 18;
+          const requiredHuman = Number(requiredAmount) / 10 ** decimals;
+          const balanceHuman = Number(balance) / 10 ** decimals;
+          throw new Error(
+            `Insufficient ${symbol} balance in Safe. ` +
+              `Required: ${requiredHuman} ${symbol}, Safe has: ${balanceHuman} ${symbol} on this chain. ` +
+              `Fund your Safe (${safeAddress}) with ${symbol} on ${chain}, or reduce the amount. ` +
+              `On testnets you need test tokens; on mainnet use real tokens.`
+          );
+        }
+      }
 
-      // Get quote
+      // Get quote (with fix-and-retry: try fallback providers if this one rejects the chain)
       logger.debug('Getting quote...');
-      const quote = await swapProvider.getQuote(chain, swapConfig);
+      const { quote, effectiveProvider } = await this.getQuoteWithFallback(chain, provider, swapConfig);
+      const swapProvider = swapProviderFactory.getProvider(effectiveProvider);
 
-      // Build transaction
+      // Build transaction using the provider that gave the quote
       logger.debug('Building transaction...');
       const transaction = await swapProvider.buildTransaction(chain, swapConfig, quote);
 
@@ -765,7 +836,7 @@ export class SwapExecutionService {
         if (!isNativeToken) {
           const spenderAddress = this.getApprovalSpenderAddress({
             chain,
-            provider,
+            provider: effectiveProvider,
             quote,
             transactionTo: transaction.to,
           });
@@ -813,7 +884,7 @@ export class SwapExecutionService {
         };
         let safeTxOperation = 0; // 0 = CALL, 1 = DELEGATECALL (for MultiSend)
 
-        if (provider === SwapProvider.UNISWAP_V4) {
+        if (effectiveProvider === SwapProvider.UNISWAP_V4) {
           const permit2 = CHAIN_CONFIGS[chain].contracts?.permit2;
           const universalRouter = CHAIN_CONFIGS[chain].contracts?.universalRouter;
           if (!permit2 || !universalRouter) {
@@ -891,7 +962,7 @@ export class SwapExecutionService {
               this.safeTxCacheKey(normalizedNodeExecutionId),
               JSON.stringify({
                 chain,
-                provider,
+                provider: effectiveProvider,
                 chainId,
                 safeAddress,
                 safeTxHash,
