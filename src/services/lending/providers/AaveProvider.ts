@@ -60,12 +60,7 @@ export class AaveProvider implements ILendingProvider {
       wethGatewayAddress: '0x0',
       version: 'v3' as const,
     },
-    [SupportedChain.ETHEREUM_SEPOLIA]: {
-      poolAddress: '0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951', // Aave V3 Pool on Ethereum Sepolia
-      poolDataProviderAddress: '0x3e9708d80f7B3e43118013075F7e95CE3AB31F31', // Aave V3 Pool Data Provider
-      wethGatewayAddress: '0x387d311e47e80b498169e6fb51d3193167d89f7d', // WETH Gateway
-      version: 'v3' as const,
-    },
+
   };
 
   getName(): LendingProvider {
@@ -73,7 +68,7 @@ export class AaveProvider implements ILendingProvider {
   }
 
   supportsChain(chain: SupportedChain): boolean {
-    return chain === SupportedChain.ARBITRUM || chain === SupportedChain.ETHEREUM_SEPOLIA;
+    return chain === SupportedChain.ARBITRUM;
   }
 
   async getQuote(

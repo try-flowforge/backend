@@ -47,6 +47,7 @@ import * as migration043 from "./043_create_perps_executions_table";
 import * as migration044 from "./044_add_perps_node_type";
 import * as migration045 from "./045_remove_relay_oneinch_swap_providers";
 import * as migration046 from "./046_drop_user_ens_subdomains_table";
+import * as migration047 from "./047_remove_unsupported_chains";
 
 // Load environment variables
 dotenv.config();
@@ -171,6 +172,7 @@ const resetDatabase = async (): Promise<void> => {
     await migration044.up(pool);
     await migration045.up(pool);
     await migration046.up(pool);
+    await migration047.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -363,6 +365,10 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [46, "046_drop_user_ens_subdomains_table"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [47, "047_remove_unsupported_chains"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {

@@ -54,10 +54,6 @@ export class UniswapV4Provider implements ISwapProvider {
     return [
       SupportedChain.ARBITRUM,
       SupportedChain.ARBITRUM_SEPOLIA,
-      SupportedChain.ETHEREUM,
-      SupportedChain.ETHEREUM_SEPOLIA,
-      SupportedChain.UNICHAIN,
-      SupportedChain.UNICHAIN_SEPOLIA,
     ].includes(chain);
   }
 

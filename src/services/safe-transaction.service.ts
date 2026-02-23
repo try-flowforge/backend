@@ -15,10 +15,8 @@ import { SupportedChain } from "../types";
  * These are the official Gnosis Safe MultiSend contracts
  */
 const MULTISEND_ADDRESSES: Partial<Record<NumericChainId, string>> = {
-  11155111: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Ethereum Sepolia
   421614: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Sepolia
   42161: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Arbitrum Mainnet
-  8453: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", // Base Mainnet
 };
 
 /**
@@ -492,10 +490,7 @@ export class SafeTransactionService {
         return NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
       case SupportedChain.ARBITRUM:
         return NUMERIC_CHAIN_IDS.ARBITRUM;
-      case SupportedChain.ETHEREUM_SEPOLIA:
-        return NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA;
-      case SupportedChain.BASE:
-        return NUMERIC_CHAIN_IDS.BASE;
+
       default:
         throw new Error(`Unsupported chain: ${chain}`);
     }

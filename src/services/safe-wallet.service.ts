@@ -17,7 +17,7 @@ export interface SafeWalletResult {
 
 export interface MultiChainSafeResult {
     testnet?: SafeWalletResult;
-    ethSepolia?: SafeWalletResult;
+
     mainnet?: SafeWalletResult;
 }
 
@@ -219,26 +219,7 @@ export class SafeWalletService {
             };
         }
 
-        // Create on Ethereum Sepolia
-        try {
-            results.ethSepolia = await this.createSafeForUser(
-                userAddress,
-                NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA
-            );
-        } catch (error) {
-            logger.error(
-                {
-                    error: error instanceof Error ? error.message : String(error),
-                    userAddress,
-                    chain: "ethSepolia",
-                },
-                "Failed to create Ethereum Sepolia Safe wallet"
-            );
-            results.ethSepolia = {
-                success: false,
-                error: error instanceof Error ? error.message : "Unknown error",
-            };
-        }
+
 
         // Mainnet Safes are not created on user creation (cost control).
         // They are created on-demand when the user switches to mainnet and

@@ -27,30 +27,18 @@ dotenv.config();
 // ---------------------------------------------------------------------------
 
 const NETWORK_ALIASES: Record<string, string> = {
-  'eth-sepolia': 'eth-sepolia',
   'arb-sepolia': 'arb-sepolia',
-  'uni-sepolia': 'uni-sepolia',
-  'eth-main': 'eth-main',
   'arb-main': 'arb-main',
-  'uni-main': 'uni-main',
 };
 
 const ALCHEMY_RPC: Record<string, string> = {
-  'eth-sepolia': 'https://eth-sepolia.g.alchemy.com/v2/',
   'arb-sepolia': 'https://arb-sepolia.g.alchemy.com/v2/',
-  'uni-sepolia': 'https://unichain-sepolia.g.alchemy.com/v2/',
-  'eth-main': 'https://eth-mainnet.g.alchemy.com/v2/',
   'arb-main': 'https://arb-mainnet.g.alchemy.com/v2/',
-  'uni-main': 'https://unichain-mainnet.g.alchemy.com/v2/',
 };
 
 const RPC_ENV_KEYS: Record<string, string> = {
-  'eth-sepolia': 'ETHEREUM_SEPOLIA_RPC_URL',
   'arb-sepolia': 'ARBITRUM_SEPOLIA_RPC_URL',
-  'uni-sepolia': 'UNICHAIN_SEPOLIA_RPC_URL',
-  'eth-main': 'ETHEREUM_RPC_URL',
   'arb-main': 'ARBITRUM_RPC_URL',
-  'uni-main': 'UNICHAIN_RPC_URL',
 };
 
 type Direction = 'weth-usdc' | 'usdc-weth';
@@ -77,7 +65,7 @@ function parseArgs(argv: string[]): { network: string; direction: Direction; amo
   const normalized = NETWORK_ALIASES[network] ?? network;
   if (!ALCHEMY_RPC[normalized]) {
     console.error('Unknown network:', network);
-    console.error('Supported: eth-sepolia, arb-sepolia, uni-sepolia, eth-main, arb-main, uni-main');
+    console.error('Supported: arb-sepolia, arb-main');
     process.exit(1);
   }
 
@@ -145,18 +133,10 @@ const MAX_UINT160 = (2n ** 160n - 1n).toString();
 // Network slug (after alias) -> SupportedChain (Ethereum, Arbitrum, Unichain — Sepolia + mainnet only)
 function getChainForNetwork(slug: string): SupportedChain {
   switch (slug) {
-    case 'eth-sepolia':
-      return SupportedChain.ETHEREUM_SEPOLIA;
     case 'arb-sepolia':
       return SupportedChain.ARBITRUM_SEPOLIA;
-    case 'uni-sepolia':
-      return SupportedChain.UNICHAIN_SEPOLIA;
-    case 'eth-main':
-      return SupportedChain.ETHEREUM;
     case 'arb-main':
       return SupportedChain.ARBITRUM;
-    case 'uni-main':
-      return SupportedChain.UNICHAIN;
     default:
       return SupportedChain.ARBITRUM_SEPOLIA;
   }
@@ -170,35 +150,17 @@ const TEST_TOKENS: Record<string, { WETH: { address: string; symbol: string; dec
     WETH: { address: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73', symbol: 'WETH', decimals: 18 },
     USDC: { address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', symbol: 'USDC', decimals: 6 },
   },
-  ETHEREUM_SEPOLIA: {
-    WETH: { address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', symbol: 'WETH', decimals: 18 },
-    USDC: { address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', symbol: 'USDC', decimals: 6 },
-  },
-  UNICHAIN_SEPOLIA: {
-    WETH: { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
-    USDC: { address: '0x31d0220469e10c4e71834a79b1f276d740d3768f', symbol: 'USDC', decimals: 6 },
-  },
+
   ARBITRUM: {
     WETH: { address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', symbol: 'WETH', decimals: 18 },
     USDC: { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', symbol: 'USDC', decimals: 6 },
   },
-  ETHEREUM: {
-    WETH: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', decimals: 18 },
-    USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 },
-  },
-  UNICHAIN: {
-    WETH: { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
-    USDC: { address: '0x078d782b760474a361dda0af3839290b0ef57ad6', symbol: 'USDC', decimals: 6 },
-  },
+
 };
 
 const CHAIN_LABELS: Record<string, string> = {
   ARBITRUM_SEPOLIA: 'Arbitrum Sepolia (421614)',
-  ETHEREUM_SEPOLIA: 'Ethereum Sepolia (11155111)',
-  UNICHAIN_SEPOLIA: 'Unichain Sepolia (1301)',
   ARBITRUM: 'Arbitrum One (42161)',
-  ETHEREUM: 'Ethereum (1)',
-  UNICHAIN: 'Unichain (130)',
 };
 
 const TEST_WALLET = process.env.WALLET_ADDRESS ?? '0xc073A5E091DC60021058346b10cD5A9b3F0619fE';

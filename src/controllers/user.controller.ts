@@ -50,44 +50,44 @@ export class UserController {
 
           const safeResults = await SafeWalletService.createSafesForUserOnAllChains(userData.address);
 
-        // Update user with wallet addresses
-        // Iterate through all results and update individually
-        for (const [key, result] of Object.entries(safeResults)) {
-          if (result && result.success && result.safeAddress) {
-            // Map key to chainId
-            let chainId: number | undefined;
-            if (key === 'testnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
-            else if (key === 'mainnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM;
-            else if (key === 'ethSepolia') chainId = NUMERIC_CHAIN_IDS.ETHEREUM_SEPOLIA;
+          // Update user with wallet addresses
+          // Iterate through all results and update individually
+          for (const [key, result] of Object.entries(safeResults)) {
+            if (result && result.success && result.safeAddress) {
+              // Map key to chainId
+              let chainId: number | undefined;
+              if (key === 'testnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
+              else if (key === 'mainnet') chainId = NUMERIC_CHAIN_IDS.ARBITRUM;
 
-            if (chainId) {
-              const updatedUser = await UserModel.updateSafeWallet(user.id, chainId, result.safeAddress);
-              if (updatedUser) {
-                user = updatedUser;
+
+              if (chainId) {
+                const updatedUser = await UserModel.updateSafeWallet(user.id, chainId, result.safeAddress);
+                if (updatedUser) {
+                  user = updatedUser;
+                }
               }
             }
           }
-        }
 
-        logger.info(
-          {
-            userId: user.id,
-            testnet: safeResults.testnet?.success ? 'success' : 'failed',
-            mainnet: safeResults.mainnet?.success ? 'success' : 'failed',
-            ethSepolia: safeResults.ethSepolia?.success ? 'success' : 'failed',
-          },
-          'Safe wallet provisioning completed'
-        );
-      } catch (safeError) {
-        // Log error but don't fail user creation
-        logger.error(
-          {
-            error: safeError instanceof Error ? safeError.message : String(safeError),
-            userId: user.id,
-          },
-          'Failed to auto-provision Safe wallets, user created without wallets'
-        );
-      }
+          logger.info(
+            {
+              userId: user.id,
+              testnet: safeResults.testnet?.success ? 'success' : 'failed',
+              mainnet: safeResults.mainnet?.success ? 'success' : 'failed',
+
+            },
+            'Safe wallet provisioning completed'
+          );
+        } catch (safeError) {
+          // Log error but don't fail user creation
+          logger.error(
+            {
+              error: safeError instanceof Error ? safeError.message : String(safeError),
+              userId: user.id,
+            },
+            'Failed to auto-provision Safe wallets, user created without wallets'
+          );
+        }
       }
 
       const response: ApiResponse = {

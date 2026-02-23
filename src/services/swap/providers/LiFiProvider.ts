@@ -41,9 +41,7 @@ export class LiFiProvider implements ISwapProvider {
     supportsChain(chain: SupportedChain): boolean {
         return (
             chain === SupportedChain.ARBITRUM ||
-            chain === SupportedChain.ARBITRUM_SEPOLIA ||
-            chain === SupportedChain.BASE ||
-            chain === SupportedChain.ETHEREUM_SEPOLIA
+            chain === SupportedChain.ARBITRUM_SEPOLIA
         );
     }
 
@@ -138,7 +136,7 @@ export class LiFiProvider implements ISwapProvider {
             // If we have a quote with rawQuote data, use it directly
             // Note: The 'from' field should be the Safe address (recipient) for Safe transactions
             const fromAddress = config.recipient || config.walletAddress;
-            
+
             // Cross-chain: LI.FI returns steps; use first step's transactionRequest (source chain)
             const rawQuote = quote?.rawQuote;
             const txRequest = rawQuote?.transactionRequest ?? rawQuote?.transactionRequests?.[0];

@@ -36,42 +36,16 @@ export const PROVIDER_CONFIGS = {
 };
 
 export const RPC_CONFIG = {
-  maxRetries: 3,
-  retryDelay: 1000,
-  timeout: 30000,
   fallbackRpcs: {
     [SupportedChain.ARBITRUM]: [
       "https://arb1.arbitrum.io/rpc",
       process.env.ARBITRUM_RPC_FALLBACK_1,
       process.env.ARBITRUM_RPC_FALLBACK_2,
     ].filter(Boolean) as string[],
-    [SupportedChain.ETHEREUM]: [
-      "https://eth.llamarpc.com",
-      process.env.ETHEREUM_RPC_URL,
-      process.env.ETHEREUM_RPC_FALLBACK_1,
-    ].filter(Boolean) as string[],
     [SupportedChain.ARBITRUM_SEPOLIA]: [
       "https://sepolia-rollup.arbitrum.io/rpc",
       process.env.ARBITRUM_SEPOLIA_RPC_FALLBACK_1,
       process.env.ARBITRUM_SEPOLIA_RPC_FALLBACK_2,
-    ].filter(Boolean) as string[],
-    [SupportedChain.BASE]: [
-      "https://mainnet.base.org",
-      process.env.BASE_RPC_URL,
-    ].filter(Boolean) as string[],
-    [SupportedChain.ETHEREUM_SEPOLIA]: [
-      "https://ethereum-sepolia-rpc.publicnode.com",
-      "https://eth-sepolia.public.blastapi.io",
-      "https://rpc.sepolia.org",
-      process.env.ETHEREUM_SEPOLIA_RPC_URL,
-    ].filter(Boolean) as string[],
-    [SupportedChain.UNICHAIN]: [
-      "https://mainnet.unichain.org",
-      process.env.UNICHAIN_RPC_URL,
-    ].filter(Boolean) as string[],
-    [SupportedChain.UNICHAIN_SEPOLIA]: [
-      "https://sepolia.unichain.org",
-      process.env.UNICHAIN_SEPOLIA_RPC_URL,
     ].filter(Boolean) as string[],
   },
 };
@@ -80,20 +54,10 @@ export const GAS_CONFIG = {
   maxPriorityFeePerGas: {
     [SupportedChain.ARBITRUM]: "100000000",
     [SupportedChain.ARBITRUM_SEPOLIA]: "100000000",
-    [SupportedChain.BASE]: "100000000",
-    [SupportedChain.ETHEREUM]: "2000000000",
-    [SupportedChain.ETHEREUM_SEPOLIA]: "2000000000",
-    [SupportedChain.UNICHAIN]: "100000000",
-    [SupportedChain.UNICHAIN_SEPOLIA]: "100000000",
   },
   maxFeePerGas: {
     [SupportedChain.ARBITRUM]: "500000000",
     [SupportedChain.ARBITRUM_SEPOLIA]: "1000000000",
-    [SupportedChain.BASE]: "1000000000",
-    [SupportedChain.ETHEREUM]: "50000000000",
-    [SupportedChain.ETHEREUM_SEPOLIA]: "50000000000",
-    [SupportedChain.UNICHAIN]: "1000000000",
-    [SupportedChain.UNICHAIN_SEPOLIA]: "1000000000",
   },
   gasLimitMultiplier: 1.2,
 };

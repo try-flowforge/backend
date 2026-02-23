@@ -70,13 +70,7 @@ export class CompoundProvider implements ILendingProvider {
       baseAsset: '0x0', // USDC on Arbitrum Sepolia
       version: 'v3' as const,
     },
-    [SupportedChain.ETHEREUM_SEPOLIA]: {
-      // Compound V3 on Ethereum Sepolia (not available)
-      cometAddress: '0x0',
-      configuratorAddress: '0x0',
-      baseAsset: '0x0',
-      version: 'v3' as const,
-    },
+
   };
 
   getName(): LendingProvider {
