@@ -1,6 +1,5 @@
 import { SwapProvider, SupportedChain } from '../../../types';
 import { ISwapProvider, ISwapProviderFactory } from '../interfaces/ISwapProvider';
-import { UniswapProvider } from './UniswapProvider';
 import { UniswapV4Provider } from './UniswapV4Provider';
 import { logger } from '../../../utils/logger';
 
@@ -23,7 +22,6 @@ export class SwapProviderFactory implements ISwapProviderFactory {
     logger.info('Initializing swap providers...');
 
     try {
-      this.providers.set(SwapProvider.UNISWAP, new UniswapProvider());
       this.providers.set(SwapProvider.UNISWAP_V4, new UniswapV4Provider());
 
       logger.info(

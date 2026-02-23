@@ -48,6 +48,7 @@ import * as migration044 from "./044_add_perps_node_type";
 import * as migration045 from "./045_remove_relay_oneinch_swap_providers";
 import * as migration046 from "./046_drop_user_ens_subdomains_table";
 import * as migration047 from "./047_remove_unsupported_chains";
+import * as migration049 from "./049_remove_uniswap_v3_swap_provider";
 import * as migration048 from "./048_add_waiting_for_client_tx_status";
 
 // Load environment variables
@@ -175,6 +176,7 @@ const resetDatabase = async (): Promise<void> => {
     await migration046.up(pool);
     await migration047.up(pool);
     await migration048.up(pool);
+    await migration049.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -186,195 +188,199 @@ const resetDatabase = async (): Promise<void> => {
     `);
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [1, "001_create_users_table"]
+      [1, "001_create_users_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [2, "002_create_slack_connections_table"]
+      [2, "002_create_slack_connections_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [3, "003_encrypt_existing_webhooks"]
+      [3, "003_encrypt_existing_webhooks"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [4, "004_create_workflows_tables"]
+      [4, "004_create_workflows_tables"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [5, "005_create_workflow_nodes_table"]
+      [5, "005_create_workflow_nodes_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [6, "006_create_workflow_edges_table"]
+      [6, "006_create_workflow_edges_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [7, "007_create_workflow_executions_table"]
+      [7, "007_create_workflow_executions_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [8, "008_create_node_executions_table"]
+      [8, "008_create_node_executions_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [9, "009_create_swap_executions_table"]
+      [9, "009_create_swap_executions_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [10, "010_create_managed_wallets_table"]
+      [10, "010_create_managed_wallets_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [11, "011_add_foreign_key_to_workflows"]
+      [11, "011_add_foreign_key_to_workflows"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [12, "012_add_slack_oauth_fields"]
+      [12, "012_add_slack_oauth_fields"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [13, "013_create_telegram_connections_table"]
+      [13, "013_create_telegram_connections_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [14, "014_add_edge_handles"]
+      [14, "014_add_edge_handles"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [15, "015_add_safe_wallet_to_users"]
+      [15, "015_add_safe_wallet_to_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [16, "016_update_node_type_constraint"]
+      [16, "016_update_node_type_constraint"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [17, "017_create_telegram_verification_codes_table"]
+      [17, "017_create_telegram_verification_codes_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [18, "018_cleanup_demo_users"]
+      [18, "018_cleanup_demo_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [19, "019_create_lending_executions_table"]
+      [19, "019_create_lending_executions_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [20, "020_add_lending_node_type"]
+      [20, "020_add_lending_node_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [21, "021_add_aave_compound_node_types"]
+      [21, "021_add_aave_compound_node_types"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [22, "022_add_llm_transform_node_type"]
+      [22, "022_add_llm_transform_node_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [23, "023_add_workflow_visibility_fields"]
+      [23, "023_add_workflow_visibility_fields"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [24, "024_add_workflow_versioning"]
+      [24, "024_add_workflow_versioning"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [25, "025_add_lifi_node_type"]
+      [25, "025_add_lifi_node_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [26, "026_add_lifi_swap_provider"]
+      [26, "026_add_lifi_swap_provider"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [27, "027_add_eth_sepolia_safe_wallet_and_chain_constraints"]
+      [27, "027_add_eth_sepolia_safe_wallet_and_chain_constraints"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [28, "028_add_uniswap_v4_swap_provider"]
+      [28, "028_add_uniswap_v4_swap_provider"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [29, "029_add_remaining_sponsored_txs_to_users"]
+      [29, "029_add_remaining_sponsored_txs_to_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [30, "030_create_user_ens_subdomains_table"]
+      [30, "030_create_user_ens_subdomains_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [31, "031_add_selected_chains_to_users"]
+      [31, "031_add_selected_chains_to_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [32, "032_migrate_safe_wallets_to_jsonb"]
+      [32, "032_migrate_safe_wallets_to_jsonb"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [33, "033_restore_remaining_sponsored_txs_to_users"]
+      [33, "033_restore_remaining_sponsored_txs_to_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [34, "034_make_address_nullable_in_users"]
+      [34, "034_make_address_nullable_in_users"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [35, "035_add_price_oracle_and_api_node_types"]
+      [35, "035_add_price_oracle_and_api_node_types"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [36, "036_create_transaction_intents_table"]
+      [36, "036_create_transaction_intents_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [37, "037_add_execution_paused_state"]
+      [37, "037_add_execution_paused_state"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [38, "038_add_safe_tx_to_intents"]
+      [38, "038_add_safe_tx_to_intents"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [39, "039_add_time_block_trigger_type"]
+      [39, "039_add_time_block_trigger_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [40, "040_create_time_blocks_table"]
+      [40, "040_create_time_blocks_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [41, "041_add_time_block_node_type"]
+      [41, "041_add_time_block_node_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [42, "042_create_ostium_delegations_table"]
+      [42, "042_create_ostium_delegations_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [43, "043_create_perps_executions_table"]
+      [43, "043_create_perps_executions_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [44, "044_add_perps_node_type"]
+      [44, "044_add_perps_node_type"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [45, "045_remove_relay_oneinch_swap_providers"]
+      [45, "045_remove_relay_oneinch_swap_providers"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [46, "046_drop_user_ens_subdomains_table"]
+      [46, "046_drop_user_ens_subdomains_table"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [47, "047_remove_unsupported_chains"]
+      [47, "047_remove_unsupported_chains"],
     );
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-      [48, "048_add_waiting_for_client_tx_status"]
+      [49, "049_remove_uniswap_v3_swap_provider"],
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [48, "048_add_waiting_for_client_tx_status"],
     );
     logger.info("Database reset completed successfully");
   } catch (error) {

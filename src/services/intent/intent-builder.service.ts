@@ -45,7 +45,7 @@ export class IntentBuilderService {
 
                 // Map agent hint fields to SwapInputConfig
                 const chain = (hints.chain as SupportedChain) ?? SupportedChain.ARBITRUM;
-                const provider = (hints.provider as SwapProvider) ?? SwapProvider.UNISWAP;
+                const provider = (hints.provider as SwapProvider) ?? SwapProvider.UNISWAP_V4;
 
                 const swapConfig = {
                     sourceToken: {

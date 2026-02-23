@@ -19,7 +19,7 @@ const SAFE_RELAY_CHAIN_ERROR = `Chain ID must be one of: ${getSafeRelayChainLabe
 /** Supported chains for swap/lending/oracle (includes BASE for LiFi cross-chain) */
 const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA'] as const;
 /** Swap providers */
-const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'LIFI'] as const;
+const SWAP_PROVIDERS = ['UNISWAP_V4', 'LIFI'] as const;
 /** Lending providers */
 const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
 /** Ostium networks */

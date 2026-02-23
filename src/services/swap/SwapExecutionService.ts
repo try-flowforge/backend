@@ -58,7 +58,6 @@ export class SwapExecutionService {
 
   /**
    * Determine which address needs ERC20 allowance for a given swap provider.
-   * - UNISWAP: Uniswap router
    * - UNISWAP_V4: Permit2 (first approval; then Permit2 approves Universal Router)
    * - LIFI: LI.FI returns an approvalAddress (spender). Fallback to tx.to.
    */
@@ -83,11 +82,7 @@ export class SwapExecutionService {
       return permit2;
     }
 
-    const routerAddress = CHAIN_CONFIGS[chain].contracts?.uniswapRouter;
-    if (!routerAddress) {
-      throw new Error(`Uniswap router address not configured for chain ${chain}`);
-    }
-    return routerAddress;
+    throw new Error(`Unsupported swap provider: ${provider}`);
   }
 
   /**
@@ -803,9 +798,9 @@ export class SwapExecutionService {
           const balanceHuman = Number(balance) / 10 ** decimals;
           throw new Error(
             `Insufficient ${symbol} balance in Safe. ` +
-              `Required: ${requiredHuman} ${symbol}, Safe has: ${balanceHuman} ${symbol} on this chain. ` +
-              `Fund your Safe (${safeAddress}) with ${symbol} on ${chain}, or reduce the amount. ` +
-              `On testnets you need test tokens; on mainnet use real tokens.`
+            `Required: ${requiredHuman} ${symbol}, Safe has: ${balanceHuman} ${symbol} on this chain. ` +
+            `Fund your Safe (${safeAddress}) with ${symbol} on ${chain}, or reduce the amount. ` +
+            `On testnets you need test tokens; on mainnet use real tokens.`
           );
         }
       }

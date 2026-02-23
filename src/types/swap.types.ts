@@ -10,7 +10,6 @@ export enum SupportedChain {
 
 // Supported Swap Providers
 export enum SwapProvider {
-  UNISWAP = "UNISWAP",
   UNISWAP_V4 = "UNISWAP_V4",
   LIFI = "LIFI",
 }
@@ -533,9 +532,5 @@ export interface ValidationError {
 
 // Provider-specific configurations
 export interface UniswapConfig {
-  routerAddress: string;
-  factoryAddress: string;
   quoterAddress?: string;
-  v2?: boolean;
-  v3?: boolean;
 }

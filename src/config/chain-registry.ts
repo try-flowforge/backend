@@ -53,8 +53,6 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export interface ChainContracts {
     // Uniswap
-    uniswapRouter?: string;
-    uniswapFactory?: string;
     weth?: string;
     uniswapV4Quoter?: string;
     uniswapV4PoolSwapTest?: string;
@@ -127,8 +125,6 @@ export const CHAIN_REGISTRY: ChainRegistryEntry[] = [
         isTestnet: false,
         nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
         contracts: {
-            uniswapRouter: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
-            uniswapFactory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             weth: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
             uniswapV4Quoter: "0x3972c00f7ed4885e145823eb7c655375d275a1c5",
             uniswapV4PoolSwapTest: "0x0",
@@ -152,8 +148,6 @@ export const CHAIN_REGISTRY: ChainRegistryEntry[] = [
         isTestnet: true,
         nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
         contracts: {
-            uniswapRouter: "0x101F443B4d1b059569D643917553c771E1b9663E",
-            uniswapFactory: "0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e",
             weth: "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
             uniswapV4Quoter: "0x7de51022d70a725b508085468052e25e22b5c4c9",
             uniswapV4PoolSwapTest: "0xf3a39c86dbd13c45365e57fb90fe413371f65af8",

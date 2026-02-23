@@ -22,11 +22,6 @@ import { SupportedChain } from "../types/swap.types";
 export { SupportedChain };
 
 export const PROVIDER_CONFIGS = {
-  UNISWAP: {
-    v2Enabled: true,
-    v3Enabled: true,
-    defaultSlippage: 0.5,
-  },
   LIFI: {
     apiUrl: process.env.LIFI_API_URL || "https://li.quest/v1",
     apiKey: process.env.LIFI_API_KEY,
