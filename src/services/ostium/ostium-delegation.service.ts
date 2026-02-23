@@ -204,7 +204,7 @@ export class OstiumDelegationService {
     });
   }
 
-  async executeApproval(userId: string, network: OstiumNetwork, signature: string, delegateAddressOverride?: string): Promise<DelegationStatus> {
+  async executeApproval(userId: string, network: OstiumNetwork, signature: string, delegateAddressOverride?: string): Promise<DelegationStatus | { submitOnClient: true; payload: { chainId: number; to: string; data: string; value: string } }> {
     const delegateAddress = this.getDelegateAddress(delegateAddressOverride);
     const status = await this.getStatus(userId, network, delegateAddress);
 
@@ -232,6 +232,20 @@ export class OstiumDelegationService {
       status.safeTxData.refundReceiver,
     );
 
+    if ('submitOnClient' in execResult && execResult.submitOnClient) {
+      return {
+        submitOnClient: true,
+        payload: {
+          chainId: execResult.chainId,
+          to: execResult.to,
+          data: execResult.data,
+          value: '0x' + execResult.value.toString(16),
+        },
+      };
+    }
+
+    const txHash = 'txHash' in execResult ? execResult.txHash : undefined;
+    if (!txHash) throw new Error('Unreachable: expected relayer result');
     const result = await query(
       `
       UPDATE ostium_delegations
@@ -242,7 +256,7 @@ export class OstiumDelegationService {
       WHERE id = $2
       RETURNING *;
       `,
-      [execResult.txHash, status.id],
+      [txHash, status.id],
     );
 
     return this.normalize(result.rows[0] as DelegationRow);
@@ -295,7 +309,7 @@ export class OstiumDelegationService {
     });
   }
 
-  async executeRevoke(userId: string, network: OstiumNetwork, signature: string, delegateAddressOverride?: string): Promise<DelegationStatus> {
+  async executeRevoke(userId: string, network: OstiumNetwork, signature: string, delegateAddressOverride?: string): Promise<DelegationStatus | { submitOnClient: true; payload: { chainId: number; to: string; data: string; value: string } }> {
     const delegateAddress = this.getDelegateAddress(delegateAddressOverride);
     const status = await this.getStatus(userId, network, delegateAddress);
 
@@ -323,6 +337,20 @@ export class OstiumDelegationService {
       status.safeTxData.refundReceiver,
     );
 
+    if ('submitOnClient' in execResult && execResult.submitOnClient) {
+      return {
+        submitOnClient: true,
+        payload: {
+          chainId: execResult.chainId,
+          to: execResult.to,
+          data: execResult.data,
+          value: '0x' + execResult.value.toString(16),
+        },
+      };
+    }
+
+    const revokeTxHash = 'txHash' in execResult ? execResult.txHash : undefined;
+    if (!revokeTxHash) throw new Error('Unreachable: expected relayer result');
     const result = await query(
       `
       UPDATE ostium_delegations
@@ -333,7 +361,7 @@ export class OstiumDelegationService {
       WHERE id = $2
       RETURNING *;
       `,
-      [execResult.txHash, status.id],
+      [revokeTxHash, status.id],
     );
 
     return this.normalize(result.rows[0] as DelegationRow);

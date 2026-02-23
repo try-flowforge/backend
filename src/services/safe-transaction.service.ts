@@ -11,6 +11,19 @@ import {
 import { SupportedChain } from "../types";
 
 /**
+ * Result of executeWithSignatures: either relayer sent (testnet) or client must submit (mainnet).
+ */
+export type ExecuteWithSignaturesResult =
+  | { txHash: string; receipt: ethers.TransactionReceipt }
+  | {
+      submitOnClient: true;
+      chainId: number;
+      to: string;
+      data: string;
+      value: bigint;
+    };
+
+/**
  * MultiSend contract addresses for Safe
  * These are the official Gnosis Safe MultiSend contracts
  */
@@ -258,7 +271,7 @@ export class SafeTransactionService {
     gasPrice: bigint = 0n,
     gasToken: string = ethers.ZeroAddress,
     refundReceiver: string = ethers.ZeroAddress
-  ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
+  ): Promise<ExecuteWithSignaturesResult> {
     const normalizedSignatures = this.normalizeSignatures(rawSignatures);
     const ethSignAdjustedSignatures = this.adjustSignaturesForEthSign(normalizedSignatures);
     const signatureCandidates: Array<{ mode: "safe_sdk" | "eth_sign"; signatures: string }> = [
@@ -427,7 +440,21 @@ export class SafeTransactionService {
       signaturesForExecution,
     ]);
 
-    // Execute via relayer
+    // Mainnet: return payload for client submission (user pays gas). Testnet: relayer sends.
+    if (isMainnetChain(chainId)) {
+      logger.info(
+        { safeAddress, chainId, signatureMode },
+        "Mainnet: returning execTransaction payload for client submission"
+      );
+      return {
+        submitOnClient: true,
+        chainId,
+        to: safeAddress,
+        data: execData,
+        value: 0n,
+      };
+    }
+
     const { txHash, receipt } = await relayerService.sendTransaction(
       chainId,
       safeAddress,

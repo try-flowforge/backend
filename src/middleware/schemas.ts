@@ -556,6 +556,13 @@ export const createSafeSchema = Joi.object({
         }),
 });
 
+export const syncSafeFromTxSchema = Joi.object({
+    chainId: Joi.number()
+        .valid(...SAFE_RELAY_CHAIN_IDS)
+        .required(),
+    txHash: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+});
+
 /**
  * Schema for enabling a module
  */
@@ -719,6 +726,12 @@ export const swapExecuteWithSignatureBodySchema = Joi.object({
     config: swapInputConfigSchema.required(),
     signature: Joi.string().required(),
     nodeExecutionId: Joi.string().uuid().required(),
+});
+
+/** Body for POST /swaps/report-client-tx (mainnet user-funded flow) */
+export const swapReportClientTxBodySchema = Joi.object({
+    swapExecutionId: Joi.string().uuid().required(),
+    txHash: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
 });
 
 // ===========================================

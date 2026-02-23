@@ -344,7 +344,10 @@ export const executeOstiumDelegationApproval = async (
     };
     logger.info({ userId, network, delegateAddress }, 'Executing Ostium delegation approval');
     const data = await ostiumDelegationService.executeApproval(userId, network, signature, delegateAddress);
-    logger.info({ userId, network, safeAddress: data.safeAddress, txHash: data.approvalTxHash }, 'Executed Ostium delegation approval');
+    logger.info(
+      { userId, network, safeAddress: 'safeAddress' in data ? data.safeAddress : undefined, approvalTxHash: 'approvalTxHash' in data ? data.approvalTxHash : undefined, submitOnClient: 'submitOnClient' in data && data.submitOnClient },
+      'Executed Ostium delegation approval'
+    );
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {
@@ -523,7 +526,10 @@ export const executeOstiumAllowanceApproval = async (
       safeTxHash,
       safeTxData,
     );
-    logger.info({ userId, network, safeAddress: data.safeAddress, txHash: data.txHash }, 'Executed Ostium allowance approval');
+    logger.info(
+      { userId, network, safeAddress: data.safeAddress, txHash: 'txHash' in data ? data.txHash : undefined, submitOnClient: 'submitOnClient' in data && data.submitOnClient },
+      'Executed Ostium allowance approval'
+    );
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error) {

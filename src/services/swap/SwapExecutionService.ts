@@ -5,9 +5,11 @@ import {
   SwapQuote,
   // SwapTransaction,
   SwapExecutionResult,
+  SwapSubmitOnClientResult,
   ExecutionStatus,
   DBSwapExecution,
   SafeTransactionHashResult,
+  TokenInfo,
 } from '../../types';
 import { swapProviderFactory } from './providers/SwapProviderFactory';
 import { waitForTransaction } from '../../config/providers';
@@ -17,7 +19,7 @@ import { parseAmount } from '../../utils/amount';
 import { pool } from '../../config/database';
 import { redisClient } from '../../config/redis';
 import { getRelayerService } from '../relayer.service';
-import { isMainnetChain, type NumericChainId } from '../../config/chain-registry';
+import { type NumericChainId } from '../../config/chain-registry';
 import { getSafeTransactionService } from '../safe-transaction.service';
 import { UserModel } from '../../models/users/user.model';
 import { ethers } from 'ethers';
@@ -456,7 +458,7 @@ export class SwapExecutionService {
     signature: string, // EIP-712 signature from user
     safeTxHash?: string,
     safeTxData?: any
-  ): Promise<SwapExecutionResult> {
+  ): Promise<SwapExecutionResult | SwapSubmitOnClientResult> {
     const normalizedNodeExecutionId = this.normalizeNodeExecutionId(nodeExecutionId);
     const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
     const safeTransactionService = getSafeTransactionService();
@@ -552,16 +554,6 @@ export class SwapExecutionService {
         );
       }
 
-      // Sponsorship on mainnet only: consume one sponsored tx slot (testnet = unlimited)
-      if (userId && isMainnetChain(chainId)) {
-        const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
-        if (!sponsorResult.consumed) {
-          throw new Error(
-            `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`
-          );
-        }
-      }
-
       // Execute Safe transaction with user signature
       logger.info(
         {
@@ -588,6 +580,27 @@ export class SwapExecutionService {
         ethers.ZeroAddress // refundReceiver
       );
 
+      // Mainnet: return payload for client submission (user pays gas)
+      if ('submitOnClient' in result && result.submitOnClient) {
+        logger.info(
+          { swapExecutionId, nodeExecutionId: normalizedNodeExecutionId, chainId },
+          'Returning submitOnClient payload for mainnet'
+        );
+        return {
+          success: true,
+          submitOnClient: true,
+          payload: {
+            chainId: result.chainId,
+            to: result.to,
+            data: result.data,
+            value: '0x' + result.value.toString(16),
+          },
+          swapExecutionId,
+          nodeExecutionId: normalizedNodeExecutionId,
+        };
+      }
+
+      if (!('txHash' in result)) throw new Error('Unreachable: expected relayer result');
       const txHash = result.txHash;
 
       // Update swap execution with tx hash
@@ -694,7 +707,7 @@ export class SwapExecutionService {
     signature?: string, // Optional: If provided, uses signature-based execution
     safeTxHash?: string,
     safeTxData?: any
-  ): Promise<SwapExecutionResult> {
+  ): Promise<SwapExecutionResult | SwapSubmitOnClientResult> {
     // If signature is provided, delegate to the signature-based flow
     // which uses the cached Safe tx payload (avoids rebuilding a different tx
     // whose hash won't match the user's signature).
@@ -1209,6 +1222,59 @@ export class SwapExecutionService {
     const spamKey = `spam:swap:${walletAddress}`;
     await redisClient.set(spamKey, Date.now().toString());
     await redisClient.expire(spamKey, 60); // 1 minute
+  }
+
+  /**
+   * Report a client-submitted tx hash (mainnet user-funded flow).
+   * Updates swap_executions, waits for receipt, then sets status SUCCESS.
+   */
+  async reportSwapClientTx(
+    swapExecutionId: string,
+    txHash: string
+  ): Promise<SwapExecutionResult | null> {
+    const row = await this.getSwapExecution(swapExecutionId);
+    if (!row) {
+      logger.warn({ swapExecutionId }, 'Swap execution not found for report-tx');
+      return null;
+    }
+    await this.updateSwapExecution(swapExecutionId, {
+      tx_hash: txHash,
+      status: ExecutionStatus.RUNNING,
+    });
+    const chain = row.chain as SupportedChain;
+    const receipt = await waitForTransaction(chain, txHash, 1);
+    if (!receipt) {
+      await this.updateSwapExecution(swapExecutionId, {
+        status: ExecutionStatus.FAILED,
+        error_message: 'Transaction receipt not found',
+        error_code: 'RECEIPT_NOT_FOUND',
+        completed_at: new Date(),
+      });
+      return null;
+    }
+    await this.updateSwapExecution(swapExecutionId, {
+      amount_out: undefined,
+      gas_used: receipt.gasUsed.toString(),
+      effective_gas_price: receipt.gasPrice?.toString(),
+      block_number: receipt.blockNumber,
+      status: ExecutionStatus.SUCCESS,
+      completed_at: new Date(),
+    });
+    const fromToken = row.source_token as TokenInfo;
+    const toToken = row.destination_token as TokenInfo;
+    return {
+      success: true,
+      txHash: receipt.hash,
+      fromToken,
+      toToken,
+      amountIn: row.amount_in,
+      amountOut: row.amount_out,
+      gasUsed: receipt.gasUsed.toString(),
+      effectiveGasPrice: receipt.gasPrice?.toString(),
+      blockNumber: receipt.blockNumber,
+      timestamp: new Date(),
+      status: ExecutionStatus.SUCCESS,
+    };
   }
 
   /**

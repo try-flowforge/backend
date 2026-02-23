@@ -17,6 +17,7 @@ import { pool } from '../../config/database';
 import { executionEventEmitter } from '../ExecutionEventEmitter';
 import { WORKFLOW_CONSTANTS } from '../../config/constants';
 import { invalidateExecutionTokens } from '../subscription-token.service';
+import { swapExecutionService } from '../swap/SwapExecutionService';
 
 /**
  * Workflow Execution Engine
@@ -826,6 +827,175 @@ export class WorkflowExecutionEngine {
   }
 
   /**
+   * Report client-submitted tx hash and continue workflow (mainnet user-funded flow).
+   * Called from POST /executions/:executionId/report-client-tx
+   */
+  async reportClientTx(executionId: string, txHash: string): Promise<WorkflowExecutionContext> {
+    const execResult = await pool.query<DBWorkflowExecution & { paused_at_node_id: string; paused_context: any }>(
+      'SELECT * FROM workflow_executions WHERE id = $1',
+      [executionId]
+    );
+    if (execResult.rows.length === 0) {
+      throw new Error(`Execution not found: ${executionId}`);
+    }
+    const execution = execResult.rows[0];
+    if (execution.status !== ExecutionStatus.WAITING_FOR_CLIENT_TX) {
+      throw new Error(`Execution ${executionId} is not waiting for client tx (status: ${execution.status})`);
+    }
+    const pausedCtx = execution.paused_context;
+    const clientTx = pausedCtx?.clientTx;
+    if (!clientTx?.payload || !clientTx?.nodeExecutionId) {
+      throw new Error(`Execution ${executionId} has no clientTx state`);
+    }
+    const { swapExecutionId, nodeExecutionId } = clientTx;
+    const pausedAtNodeId = execution.paused_at_node_id;
+
+    let swapResult: any = { success: true, txHash, fromToken: {}, toToken: {}, amountIn: '0', timestamp: new Date(), status: ExecutionStatus.SUCCESS };
+    if (swapExecutionId) {
+      const reported = await swapExecutionService.reportSwapClientTx(swapExecutionId, txHash);
+      if (reported) {
+        swapResult = { ...reported, timestamp: new Date() };
+      }
+    }
+
+    const nodeResult = {
+      success: true,
+      output: { txHash: swapResult.txHash, ...swapResult },
+      error: null,
+      metadata: { completedAt: new Date(), duration: 0, startedAt: new Date() },
+    };
+    await this.updateNodeExecution(nodeExecutionId, nodeResult);
+
+    const nodeOutputsMap = new Map<string, any>();
+    if (pausedCtx.nodeOutputs) {
+      for (const [key, value] of Object.entries(pausedCtx.nodeOutputs)) {
+        nodeOutputsMap.set(key, value);
+      }
+    }
+    nodeOutputsMap.set(pausedAtNodeId, nodeResult.output);
+
+    const context: WorkflowExecutionContext = {
+      executionId,
+      workflowId: execution.workflow_id,
+      userId: execution.user_id,
+      triggeredBy: (pausedCtx.triggeredBy as TriggerType) || execution.triggered_by,
+      triggeredAt: new Date(pausedCtx.triggeredAt || execution.triggered_at),
+      initialInput: pausedCtx.initialInput || execution.initial_input,
+      nodeOutputs: nodeOutputsMap,
+      status: ExecutionStatus.RUNNING,
+      startedAt: new Date(pausedCtx.startedAt || execution.started_at),
+      retryCount: pausedCtx.retryCount || 0,
+      currentNodeId: pausedAtNodeId,
+    };
+
+    await this.updateExecutionStatus(executionId, ExecutionStatus.RUNNING);
+
+    const workflow = await this.loadWorkflow(execution.workflow_id);
+    const pausedNode = workflow.nodes.find((n) => n.id === pausedAtNodeId);
+    if (!pausedNode) {
+      throw new Error(`Paused node ${pausedAtNodeId} not found`);
+    }
+
+    const branchDecisions = new Map<string, string>();
+    const visited = new Set<string>();
+    context.nodeOutputs.forEach((_, key) => visited.add(key));
+
+    let currentNodeId: string | null = this.getNextNode(pausedNode.id, branchDecisions, workflow);
+    const maxSteps = WORKFLOW_CONSTANTS.MAX_STEPS_PER_EXECUTION;
+    let stepCount = 0;
+
+    while (currentNodeId && stepCount < maxSteps) {
+      stepCount++;
+      if (visited.has(currentNodeId)) break;
+      visited.add(currentNodeId);
+
+      const node = workflow.nodes.find((n) => n.id === currentNodeId);
+      if (!node) break;
+      if (node.type === NodeType.TRIGGER) {
+        const nextEdges = workflow.edges.filter((e) => e.sourceNodeId === currentNodeId);
+        currentNodeId = nextEdges.length > 0 ? nextEdges[0].targetNodeId : null;
+        continue;
+      }
+
+      const nodeInputData = this.collectInputData(node.id, workflow, context);
+      const nExecId = await this.createNodeExecution(executionId, node.id, node.type, nodeInputData);
+      const nInput: NodeExecutionInput = {
+        nodeId: node.id,
+        nodeType: node.type,
+        nodeConfig: node.config,
+        inputData: nodeInputData,
+        executionContext: context,
+        secrets: await this.loadUserSecrets(context.userId),
+      };
+      executionEventEmitter.emitExecutionEvent({
+        type: 'node:started',
+        executionId,
+        workflowId: context.workflowId,
+        nodeId: node.id,
+        nodeType: node.type,
+        status: ExecutionStatus.RUNNING,
+        timestamp: new Date(),
+      });
+      const nResult = await nodeProcessorFactory.getProcessor(node.type).execute(nInput);
+      await this.updateNodeExecution(nExecId, nResult);
+      context.nodeOutputs.set(node.id, nResult.output);
+      executionEventEmitter.emitExecutionEvent({
+        type: nResult.success ? 'node:completed' : 'node:failed',
+        executionId,
+        workflowId: context.workflowId,
+        nodeId: node.id,
+        nodeType: node.type,
+        status: nResult.success ? ExecutionStatus.SUCCESS : ExecutionStatus.FAILED,
+        output: nResult.output,
+        error: nResult.error,
+        timestamp: new Date(),
+      });
+      if (node.type === NodeType.IF && nResult.output?.branchToFollow) {
+        branchDecisions.set(node.id, nResult.output.branchToFollow);
+      }
+      if (node.type === NodeType.SWITCH && nResult.output?.branchToFollow) {
+        branchDecisions.set(node.id, nResult.output.branchToFollow);
+      }
+      if (!nResult.success && nResult.output?.requiresSignature && nResult.output?.safeTxHash) {
+        await this.persistPausedState(executionId, node.id, context, nResult.output.safeTxHash, nResult.output.safeTxData);
+        executionEventEmitter.emitExecutionEvent({
+          type: 'node:signature_required',
+          executionId,
+          workflowId: context.workflowId,
+          nodeId: node.id,
+          nodeType: node.type,
+          status: ExecutionStatus.WAITING_FOR_SIGNATURE,
+          safeTxHash: nResult.output.safeTxHash,
+          safeTxData: nResult.output.safeTxData,
+          timestamp: new Date(),
+        });
+        context.status = ExecutionStatus.WAITING_FOR_SIGNATURE;
+        return context;
+      }
+      if (!nResult.success && !(node.config as any).continueOnError) {
+        context.status = ExecutionStatus.FAILED;
+        context.error = nResult.error;
+        throw new Error(`Node ${node.id} failed: ${nResult.error?.message}`);
+      }
+      currentNodeId = this.getNextNode(node.id, branchDecisions, workflow);
+    }
+
+    context.status = ExecutionStatus.SUCCESS;
+    context.completedAt = new Date();
+    await this.updateExecutionStatus(executionId, ExecutionStatus.SUCCESS);
+    await this.updateWorkflowLastExecuted(execution.workflow_id);
+    executionEventEmitter.emitExecutionEvent({
+      type: 'execution:completed',
+      executionId,
+      workflowId: context.workflowId,
+      status: ExecutionStatus.SUCCESS,
+      timestamp: new Date(),
+    });
+    await invalidateExecutionTokens(executionId);
+    return context;
+  }
+
+  /**
    * Get node executions for a workflow execution
    */
   async getNodeExecutions(executionId: string): Promise<DBNodeExecution[]> {
@@ -885,6 +1055,41 @@ export class WorkflowExecutionEngine {
         JSON.stringify(safeTxData, jsonReplacer),
         executionId,
       ]
+    );
+  }
+
+  /**
+   * Persist state when mainnet swap returns submitOnClient (user must submit tx).
+   */
+  private async persistClientTxState(
+    executionId: string,
+    pausedAtNodeId: string,
+    context: WorkflowExecutionContext,
+    output: { payload: any; swapExecutionId: string | null; nodeExecutionId: string }
+  ): Promise<void> {
+    const nodeOutputsObj: Record<string, any> = {};
+    context.nodeOutputs.forEach((value, key) => {
+      nodeOutputsObj[key] = value;
+    });
+    const pausedContext = {
+      workflowId: context.workflowId,
+      userId: context.userId,
+      triggeredBy: context.triggeredBy,
+      triggeredAt: context.triggeredAt,
+      initialInput: context.initialInput,
+      nodeOutputs: nodeOutputsObj,
+      startedAt: context.startedAt,
+      retryCount: context.retryCount,
+      clientTx: {
+        payload: output.payload,
+        swapExecutionId: output.swapExecutionId,
+        nodeExecutionId: output.nodeExecutionId,
+      },
+    };
+    const jsonReplacer = (_key: string, value: any) => (typeof value === 'bigint' ? value.toString() : value);
+    await pool.query(
+      `UPDATE workflow_executions SET status = $1, paused_at_node_id = $2, paused_context = $3 WHERE id = $4`,
+      [ExecutionStatus.WAITING_FOR_CLIENT_TX, pausedAtNodeId, JSON.stringify(pausedContext, jsonReplacer), executionId]
     );
   }
 
@@ -1005,6 +1210,21 @@ export class WorkflowExecutionEngine {
         throw new Error(`Resumed node ${pausedNode.id} failed: ${result.error?.message}`);
       }
 
+      // Mainnet: node returned submitOnClient; persist and return payload for client to submit tx
+      if (result.output?.submitOnClient && result.output?.payload) {
+        await this.persistClientTxState(executionId, pausedNode.id, context, {
+          payload: result.output.payload,
+          swapExecutionId: result.output.swapExecutionId ?? null,
+          nodeExecutionId: result.output.nodeExecutionId,
+        });
+        (context as any).submitOnClientPayload = {
+          submitOnClient: true,
+          payload: result.output.payload,
+          executionId,
+        };
+        return context;
+      }
+
       // 5. Continue executing remaining nodes from where we left off
       //    We need to find the next node and continue the loop
       const branchDecisions = new Map<string, string>();
@@ -1097,6 +1317,21 @@ export class WorkflowExecutionEngine {
             timestamp: new Date(),
           });
           context.status = ExecutionStatus.WAITING_FOR_SIGNATURE;
+          return context;
+        }
+
+        // Mainnet: subsequent swap node returned submitOnClient
+        if (nResult.success && nResult.output?.submitOnClient && nResult.output?.payload) {
+          await this.persistClientTxState(executionId, node.id, context, {
+            payload: nResult.output.payload,
+            swapExecutionId: nResult.output.swapExecutionId ?? null,
+            nodeExecutionId: nResult.output.nodeExecutionId,
+          });
+          (context as any).submitOnClientPayload = {
+            submitOnClient: true,
+            payload: nResult.output.payload,
+            executionId,
+          };
           return context;
         }
 

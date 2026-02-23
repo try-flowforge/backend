@@ -75,6 +75,16 @@ interface AllowanceExecuteResponse {
   txHash: string;
 }
 
+interface AllowanceExecuteSubmitOnClientResponse {
+  network: OstiumNetwork;
+  safeAddress: string;
+  tokenAddress: string;
+  spenderAddress: string;
+  amount: string;
+  submitOnClient: true;
+  payload: { chainId: number; to: string; data: string; value: string };
+}
+
 const DEFAULT_CONTRACTS: Record<OstiumNetwork, NetworkContracts> = {
   testnet: {
     usdc: '0xe73B11Fb1e3eeEe8AF2a23079A4410Fe1B370548',
@@ -425,7 +435,7 @@ export class OstiumSetupService {
     signature: string,
     safeTxHash: string,
     safeTxData: SafeTxData,
-  ): Promise<AllowanceExecuteResponse> {
+  ): Promise<AllowanceExecuteResponse | AllowanceExecuteSubmitOnClientResponse> {
     const safeAddress = await this.getSafeAddressByNetwork(userId, network);
     if (!safeAddress) {
       throw new Error(`Safe wallet not found for ${network}. Create Safe first.`);
@@ -451,13 +461,32 @@ export class OstiumSetupService {
       ethers.ZeroAddress,
     );
 
+    if ('submitOnClient' in result && result.submitOnClient) {
+      return {
+        network,
+        safeAddress,
+        tokenAddress: contracts.usdc,
+        spenderAddress: spender,
+        amount: amount.toString(),
+        submitOnClient: true,
+        payload: {
+          chainId: result.chainId,
+          to: result.to,
+          data: result.data,
+          value: '0x' + result.value.toString(16),
+        },
+      };
+    }
+
+    const txHash = 'txHash' in result ? result.txHash : undefined;
+    if (!txHash) throw new Error('Unreachable: expected relayer result');
     return {
       network,
       safeAddress,
       tokenAddress: contracts.usdc,
       spenderAddress: spender,
       amount: amount.toString(),
-      txHash: result.txHash,
+      txHash,
     };
   }
 }

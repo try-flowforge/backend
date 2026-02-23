@@ -48,6 +48,7 @@ import * as migration044 from "./044_add_perps_node_type";
 import * as migration045 from "./045_remove_relay_oneinch_swap_providers";
 import * as migration046 from "./046_drop_user_ens_subdomains_table";
 import * as migration047 from "./047_remove_unsupported_chains";
+import * as migration048 from "./048_add_waiting_for_client_tx_status";
 
 // Load environment variables
 dotenv.config();
@@ -349,6 +350,12 @@ const migrations: Migration[] = [
     name: "047_remove_unsupported_chains",
     up: migration047.up,
     down: migration047.down,
+  },
+  {
+    id: 48,
+    name: "048_add_waiting_for_client_tx_status",
+    up: migration048.up,
+    down: migration048.down,
   },
 ];
 

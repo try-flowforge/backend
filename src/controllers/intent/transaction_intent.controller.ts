@@ -95,12 +95,12 @@ export class TransactionIntentController {
                 return;
             }
 
-            // If we have pre-built safe tx data, broadcast via relayer
+            // If we have pre-built safe tx data, execute (relayer on testnet, submitOnClient on mainnet)
             if (intent.safeTxData && intent.safeTxHash) {
                 const safeTransactionService = getSafeTransactionService();
                 const { to, value, data, operation } = intent.safeTxData;
 
-                const { txHash } = await safeTransactionService.executeWithSignatures(
+                const result = await safeTransactionService.executeWithSignatures(
                     intent.safeAddress,
                     intent.chainId as NumericChainId,
                     to,
@@ -111,7 +111,24 @@ export class TransactionIntentController {
                     intent.safeTxHash
                 );
 
-                const completed = await transactionIntentService.completeIntent(id, txHash);
+                if ('submitOnClient' in result && result.submitOnClient) {
+                    res.json({
+                        success: true,
+                        data: {
+                            submitOnClient: true,
+                            payload: {
+                                chainId: result.chainId,
+                                to: result.to,
+                                data: result.data,
+                                value: '0x' + result.value.toString(16),
+                            },
+                        },
+                    });
+                    return;
+                }
+
+                if (!('txHash' in result)) throw new Error('Unreachable: expected relayer result');
+                const completed = await transactionIntentService.completeIntent(id, result.txHash);
                 res.json({ success: true, data: completed });
                 return;
             }

@@ -82,13 +82,35 @@ export class SwapNodeProcessor implements INodeProcessor {
         };
       }
 
+      // Mainnet: client must submit tx; return payload for workflow to pause as WAITING_FOR_CLIENT_TX
+      if ('submitOnClient' in result && result.submitOnClient) {
+        const output = {
+          submitOnClient: true,
+          payload: result.payload,
+          swapExecutionId: result.swapExecutionId,
+          nodeExecutionId: result.nodeExecutionId,
+          chain: config.chain,
+        };
+        logger.info({ nodeId: input.nodeId, submitOnClient: true }, 'Swap node returning payload for client submission');
+        return {
+          nodeId: input.nodeId,
+          success: true,
+          output,
+          metadata: {
+            startedAt: startTime,
+            completedAt: endTime,
+            duration: endTime.getTime() - startTime.getTime(),
+          },
+        };
+      }
+
       // Map output if configured; include chain so agents can build block explorer links
       let output = { ...result, chain: config.chain };
       if (config.outputMapping) {
         output = this.applyOutputMapping(output, config.outputMapping);
       }
 
-      logger.info({ nodeId: input.nodeId, txHash: result.txHash }, 'Swap node executed successfully');
+      logger.info({ nodeId: input.nodeId, txHash: 'txHash' in result ? result.txHash : undefined }, 'Swap node executed successfully');
 
       return {
         nodeId: input.nodeId,

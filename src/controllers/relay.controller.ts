@@ -287,10 +287,28 @@ export const createSafe = async (
         userAddress,
         data,
       },
-      "Sending createSafeWallet transaction"
+      "createSafeWallet transaction"
     );
 
-    // Send via relayer (already initialized above for reading)
+    // Mainnet: return payload for client submission (user pays gas)
+    if (isMainnetChain(supportedChainId)) {
+      await releaseLock(lockKey, lockValue!);
+      res.json({
+        success: true,
+        data: {
+          submitOnClient: true,
+          payload: {
+            chainId: supportedChainId,
+            to: factoryAddress,
+            data,
+            value: "0x0",
+          },
+        },
+      });
+      return;
+    }
+
+    // Send via relayer (testnet)
     const { txHash, receipt } = await relayerService.sendTransaction(
       supportedChainId,
       factoryAddress,
@@ -383,6 +401,66 @@ export const createSafe = async (
 };
 
 /**
+ * POST /api/v1/relay/sync-safe-from-tx
+ * After client submits create-safe tx (mainnet), parse receipt and sync Safe address to user.
+ * Body: { chainId: number, txHash: string }
+ */
+export const syncSafeFromTx = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { chainId: chainIdBody, txHash } = req.body;
+    const supportedChainId = chainIdBody;
+    if (!isSafeRelayChainId(supportedChainId) || !txHash || typeof txHash !== "string") {
+      res.status(400).json({
+        success: false,
+        error: "Missing or invalid chainId or txHash",
+      });
+      return;
+    }
+    const userId = req.userId;
+    const userAddress = req.userWalletAddress;
+    if (!userId || !userAddress) {
+      res.status(401).json({ success: false, error: "Unauthorized" });
+      return;
+    }
+    const relayerService = getRelayerService();
+    const provider = relayerService.getProvider(supportedChainId);
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+      res.status(404).json({
+        success: false,
+        error: "Transaction receipt not found. The transaction may still be pending.",
+      });
+      return;
+    }
+    const eventTopic = ethers.id("SafeWalletCreated(address,address,uint256)");
+    const log = receipt.logs.find((l) => l.topics[0] === eventTopic);
+    if (!log) {
+      res.status(400).json({
+        success: false,
+        error: "SafeWalletCreated event not found in this transaction",
+      });
+      return;
+    }
+    const safeAddress = ethers.getAddress("0x" + log.topics[2].slice(-40));
+    await ensureUserExistsAndUpdateSafe(userId, userAddress, safeAddress, supportedChainId);
+    res.json({
+      success: true,
+      data: { safeAddress, txHash },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error({ error: errorMessage }, "syncSafeFromTx failed");
+    res.status(500).json({
+      success: false,
+      error: errorMessage || "Failed to sync Safe from transaction",
+    });
+  }
+};
+
+/**
  * POST /api/v1/relay/enable-module
  * Execute Safe transaction to enable module via relayer (sponsored)
  */
@@ -444,19 +522,6 @@ export const enableModule = async (
         },
       });
       return;
-    }
-
-    // Sponsorship on mainnet only: consume one of the user's sponsored tx slots (testnet = unlimited)
-    if (isMainnetChain(supportedChainId)) {
-      const sponsorResult = await UserModel.consumeOneSponsoredTx(userId);
-      if (!sponsorResult.consumed) {
-        res.status(403).json({
-          success: false,
-          error: `No sponsored mainnet transactions remaining (${sponsorResult.remaining} left). Claim an ENS subdomain to get more sponsored txs.`,
-          code: "NO_SPONSORED_TXS_REMAINING",
-        });
-        return;
-      }
     }
 
     // Rate limiting: max module enable per user per day
@@ -564,7 +629,28 @@ export const enableModule = async (
       signatures,
     ]);
 
-    // Step 5: Send via relayer
+    // Mainnet: return payload for client submission (user pays gas)
+    if (isMainnetChain(supportedChainId)) {
+      logger.info(
+        { userId, safeAddress, chainId: supportedChainId, chainName: chainConfig.name },
+        "Module enable: returning payload for client submission"
+      );
+      res.json({
+        success: true,
+        data: {
+          submitOnClient: true,
+          payload: {
+            chainId: supportedChainId,
+            to: safeAddress,
+            data: execTxData,
+            value: "0x0",
+          },
+        },
+      });
+      return;
+    }
+
+    // Step 5: Send via relayer (testnet)
     const relayerService = getRelayerService();
     const { txHash } = await relayerService.sendTransaction(
       supportedChainId,

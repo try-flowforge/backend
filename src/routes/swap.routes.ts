@@ -7,6 +7,7 @@ import {
   buildSwapTransaction,
   buildSafeSwapTransaction,
   executeSwapWithSignature,
+  reportSwapClientTx,
 } from '../controllers/swap.controller';
 import { validateParams, validateBody } from '../middleware/validation';
 import { verifyPrivyToken } from '../middleware/privy-auth';
@@ -16,6 +17,7 @@ import {
   swapChainTokenParamsSchema,
   swapInputConfigSchema,
   swapExecuteWithSignatureBodySchema,
+  swapReportClientTxBodySchema,
 } from '../middleware/schemas';
 
 const router = Router();
@@ -42,6 +44,14 @@ router.post(
   validateParams(swapProviderChainParamsSchema),
   validateBody(swapExecuteWithSignatureBodySchema),
   executeSwapWithSignature
+);
+
+// Report client-submitted tx hash (mainnet user-funded flow)
+router.post(
+  '/report-client-tx',
+  verifyPrivyToken,
+  validateBody(swapReportClientTxBodySchema),
+  reportSwapClientTx
 );
 
 // Get supported providers for chain

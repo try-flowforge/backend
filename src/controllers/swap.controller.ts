@@ -319,6 +319,24 @@ export const executeSwapWithSignature = async (
       return;
     }
 
+    // Mainnet: client must submit tx; return payload and ids for report-tx
+    if ('submitOnClient' in result && result.submitOnClient) {
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          submitOnClient: true,
+          payload: result.payload,
+          swapExecutionId: result.swapExecutionId,
+          nodeExecutionId: result.nodeExecutionId,
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      };
+      res.json(response);
+      return;
+    }
+
     const response: ApiResponse = {
       success: true,
       data: result,
@@ -330,6 +348,48 @@ export const executeSwapWithSignature = async (
     res.json(response);
   } catch (error) {
     logger.error({ error }, 'Failed to execute swap with signature');
+    next(error);
+  }
+};
+
+/**
+ * Report client-submitted tx hash (mainnet user-funded flow).
+ * Body: { swapExecutionId, txHash }
+ */
+export const reportSwapClientTx = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { swapExecutionId, txHash } = req.body;
+
+    logger.info({ swapExecutionId, userId: authReq.userId }, 'Reporting client-submitted swap tx');
+
+    const result = await swapExecutionService.reportSwapClientTx(swapExecutionId, txHash);
+
+    if (!result) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Swap execution not found or receipt not available',
+          code: 'REPORT_TX_FAILED',
+        },
+      } as ApiResponse);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: true,
+      data: result,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    };
+    res.json(response);
+  } catch (error) {
+    logger.error({ error }, 'Failed to report client swap tx');
     next(error);
   }
 };

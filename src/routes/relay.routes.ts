@@ -5,7 +5,7 @@ import {
 } from "../middleware/privy-auth";
 import * as relayController from "../controllers/relay.controller";
 import { validateBody } from "../middleware/validation";
-import { createSafeSchema, enableModuleSchema } from "../middleware/schemas";
+import { createSafeSchema, enableModuleSchema, syncSafeFromTxSchema } from "../middleware/schemas";
 
 const router = Router();
 
@@ -22,6 +22,17 @@ router.post(
   validateBody(createSafeSchema),
   (req: Request, res: Response, next: NextFunction) => {
     relayController.createSafe(req as AuthenticatedRequest, res).catch(next);
+  }
+);
+
+/**
+ * POST /api/v1/relay/sync-safe-from-tx - Sync Safe address from client-submitted create-safe tx (mainnet)
+ */
+router.post(
+  "/sync-safe-from-tx",
+  validateBody(syncSafeFromTxSchema),
+  (req: Request, res: Response, next: NextFunction) => {
+    relayController.syncSafeFromTx(req as AuthenticatedRequest, res).catch(next);
   }
 );
 

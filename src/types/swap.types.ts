@@ -56,6 +56,7 @@ export enum ExecutionStatus {
   CANCELLED = "CANCELLED",
   RETRYING = "RETRYING",
   WAITING_FOR_SIGNATURE = "WAITING_FOR_SIGNATURE",
+  WAITING_FOR_CLIENT_TX = "WAITING_FOR_CLIENT_TX",
 }
 
 // Swap Type (exact in vs exact out)
@@ -156,6 +157,23 @@ export interface SwapExecutionResult {
     data: string;
     operation: number;
   };
+}
+
+/** Payload for client to submit (mainnet user-funded); value as hex string for JSON */
+export interface SwapSubmitOnClientPayload {
+  chainId: number;
+  to: string;
+  data: string;
+  value: string;
+}
+
+/** Result when backend returns tx for client submission (mainnet) */
+export interface SwapSubmitOnClientResult {
+  success: true;
+  submitOnClient: true;
+  payload: SwapSubmitOnClientPayload;
+  swapExecutionId: string | null;
+  nodeExecutionId: string;
 }
 
 // Safe Transaction Hash for Signing
