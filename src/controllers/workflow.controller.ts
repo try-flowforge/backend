@@ -437,7 +437,7 @@ export const listWorkflows = async (
     const userId = authReq.userId;
     const { category, isActive, limit = 50, offset = 0 } = req.query;
 
-    // Build the base query with execution statistics
+    // Build the base query with execution statistics (single-pass aggregation, no correlated subquery)
     let query = `
       SELECT 
         w.*,
@@ -453,11 +453,7 @@ export const listWorkflows = async (
           COUNT(*)::int as execution_count,
           COUNT(*) FILTER (WHERE status = 'SUCCESS')::int as success_count,
           COUNT(*) FILTER (WHERE status = 'FAILED')::int as failed_count,
-          (
-            SELECT status FROM workflow_executions we2 
-            WHERE we2.workflow_id = workflow_executions.workflow_id 
-            ORDER BY started_at DESC LIMIT 1
-          ) as last_execution_status,
+          (array_agg(status ORDER BY started_at DESC))[1] as last_execution_status,
           MAX(started_at) as last_execution_at
         FROM workflow_executions
         GROUP BY workflow_id

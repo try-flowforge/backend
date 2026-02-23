@@ -50,6 +50,7 @@ import * as migration046 from "./046_drop_user_ens_subdomains_table";
 import * as migration047 from "./047_remove_unsupported_chains";
 import * as migration049 from "./049_remove_uniswap_v3_swap_provider";
 import * as migration048 from "./048_add_waiting_for_client_tx_status";
+import * as migration050 from "./050_db_optimization_indexes_and_fks";
 
 // Load environment variables
 dotenv.config();
@@ -363,6 +364,12 @@ const migrations: Migration[] = [
     name: "048_add_waiting_for_client_tx_status",
     up: migration048.up,
     down: migration048.down,
+  },
+  {
+    id: 50,
+    name: "050_db_optimization_indexes_and_fks",
+    up: migration050.up,
+    down: migration050.down,
   },
 ];
 
