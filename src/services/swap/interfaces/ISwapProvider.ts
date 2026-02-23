@@ -8,7 +8,7 @@ import {
 
 /**
  * Base interface for all swap providers
- * Each provider (Uniswap, Relay, 1inch) implements this interface
+ * Each provider (Uniswap, LiFi) implements this interface
  */
 export interface ISwapProvider {
   /**

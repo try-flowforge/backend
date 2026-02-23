@@ -143,44 +143,7 @@ export const agentServiceConfig = {
   serviceKey: process.env.AGENT_SERVICE_KEY || null,
 } as const;
 
-/**
- * ENS subdomain sponsorship: 3 sponsored txs per 0.5 USDC (per 1 week period).
- */
-export const SPONSORED_TXS_PER_PERIOD = 3;
-export const ENS_PRICER_PERIOD_SECONDS = 7 * 24 * 3600; // 604800
 
-/**
- * ENS chain IDs
- */
-export const ENS_CHAIN_IDS = {
-  ETHEREUM_MAINNET: 1,
-  ETHEREUM_SEPOLIA: 11155111,
-} as const;
-
-export type EnsChainId =
-  | typeof ENS_CHAIN_IDS.ETHEREUM_MAINNET
-  | typeof ENS_CHAIN_IDS.ETHEREUM_SEPOLIA;
-
-/**
- * ENS Configuration
- */
-export const ensConfig: Partial<
-  Record<
-    EnsChainId,
-    { registryAddress: string; pricerAddress: string; rpcUrl?: string }
-  >
-> = {
-  [ENS_CHAIN_IDS.ETHEREUM_MAINNET]: {
-    registryAddress: getOptionalEnv("SUBDOMAIN_REGISTRY_ADDRESS_1", ""),
-    pricerAddress: getOptionalEnv("PRICER_ADDRESS_1", ""),
-    rpcUrl: process.env.ETHEREUM_MAINNET_RPC_URL,
-  },
-  [ENS_CHAIN_IDS.ETHEREUM_SEPOLIA]: {
-    registryAddress: getOptionalEnv("SUBDOMAIN_REGISTRY_ADDRESS_11155111", ""),
-    pricerAddress: getOptionalEnv("PRICER_ADDRESS_11155111", ""),
-    rpcUrl: process.env.ETHEREUM_SEPOLIA_RPC_URL,
-  },
-};
 
 /**
  * Complete configuration object

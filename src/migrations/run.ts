@@ -45,6 +45,8 @@ import * as migration041 from "./041_add_time_block_node_type";
 import * as migration042 from "./042_create_ostium_delegations_table";
 import * as migration043 from "./043_create_perps_executions_table";
 import * as migration044 from "./044_add_perps_node_type";
+import * as migration045 from "./045_remove_relay_oneinch_swap_providers";
+import * as migration046 from "./046_drop_user_ens_subdomains_table";
 
 // Load environment variables
 dotenv.config();
@@ -328,6 +330,18 @@ const migrations: Migration[] = [
     name: "044_add_perps_node_type",
     up: migration044.up,
     down: migration044.down,
+  },
+  {
+    id: 45,
+    name: "045_remove_relay_oneinch_swap_providers",
+    up: migration045.up,
+    down: migration045.down,
+  },
+  {
+    id: 46,
+    name: "046_drop_user_ens_subdomains_table",
+    up: migration046.up,
+    down: migration046.down,
   },
 ];
 

@@ -45,6 +45,8 @@ import * as migration041 from "./041_add_time_block_node_type";
 import * as migration042 from "./042_create_ostium_delegations_table";
 import * as migration043 from "./043_create_perps_executions_table";
 import * as migration044 from "./044_add_perps_node_type";
+import * as migration045 from "./045_remove_relay_oneinch_swap_providers";
+import * as migration046 from "./046_drop_user_ens_subdomains_table";
 
 // Load environment variables
 dotenv.config();
@@ -167,6 +169,8 @@ const resetDatabase = async (): Promise<void> => {
     await migration042.up(pool);
     await migration043.up(pool);
     await migration044.up(pool);
+    await migration045.up(pool);
+    await migration046.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -351,6 +355,14 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [44, "044_add_perps_node_type"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [45, "045_remove_relay_oneinch_swap_providers"]
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [46, "046_drop_user_ens_subdomains_table"]
     );
     logger.info("Database reset completed successfully");
   } catch (error) {

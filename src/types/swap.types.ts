@@ -17,8 +17,6 @@ export enum SupportedChain {
 export enum SwapProvider {
   UNISWAP = "UNISWAP",
   UNISWAP_V4 = "UNISWAP_V4",
-  RELAY = "RELAY",
-  ONEINCH = "ONEINCH",
   LIFI = "LIFI",
 }
 
@@ -103,7 +101,6 @@ export interface SwapInputConfig {
 
   // Advanced options
   recipient?: string; // If different from walletAddress
-  enablePartialFill?: boolean; // For 1inch
   simulateFirst?: boolean; // Default: true - simulate before executing
 
   /** For LiFi cross-chain: destination chain. When set and different from source chain, use cross-chain quote/execution. */
@@ -528,14 +525,4 @@ export interface UniswapConfig {
   quoterAddress?: string;
   v2?: boolean;
   v3?: boolean;
-}
-
-export interface RelayConfig {
-  apiKey: string;
-  apiUrl: string;
-}
-
-export interface OneInchConfig {
-  apiKey: string;
-  apiUrl: string;
 }

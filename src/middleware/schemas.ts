@@ -19,7 +19,7 @@ const SAFE_RELAY_CHAIN_ERROR = `Chain ID must be one of: ${getSafeRelayChainLabe
 /** Supported chains for swap/lending/oracle (includes BASE for LiFi cross-chain) */
 const SUPPORTED_CHAINS = ['ARBITRUM', 'ARBITRUM_SEPOLIA', 'ETHEREUM_SEPOLIA', 'BASE'] as const;
 /** Swap providers */
-const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'] as const;
+const SWAP_PROVIDERS = ['UNISWAP', 'UNISWAP_V4', 'LIFI'] as const;
 /** Lending providers */
 const LENDING_PROVIDERS = ['AAVE', 'COMPOUND'] as const;
 /** Ostium networks */
@@ -581,34 +581,6 @@ export const enableModuleSchema = Joi.object({
         refundReceiver: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
     }).required(),
     signatures: Joi.string().required(),
-});
-
-/**
- * Schema for recording ENS subdomain registration (grant sponsorship allowance).
- * Chain ID: 1 = Ethereum mainnet, 11155111 = Ethereum Sepolia.
- */
-export const registerSubdomainSchema = Joi.object({
-    ensName: Joi.string().required().max(255).messages({
-        'string.empty': 'ENS name is required',
-    }),
-    ownerAddress: Joi.string()
-        .pattern(/^0x[a-fA-F0-9]{40}$/)
-        .required()
-        .messages({
-            'string.pattern.base': 'Invalid owner address format',
-        }),
-    expiry: Joi.date().iso().required().messages({
-        'date.format': 'expiry must be ISO 8601 date',
-    }),
-    durationSeconds: Joi.number().integer().min(1).required().messages({
-        'number.min': 'durationSeconds must be at least 1',
-    }),
-    chainId: Joi.number()
-        .valid(1, 11155111)
-        .required()
-        .messages({
-            'any.only': 'Chain ID must be 1 (Ethereum mainnet) or 11155111 (Ethereum Sepolia)',
-        }),
 });
 
 // ===========================================

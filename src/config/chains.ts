@@ -27,16 +27,6 @@ export const PROVIDER_CONFIGS = {
     v3Enabled: true,
     defaultSlippage: 0.5,
   },
-  RELAY: {
-    apiUrl: process.env.RELAY_API_URL || "https://api.relay.link",
-    apiKey: process.env.RELAY_API_KEY,
-    defaultSlippage: 0.5,
-  },
-  ONEINCH: {
-    apiUrl: process.env.ONEINCH_API_URL || "https://api.1inch.dev/swap/v6.0",
-    apiKey: process.env.ONEINCH_API_KEY,
-    defaultSlippage: 0.5,
-  },
   LIFI: {
     apiUrl: process.env.LIFI_API_URL || "https://li.quest/v1",
     apiKey: process.env.LIFI_API_KEY,
