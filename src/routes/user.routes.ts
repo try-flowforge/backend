@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import { UserController } from '../controllers/user.controller';
+import {
+  getMeAgentContext,
+  patchMeAgentContext,
+} from '../controllers/agent-context.controller';
 import { validateBody, validateParams, asyncHandler } from '../middleware';
 import { verifyPrivyToken } from '../middleware/privy-auth';
 import { createUserSchema, userIdSchema, updateUserChainsSchema } from '../models/users';
@@ -43,6 +47,28 @@ router.get('/', asyncHandler(UserController.getAllUsers));
  * @important Must be defined BEFORE /:id route to avoid matching "me" as an ID
  */
 router.get('/me', verifyPrivyToken, asyncHandler(UserController.getMe));
+
+/**
+ * @route   GET /api/v1/users/me/agent-context
+ * @desc    Get current user's agent context (for planner)
+ * @access  Private (requires Privy token)
+ */
+router.get(
+  '/me/agent-context',
+  verifyPrivyToken,
+  asyncHandler(getMeAgentContext)
+);
+
+/**
+ * @route   PATCH /api/v1/users/me/agent-context
+ * @desc    Update current user's agent context (allowlisted keys only)
+ * @access  Private (requires Privy token)
+ */
+router.patch(
+  '/me/agent-context',
+  verifyPrivyToken,
+  asyncHandler(patchMeAgentContext)
+);
 
 /**
  * @route   GET /api/v1/users/:id
