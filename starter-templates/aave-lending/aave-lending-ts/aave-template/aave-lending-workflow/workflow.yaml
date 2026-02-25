@@ -1,0 +1,22 @@
+# ==========================================================================
+# CRE WORKFLOW SETTINGS FILE
+# ==========================================================================
+# Aave lending workflow. Config shape aligned with agentic LendingNodeConfig.
+
+# ==========================================================================
+staging-settings:
+  user-workflow:
+    workflow-name: "aave-lending-staging"
+    workflow-artifacts:
+      workflow-path: "./main.ts"
+      config-path: "./config.staging.json"
+      secrets-path: ""
+
+# ==========================================================================
+production-settings:
+  user-workflow:
+    workflow-name: "aave-lending-production"
+    workflow-artifacts:
+      workflow-path: "./main.ts"
+      config-path: "./config.production.json"
+      secrets-path: ""

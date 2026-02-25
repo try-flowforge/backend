@@ -1,0 +1,21 @@
+{
+  "schedule": "*/30 * * * * *",
+  "chain": "ARBITRUM_SEPOLIA",
+  "provider": "AAVE",
+  "aaveReceiverAddress": "0xe6adB91Cf2C31Ca2077b336d893816b736C9899a",
+  "gasLimit": "500000",
+  "inputConfig": {
+    "operation": "SUPPLY",
+    "asset": {
+      "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      "symbol": "USDC",
+      "decimals": 6
+    },
+    "amount": "1000",
+    "walletAddress": "0x844294eBecC14e934d9d72a319E6Fa9DbAf95Bc5",
+    "interestRateMode": "VARIABLE",
+    "onBehalfOf": "",
+    "referralCode": 0
+  },
+  "simulateFirst": true
+}

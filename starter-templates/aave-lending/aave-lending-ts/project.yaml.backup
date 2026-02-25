@@ -1,0 +1,16 @@
+version: v1
+projectName: aave-lending-cre-workflow
+language: typescript
+
+targets:
+  staging-settings:
+    description: Local staging (Arbitrum Sepolia testnet)
+    rpcs:
+      - chain-name: arbitrum-sepolia
+        url: ${ARBITRUM_SEPOLIA_RPC_URL}
+
+  production-settings:
+    description: Local production (Arbitrum mainnet)
+    rpcs:
+      - chain-name: arbitrum-one
+        url: ${ARBITRUM_RPC_URL}

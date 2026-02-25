@@ -1,0 +1,9 @@
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://arb-sepolia.g.alchemy.com/v2/9eCzjtGExJJ6c_WwQ01h6Hgmj8bjAdrc
+
+  experimental-chains:
+    - chain-selector: 3478487238524512106
+      rpc-url: https://arb-sepolia.g.alchemy.com/v2/9eCzjtGExJJ6c_WwQ01h6Hgmj8bjAdrc
+      forwarder: "0x76c9cf548b4179F8901cda1f8623568b58215E62"

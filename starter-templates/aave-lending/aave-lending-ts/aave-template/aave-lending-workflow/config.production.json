@@ -1,0 +1,20 @@
+{
+  "chain": "ARBITRUM",
+  "provider": "AAVE",
+  "aaveReceiverAddress": "",
+  "gasLimit": "500000",
+  "inputConfig": {
+    "operation": "SUPPLY",
+    "asset": {
+      "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+      "symbol": "USDC",
+      "decimals": 6
+    },
+    "amount": "1000000",
+    "walletAddress": "0x0000000000000000000000000000000000000000",
+    "interestRateMode": "VARIABLE",
+    "onBehalfOf": "",
+    "referralCode": 0
+  },
+  "simulateFirst": true
+}
