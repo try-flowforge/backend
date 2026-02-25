@@ -85,6 +85,9 @@ export class OracleNodeProcessor implements INodeProcessor {
         }
       }
 
+      const rawPrice = formatUnits(round.answer, decimals);
+      const formattedPrice = Number.parseFloat(rawPrice).toFixed(2);
+
       const output: ChainlinkPriceOutput = {
         provider: OracleProvider.CHAINLINK,
         chain: chainlinkConfig.chain,
@@ -97,7 +100,7 @@ export class OracleNodeProcessor implements INodeProcessor {
         startedAt: Number(round.startedAt),
         updatedAt,
         answer: round.answer.toString(),
-        formattedAnswer: formatUnits(round.answer, decimals),
+        formattedAnswer: formattedPrice,
       };
 
       const endTime = new Date();
