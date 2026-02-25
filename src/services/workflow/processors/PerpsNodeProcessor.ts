@@ -95,8 +95,6 @@ export class PerpsNodeProcessor implements INodeProcessor {
           break;
         case 'OPEN_POSITION': {
           await this.ensureWriteReadiness(input.executionContext.userId, config.network, config.action);
-          const slPrice = config.slPrice;
-          const tpPrice = config.tpPrice;
           result = await ostiumServiceClient.openPosition(
             {
               network: config.network,
@@ -104,8 +102,11 @@ export class PerpsNodeProcessor implements INodeProcessor {
               side: this.required(config.side, 'side is required for OPEN_POSITION'),
               collateral: this.required(config.collateral, 'collateral is required for OPEN_POSITION'),
               leverage: this.required(config.leverage, 'leverage is required for OPEN_POSITION'),
-              ...(slPrice != null ? { slPrice } : {}),
-              ...(tpPrice != null ? { tpPrice } : {}),
+              orderType: config.orderType,
+              triggerPrice: config.triggerPrice,
+              slippage: config.slippage,
+              slPrice: config.slPrice,
+              tpPrice: config.tpPrice,
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -124,6 +125,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
               network: config.network,
               pairId: this.required(config.pairId, 'pairId is required for CLOSE_POSITION'),
               tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for CLOSE_POSITION'),
+              closePercentage: config.closePercentage,
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -171,6 +173,130 @@ export class PerpsNodeProcessor implements INodeProcessor {
           );
           break;
         }
+        case 'LIST_ORDERS':
+          result = await ostiumServiceClient.listOrders(
+            {
+              network: config.network,
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'CANCEL_ORDER':
+          result = await ostiumServiceClient.cancelOrder(
+            {
+              network: config.network,
+              orderId: this.required(config.orderId, 'orderId is required for CANCEL_ORDER'),
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'UPDATE_ORDER':
+          result = await ostiumServiceClient.updateOrder(
+            {
+              network: config.network,
+              orderId: this.required(config.orderId, 'orderId is required for UPDATE_ORDER'),
+              triggerPrice: config.triggerPrice,
+              slPrice: config.slPrice,
+              tpPrice: config.tpPrice,
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'TRACK_ORDER':
+          result = await ostiumServiceClient.trackOrder(
+            {
+              network: config.network,
+              orderId: this.required(config.orderId, 'orderId is required for TRACK_ORDER'),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'POSITION_METRICS':
+          result = await ostiumServiceClient.getPositionMetrics(
+            {
+              network: config.network,
+              pairId: this.required(config.pairId, 'pairId is required for POSITION_METRICS'),
+              tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for POSITION_METRICS'),
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'HISTORY':
+          result = await ostiumServiceClient.getHistory(
+            {
+              network: config.network,
+              limit: config.limit,
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'FAUCET':
+          result = await ostiumServiceClient.requestFaucet(
+            {
+              network: config.network,
+              traderAddress: await this.resolveSafeAddress(
+                config.traderAddress,
+                input.executionContext.userId,
+                config.network,
+              ),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'MARKET_DETAILS':
+          result = await ostiumServiceClient.getMarketDetails(
+            {
+              network: config.network,
+              pairId: this.required(config.pairId, 'pairId is required for MARKET_DETAILS'),
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'MARKET_FUNDING':
+          result = await ostiumServiceClient.getMarketFunding(
+            {
+              network: config.network,
+              pairId: this.required(config.pairId, 'pairId is required for MARKET_FUNDING'),
+              periodHours: config.periodHours,
+            },
+            nodeExecutionId,
+          );
+          break;
+        case 'MARKET_ROLLOVER':
+          result = await ostiumServiceClient.getMarketRollover(
+            {
+              network: config.network,
+              pairId: this.required(config.pairId, 'pairId is required for MARKET_ROLLOVER'),
+              periodHours: config.periodHours,
+            },
+            nodeExecutionId,
+          );
+          break;
         default:
           throw new Error(`Unsupported perps action: ${config.action}`);
       }
@@ -265,11 +391,10 @@ export class PerpsNodeProcessor implements INodeProcessor {
         if (perpsConfig.leverage == null || perpsConfig.leverage <= 0) {
           errors.push('leverage must be > 0 for OPEN_POSITION');
         }
-        if (perpsConfig.slPrice != null && perpsConfig.slPrice <= 0) {
-          errors.push('slPrice must be > 0 for OPEN_POSITION when provided');
-        }
-        if (perpsConfig.tpPrice != null && perpsConfig.tpPrice <= 0) {
-          errors.push('tpPrice must be > 0 for OPEN_POSITION when provided');
+        if (perpsConfig.orderType === 'limit' || perpsConfig.orderType === 'stop') {
+          if (perpsConfig.triggerPrice == null || perpsConfig.triggerPrice <= 0) {
+            errors.push('triggerPrice must be > 0 for limit/stop orders');
+          }
         }
         break;
       case 'CLOSE_POSITION':
@@ -289,6 +414,17 @@ export class PerpsNodeProcessor implements INodeProcessor {
         if (perpsConfig.tpPrice == null || perpsConfig.tpPrice <= 0) {
           errors.push('tpPrice must be > 0 for UPDATE_TP');
         }
+        break;
+      case 'CANCEL_ORDER':
+      case 'UPDATE_ORDER':
+      case 'TRACK_ORDER':
+        if (!perpsConfig.orderId) errors.push('orderId is required');
+        break;
+      case 'POSITION_METRICS':
+      case 'MARKET_DETAILS':
+      case 'MARKET_FUNDING':
+      case 'MARKET_ROLLOVER':
+        if (perpsConfig.pairId == null) errors.push('pairId is required');
         break;
       default:
         break;

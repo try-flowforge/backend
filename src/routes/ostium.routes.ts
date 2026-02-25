@@ -1,20 +1,30 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
+  cancelOstiumOrder,
   closeOstiumPosition,
   executeOstiumAllowanceApproval,
   executeOstiumDelegationApproval,
   executeOstiumDelegationRevoke,
+  getOstiumAccountHistory,
   getOstiumBalance,
   getOstiumDelegationStatus,
+  getOstiumMarketDetails,
+  getOstiumMarketFunding,
+  getOstiumMarketRollover,
+  getOstiumPositionMetrics,
   getOstiumPrice,
   getOstiumReadiness,
   getOstiumSetupOverview,
   listOstiumMarkets,
+  listOstiumOrders,
   listOstiumPositions,
   openOstiumPosition,
   prepareOstiumAllowanceApproval,
   prepareOstiumDelegationApproval,
   prepareOstiumDelegationRevoke,
+  requestOstiumFaucet,
+  trackOstiumOrder,
+  updateOstiumOrder,
   updateOstiumStopLoss,
   updateOstiumTakeProfit,
 } from '../controllers/ostium.controller';
@@ -36,6 +46,14 @@ import {
   ostiumPositionUpdateSlSchema,
   ostiumPositionUpdateTpSchema,
   ostiumPriceSchema,
+  ostiumPositionMetricsSchema,
+  ostiumOrderCancelSchema,
+  ostiumOrderUpdateSchema,
+  ostiumOrderTrackSchema,
+  ostiumHistorySchema,
+  ostiumFaucetSchema,
+  ostiumMarketFundingSchema,
+  ostiumMarketDetailsSchema,
 } from '../middleware/schemas';
 
 const router = Router();
@@ -82,14 +100,33 @@ const ensureSetupOverviewEnabled = (_req: Request, res: Response, next: NextFunc
 router.use(verifyServiceKeyOrPrivyToken);
 router.use(ensureOstiumEnabled);
 
+// Market Routes
 router.post('/markets/list', validateBody(ostiumMarketsListSchema), listOstiumMarkets);
+router.post('/markets/funding-rate', validateBody(ostiumMarketFundingSchema), getOstiumMarketFunding);
+router.post('/markets/rollover-rate', validateBody(ostiumMarketFundingSchema), getOstiumMarketRollover);
+router.post('/markets/details', validateBody(ostiumMarketDetailsSchema), getOstiumMarketDetails);
 router.post('/prices/get', validateBody(ostiumPriceSchema), getOstiumPrice);
+
+// Account & Utilities
 router.post('/accounts/balance', validateBody(ostiumBalanceSchema), getOstiumBalance);
+router.post('/accounts/history', validateBody(ostiumHistorySchema), getOstiumAccountHistory);
+router.post('/faucet/request', validateBody(ostiumFaucetSchema), requestOstiumFaucet);
+
+// Positions
 router.post('/positions/list', validateBody(ostiumPositionsListSchema), listOstiumPositions);
 router.post('/positions/open', validateBody(ostiumPositionOpenSchema), openOstiumPosition);
 router.post('/positions/close', validateBody(ostiumPositionCloseSchema), closeOstiumPosition);
 router.post('/positions/update-sl', validateBody(ostiumPositionUpdateSlSchema), updateOstiumStopLoss);
 router.post('/positions/update-tp', validateBody(ostiumPositionUpdateTpSchema), updateOstiumTakeProfit);
+router.post('/positions/metrics', validateBody(ostiumPositionMetricsSchema), getOstiumPositionMetrics);
+
+// Orders
+router.post('/orders/list', validateBody(ostiumPositionsListSchema), listOstiumOrders);
+router.post('/orders/cancel', validateBody(ostiumOrderCancelSchema), cancelOstiumOrder);
+router.post('/orders/update', validateBody(ostiumOrderUpdateSchema), updateOstiumOrder);
+router.post('/orders/track', validateBody(ostiumOrderTrackSchema), trackOstiumOrder);
+
+// Setup & Delegation
 router.post('/delegations/prepare', validateBody(ostiumDelegationPrepareSchema), prepareOstiumDelegationApproval);
 router.post('/delegations/execute', validateBody(ostiumDelegationExecuteSchema), executeOstiumDelegationApproval);
 router.post('/delegations/status', validateBody(ostiumDelegationStatusSchema), getOstiumDelegationStatus);

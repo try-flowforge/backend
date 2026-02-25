@@ -814,6 +814,8 @@ const ostiumNetworkSchema = Joi.string().valid(...OSTIUM_NETWORKS).required().me
     'any.only': `network must be one of: ${OSTIUM_NETWORKS.join(', ')}`,
 });
 
+const ethAddressSchema = Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional();
+
 export const ostiumMarketsListSchema = Joi.object({
     network: ostiumNetworkSchema,
 });
@@ -826,12 +828,12 @@ export const ostiumPriceSchema = Joi.object({
 
 export const ostiumBalanceSchema = Joi.object({
     network: ostiumNetworkSchema,
-    address: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    address: ethAddressSchema,
 });
 
 export const ostiumPositionsListSchema = Joi.object({
     network: ostiumNetworkSchema,
-    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    traderAddress: ethAddressSchema,
 });
 
 export const ostiumPositionOpenSchema = Joi.object({
@@ -840,9 +842,12 @@ export const ostiumPositionOpenSchema = Joi.object({
     side: Joi.string().valid('long', 'short').required(),
     collateral: Joi.number().positive().required(),
     leverage: Joi.number().positive().required(),
+    orderType: Joi.string().valid('market', 'limit', 'stop').default('market'),
+    triggerPrice: Joi.number().positive().optional(),
+    slippage: Joi.number().min(0).max(10).optional(),
     slPrice: Joi.number().positive().optional(),
     tpPrice: Joi.number().positive().optional(),
-    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    traderAddress: ethAddressSchema,
     idempotencyKey: Joi.string().max(128).optional(),
 });
 
@@ -850,7 +855,8 @@ export const ostiumPositionCloseSchema = Joi.object({
     network: ostiumNetworkSchema,
     pairId: Joi.number().integer().min(0).required(),
     tradeIndex: Joi.number().integer().min(0).required(),
-    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    closePercentage: Joi.number().min(0).max(100).optional(),
+    traderAddress: ethAddressSchema,
     idempotencyKey: Joi.string().max(128).optional(),
 });
 
@@ -859,7 +865,7 @@ export const ostiumPositionUpdateSlSchema = Joi.object({
     pairId: Joi.number().integer().min(0).required(),
     tradeIndex: Joi.number().integer().min(0).required(),
     slPrice: Joi.number().positive().required(),
-    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    traderAddress: ethAddressSchema,
 });
 
 export const ostiumPositionUpdateTpSchema = Joi.object({
@@ -867,23 +873,72 @@ export const ostiumPositionUpdateTpSchema = Joi.object({
     pairId: Joi.number().integer().min(0).required(),
     tradeIndex: Joi.number().integer().min(0).required(),
     tpPrice: Joi.number().positive().required(),
-    traderAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    traderAddress: ethAddressSchema,
+});
+
+export const ostiumPositionMetricsSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
+    tradeIndex: Joi.number().integer().min(0).required(),
+    traderAddress: ethAddressSchema,
+});
+
+export const ostiumOrderCancelSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    orderId: Joi.string().required(),
+    traderAddress: ethAddressSchema,
+});
+
+export const ostiumOrderUpdateSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    orderId: Joi.string().required(),
+    triggerPrice: Joi.number().positive().optional(),
+    slPrice: Joi.number().positive().optional(),
+    tpPrice: Joi.number().positive().optional(),
+    traderAddress: ethAddressSchema,
+});
+
+export const ostiumOrderTrackSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    orderId: Joi.string().required(),
+});
+
+export const ostiumHistorySchema = Joi.object({
+    network: ostiumNetworkSchema,
+    traderAddress: ethAddressSchema,
+    limit: Joi.number().integer().min(1).max(100).optional(),
+});
+
+export const ostiumFaucetSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    traderAddress: ethAddressSchema,
+});
+
+export const ostiumMarketFundingSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
+    periodHours: Joi.number().integer().min(1).max(720).optional(),
+});
+
+export const ostiumMarketDetailsSchema = Joi.object({
+    network: ostiumNetworkSchema,
+    pairId: Joi.number().integer().min(0).required(),
 });
 
 export const ostiumDelegationPrepareSchema = Joi.object({
     network: ostiumNetworkSchema,
-    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    delegateAddress: ethAddressSchema,
 });
 
 export const ostiumDelegationExecuteSchema = Joi.object({
     network: ostiumNetworkSchema,
     signature: Joi.string().min(10).required(),
-    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    delegateAddress: ethAddressSchema,
 });
 
 export const ostiumDelegationStatusSchema = Joi.object({
     network: ostiumNetworkSchema,
-    delegateAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+    delegateAddress: ethAddressSchema,
 });
 
 export const ostiumReadinessSchema = Joi.object({

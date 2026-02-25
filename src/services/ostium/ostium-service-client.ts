@@ -3,8 +3,16 @@ import { logger } from '../../utils/logger';
 import { signRequest, HMAC_HEADERS } from '../../utils/hmac';
 import {
   OstiumBalanceRequest,
+  OstiumFaucetRequest,
+  OstiumHistoryRequest,
+  OstiumMarketDetailsRequest,
+  OstiumMarketFundingRequest,
   OstiumMarketsListRequest,
+  OstiumOrderCancelRequest,
+  OstiumOrderTrackRequest,
+  OstiumOrderUpdateRequest,
   OstiumPositionCloseRequest,
+  OstiumPositionMetricsRequest,
   OstiumPositionOpenRequest,
   OstiumPositionsListRequest,
   OstiumPositionUpdateSlRequest,
@@ -214,36 +222,80 @@ export class OstiumServiceClient {
     throw new OstiumServiceClientError('OSTIUM_SERVICE_REQUEST_FAILED', 'Unexpected retry termination', 500, true);
   }
 
+  // Market Intelligence
   async listMarkets(request: OstiumMarketsListRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumMarketsListRequest, any>('/v1/markets/list', request, requestId);
+    return this.signedPost('/v1/markets/list', request, requestId);
   }
 
   async getPrice(request: OstiumPriceRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPriceRequest, any>('/v1/prices/get', request, requestId);
+    return this.signedPost('/v1/prices/get', request, requestId);
   }
 
-  async getBalance(request: OstiumBalanceRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumBalanceRequest, any>('/v1/accounts/balance', request, requestId);
+  async getMarketFunding(request: OstiumMarketFundingRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/markets/funding-rate', request, requestId);
   }
 
-  async listPositions(request: OstiumPositionsListRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPositionsListRequest, any>('/v1/positions/list', request, requestId);
+  async getMarketRollover(request: OstiumMarketFundingRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/markets/rollover-rate', request, requestId);
   }
 
+  async getMarketDetails(request: OstiumMarketDetailsRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/markets/details', request, requestId);
+  }
+
+  // Trading & Positions
   async openPosition(request: OstiumPositionOpenRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPositionOpenRequest, any>('/v1/positions/open', request, requestId);
+    return this.signedPost('/v1/positions/open', request, requestId);
   }
 
   async closePosition(request: OstiumPositionCloseRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPositionCloseRequest, any>('/v1/positions/close', request, requestId);
+    return this.signedPost('/v1/positions/close', request, requestId);
   }
 
   async updateStopLoss(request: OstiumPositionUpdateSlRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPositionUpdateSlRequest, any>('/v1/positions/update-sl', request, requestId);
+    return this.signedPost('/v1/positions/update-sl', request, requestId);
   }
 
   async updateTakeProfit(request: OstiumPositionUpdateTpRequest, requestId?: string): Promise<any> {
-    return this.signedPost<OstiumPositionUpdateTpRequest, any>('/v1/positions/update-tp', request, requestId);
+    return this.signedPost('/v1/positions/update-tp', request, requestId);
+  }
+
+  async getPositionMetrics(request: OstiumPositionMetricsRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/positions/metrics', request, requestId);
+  }
+
+  // Order Management
+  async listOrders(request: OstiumPositionsListRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/orders/list', request, requestId);
+  }
+
+  async cancelOrder(request: OstiumOrderCancelRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/orders/cancel', request, requestId);
+  }
+
+  async updateOrder(request: OstiumOrderUpdateRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/orders/update', request, requestId);
+  }
+
+  async trackOrder(request: OstiumOrderTrackRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/orders/track', request, requestId);
+  }
+
+  // Account & Utilities
+  async getBalance(request: OstiumBalanceRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/accounts/balance', request, requestId);
+  }
+
+  async listPositions(request: OstiumPositionsListRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/positions/list', request, requestId);
+  }
+
+  async getHistory(request: OstiumHistoryRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/accounts/history', request, requestId);
+  }
+
+  async requestFaucet(request: OstiumFaucetRequest, requestId?: string): Promise<any> {
+    return this.signedPost('/v1/faucet/request', request, requestId);
   }
 }
 

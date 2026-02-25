@@ -215,7 +215,17 @@ export type PerpsAction =
   | "OPEN_POSITION"
   | "CLOSE_POSITION"
   | "UPDATE_SL"
-  | "UPDATE_TP";
+  | "UPDATE_TP"
+  | "LIST_ORDERS"
+  | "CANCEL_ORDER"
+  | "UPDATE_ORDER"
+  | "TRACK_ORDER"
+  | "POSITION_METRICS"
+  | "HISTORY"
+  | "FAUCET"
+  | "MARKET_DETAILS"
+  | "MARKET_FUNDING"
+  | "MARKET_ROLLOVER";
 
 export interface PerpsNodeConfig {
   provider: "OSTIUM";
@@ -231,8 +241,15 @@ export interface PerpsNodeConfig {
   leverage?: number;
   pairId?: number;
   tradeIndex?: number;
+  orderId?: string;
+  orderType?: "market" | "limit" | "stop";
+  triggerPrice?: number;
+  slippage?: number;
   slPrice?: number;
   tpPrice?: number;
+  closePercentage?: number;
+  limit?: number;
+  periodHours?: number;
   idempotencyKey?: string;
   outputMapping?: Record<string, string>;
 }

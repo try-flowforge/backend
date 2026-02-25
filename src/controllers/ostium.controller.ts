@@ -5,9 +5,17 @@ import { UserModel } from '../models/users';
 import { NUMERIC_CHAIN_IDS } from '../config/chain-registry';
 import {
   OstiumBalanceRequest,
+  OstiumFaucetRequest,
+  OstiumHistoryRequest,
+  OstiumMarketDetailsRequest,
+  OstiumMarketFundingRequest,
   OstiumMarketsListRequest,
   OstiumNetwork,
+  OstiumOrderCancelRequest,
+  OstiumOrderTrackRequest,
+  OstiumOrderUpdateRequest,
   OstiumPositionCloseRequest,
+  OstiumPositionMetricsRequest,
   OstiumPositionOpenRequest,
   OstiumPositionsListRequest,
   OstiumPositionUpdateSlRequest,
@@ -297,6 +305,214 @@ export const updateOstiumTakeProfit = async (req: Request, res: Response, next: 
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
       return;
     }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+// --- New Advanced Handlers ---
+
+export const getOstiumPositionMetrics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumPositionMetricsRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.getPositionMetrics({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const listOstiumOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumPositionsListRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.listOrders({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const cancelOstiumOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumOrderCancelRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.cancelOrder({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const updateOstiumOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumOrderUpdateRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.updateOrder({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const trackOstiumOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumOrderTrackRequest;
+    const data = await ostiumServiceClient.trackOrder(payload, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const getOstiumAccountHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumHistoryRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.getHistory({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const requestOstiumFaucet = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumFaucetRequest;
+    const userId = resolveUserId(req);
+    const traderAddress = await resolveAndValidateAddress(
+      userId,
+      payload.network,
+      payload.traderAddress,
+      'traderAddress',
+    );
+    const data = await ostiumServiceClient.requestFaucet({ ...payload, traderAddress }, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
+      sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
+      return;
+    }
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const getOstiumMarketFunding = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumMarketFundingRequest;
+    const data = await ostiumServiceClient.getMarketFunding(payload, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const getOstiumMarketRollover = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumMarketFundingRequest;
+    const data = await ostiumServiceClient.getMarketRollover(payload, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof OstiumServiceClientError) {
+      sendServiceError(res, error);
+      return;
+    }
+    next(error);
+  }
+};
+
+export const getOstiumMarketDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const payload = req.body as OstiumMarketDetailsRequest;
+    const data = await ostiumServiceClient.getMarketDetails(payload, req.requestId);
+    sendSuccess(res, data);
+  } catch (error) {
     if (error instanceof OstiumServiceClientError) {
       sendServiceError(res, error);
       return;
