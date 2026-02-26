@@ -15,6 +15,16 @@ const router = Router();
 router.use(verifyPrivyToken);
 
 /**
+ * GET /api/v1/relay/existing-safe?chainId= - Fetch existing Safe for owner (updates DB if found)
+ */
+router.get(
+  "/existing-safe",
+  (req: Request, res: Response, next: NextFunction) => {
+    relayController.getExistingSafe(req as AuthenticatedRequest, res).catch(next);
+  }
+);
+
+/**
  * POST /api/v1/relay/create-safe - Create a Safe wallet
  */
 router.post(

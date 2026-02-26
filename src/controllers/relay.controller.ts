@@ -109,6 +109,102 @@ async function ensureUserExistsAndUpdateSafe(
   }
 }
 
+/**
+ * GET /api/v1/relay/existing-safe?chainId=42161
+ * Fetch existing Safe wallet for the authenticated owner on the given chain.
+ * If one exists, updates the user record in DB and returns it; otherwise returns exists: false.
+ * Used by onboarding to restore Safe state after DB clear without asking the user to create again.
+ */
+export const getExistingSafe = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const chainIdRaw = req.query.chainId;
+    const chainId = typeof chainIdRaw === "string" ? parseInt(chainIdRaw, 10) : Number(chainIdRaw);
+
+    if (!Number.isInteger(chainId) || !isSafeRelayChainId(chainId)) {
+      res.status(400).json({
+        success: false,
+        error: `Invalid or unsupported chain ID. Supported: ${SUPPORTED_SAFE_RELAY_CHAINS}`,
+      });
+      return;
+    }
+
+    const supportedChainId = chainId as SafeRelayNumericChainId;
+    const userAddress = req.userWalletAddress;
+    const userId = req.userId;
+
+    if (!userAddress) {
+      res.status(401).json({
+        success: false,
+        error: "Wallet address not found. Connect your wallet.",
+      });
+      return;
+    }
+
+    const chainConfig = getSafeRelayChainOrThrow(supportedChainId);
+    const factoryAddress = chainConfig.safeFactoryAddress;
+    const relayerService = getRelayerService();
+    const provider = relayerService.getProvider(supportedChainId);
+    const factoryContract = new ethers.Contract(
+      factoryAddress,
+      [
+        "function getSafeWallets(address user) view returns (address[])",
+        "function predictSafeAddress(address user) view returns (address)",
+      ],
+      provider
+    );
+
+    let existingSafeAddress: string | null = null;
+    const existingSafes = await factoryContract.getSafeWallets(userAddress);
+
+    if (existingSafes.length > 0) {
+      existingSafeAddress = existingSafes[0];
+    } else {
+      try {
+        const predictedAddress = await factoryContract.predictSafeAddress(userAddress);
+        const code = await provider.getCode(predictedAddress);
+        if (code && code !== "0x" && code.length > 2) {
+          existingSafeAddress = predictedAddress;
+        }
+      } catch {
+        // No Safe at predicted address
+      }
+    }
+
+    if (existingSafeAddress) {
+      await ensureUserExistsAndUpdateSafe(
+        userId,
+        userAddress,
+        existingSafeAddress,
+        supportedChainId
+      );
+      logger.info(
+        { userId, userAddress, safeAddress: existingSafeAddress, chainId: supportedChainId },
+        "Existing Safe found and user record updated"
+      );
+      res.json({
+        success: true,
+        exists: true,
+        safeAddress: existingSafeAddress,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      exists: false,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ error: message }, "getExistingSafe failed");
+    res.status(500).json({
+      success: false,
+      error: message,
+    });
+  }
+};
 
 /**
  * POST /api/v1/relay/create-safe
