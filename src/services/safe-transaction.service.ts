@@ -111,6 +111,15 @@ export class SafeTransactionService {
     return "0x" + adjusted;
   }
 
+  /** True if the first 65-byte signature has v=27|28 (typical of personal_sign / eth_sign). */
+  private signaturesLookLikePersonalSign(normalizedSignatures: string): boolean {
+    const sig = normalizedSignatures.startsWith("0x") ? normalizedSignatures.slice(2) : normalizedSignatures;
+    if (sig.length < 130) return false;
+    const v = parseInt(sig.slice(128, 130), 16);
+    const normalizedV = v === 0 || v === 1 ? v + 27 : v;
+    return normalizedV === 27 || normalizedV === 28;
+  }
+
   private normalizeSignatureForRecover(signature: string): string | null {
     const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
     if (sig.length !== 130) return null;
@@ -274,10 +283,15 @@ export class SafeTransactionService {
   ): Promise<ExecuteWithSignaturesResult> {
     const normalizedSignatures = this.normalizeSignatures(rawSignatures);
     const ethSignAdjustedSignatures = this.adjustSignaturesForEthSign(normalizedSignatures);
-    const signatureCandidates: Array<{ mode: "safe_sdk" | "eth_sign"; signatures: string }> = [
-      { mode: "safe_sdk", signatures: normalizedSignatures },
-    ];
-    if (ethSignAdjustedSignatures.toLowerCase() !== normalizedSignatures.toLowerCase()) {
+    const looksLikePersonalSign = this.signaturesLookLikePersonalSign(normalizedSignatures);
+    // Try eth_sign first when signatures have v=27|28 (typical of personal_sign). Otherwise we try
+    // safe_sdk first and log a noisy GS026 warning before eth_sign succeeds.
+    const signatureCandidates: Array<{ mode: "safe_sdk" | "eth_sign"; signatures: string }> = [];
+    if (looksLikePersonalSign && ethSignAdjustedSignatures.toLowerCase() !== normalizedSignatures.toLowerCase()) {
+      signatureCandidates.push({ mode: "eth_sign", signatures: ethSignAdjustedSignatures });
+    }
+    signatureCandidates.push({ mode: "safe_sdk", signatures: normalizedSignatures });
+    if (!looksLikePersonalSign && ethSignAdjustedSignatures.toLowerCase() !== normalizedSignatures.toLowerCase()) {
       signatureCandidates.push({ mode: "eth_sign", signatures: ethSignAdjustedSignatures });
     }
 
@@ -361,6 +375,9 @@ export class SafeTransactionService {
             expectedSafeTxHash
               ? String(computedTxHash).toLowerCase() === expectedSafeTxHash.toLowerCase()
               : undefined,
+          note: recovered && Array.isArray(owners) && owners.length > 0 && recovered.toLowerCase() !== (owners[0] as string).toLowerCase()
+            ? "recoveredSigner differs from owner when user signed with personal_sign (eth_sign); we validate with eth_sign and execution succeeds"
+            : undefined,
         },
         "Safe exec diagnostics"
       );

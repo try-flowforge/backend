@@ -19,9 +19,11 @@ export class RelayerService {
   constructor() {
     this.privateKey = config.relayer.relayerPrivateKey;
 
-    // Initialize providers and wallets for all configured chains
+    // Initialize providers and wallets for all configured chains.
+    // Pass network explicitly to avoid JsonRpcProvider's network-detect call (which can timeout on slow RPCs).
     for (const chainConfig of getAllChains()) {
-      const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+      const network = { chainId: chainConfig.chainId, name: chainConfig.name };
+      const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl, network);
       const wallet = new ethers.Wallet(this.privateKey, provider);
 
       this.providers.set(chainConfig.chainId, provider);
