@@ -140,6 +140,7 @@ export class OstiumServiceClient {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        logger.info({ url, payload, requestId }, 'Sending Ostium service request');
         const response = await axios.post(url, payload, {
           timeout: REQUEST_TIMEOUT,
           headers: {

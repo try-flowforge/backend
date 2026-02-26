@@ -110,6 +110,7 @@ router.post('/prices/get', validateBody(ostiumPriceSchema), getOstiumPrice);
 // Account & Utilities
 router.post('/accounts/balance', validateBody(ostiumBalanceSchema), getOstiumBalance);
 router.post('/accounts/history', validateBody(ostiumHistorySchema), getOstiumAccountHistory);
+router.post('/history', validateBody(ostiumHistorySchema), getOstiumAccountHistory); // Alias for convenience
 router.post('/faucet/request', validateBody(ostiumFaucetSchema), requestOstiumFaucet);
 
 // Positions
@@ -133,6 +134,7 @@ router.post('/delegations/status', validateBody(ostiumDelegationStatusSchema), g
 router.post('/delegations/revoke/prepare', validateBody(ostiumDelegationPrepareSchema), prepareOstiumDelegationRevoke);
 router.post('/delegations/revoke/execute', validateBody(ostiumDelegationExecuteSchema), executeOstiumDelegationRevoke);
 router.post('/setup/overview', ensureSetupOverviewEnabled, validateBody(ostiumSetupOverviewSchema), getOstiumSetupOverview);
+router.post('/overview', ensureSetupOverviewEnabled, validateBody(ostiumSetupOverviewSchema), getOstiumSetupOverview); // Alias
 router.post('/readiness', validateBody(ostiumReadinessSchema), getOstiumReadiness);
 router.post('/allowance/prepare', validateBody(ostiumAllowancePrepareSchema), prepareOstiumAllowanceApproval);
 router.post('/allowance/execute', validateBody(ostiumAllowanceExecuteSchema), executeOstiumAllowanceApproval);

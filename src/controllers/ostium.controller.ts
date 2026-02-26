@@ -240,6 +240,9 @@ export const closeOstiumPosition = async (req: Request, res: Response, next: Nex
       network: payload.network,
       payload: {
         ...payload,
+        pairId: Math.floor(payload.pairId),
+        tradeIndex: Math.floor(payload.tradeIndex),
+        closePercentage: payload.closePercentage !== undefined ? Number(payload.closePercentage) : undefined,
         traderAddress,
       },
       requestId: req.requestId || '',
@@ -274,6 +277,8 @@ export const updateOstiumStopLoss = async (req: Request, res: Response, next: Ne
       network: payload.network,
       payload: {
         ...payload,
+        pairId: Math.floor(payload.pairId),
+        tradeIndex: Math.floor(payload.tradeIndex),
         traderAddress,
       },
       requestId: req.requestId || '',
@@ -308,6 +313,8 @@ export const updateOstiumTakeProfit = async (req: Request, res: Response, next: 
       network: payload.network,
       payload: {
         ...payload,
+        pairId: Math.floor(payload.pairId),
+        tradeIndex: Math.floor(payload.tradeIndex),
         traderAddress,
       },
       requestId: req.requestId || '',
@@ -338,7 +345,15 @@ export const getOstiumPositionMetrics = async (req: Request, res: Response, next
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.getPositionMetrics({ ...payload, traderAddress }, req.requestId);
+    const data = await ostiumServiceClient.getPositionMetrics(
+      {
+        ...payload,
+        pairId: Math.floor(payload.pairId),
+        tradeIndex: Math.floor(payload.tradeIndex),
+        traderAddress,
+      },
+      req.requestId,
+    );
     sendSuccess(res, data);
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
