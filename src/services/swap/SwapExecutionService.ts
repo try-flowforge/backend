@@ -814,8 +814,39 @@ export class SwapExecutionService {
       logger.debug('Building transaction...');
       const transaction = await swapProvider.buildTransaction(chain, swapConfig, quote);
 
-      // Simulate transaction if enabled (default: true)
-      if (swapConfig.simulateFirst !== false) {
+      // When executing via Safe with an ERC20 source, simulation will fail with TRANSFER_FROM_FAILED
+      // until the Safe has approved the spender. Check approval first; if needed, skip simulation
+      // so we don't fail the run—approval will be added and executed before the swap.
+      let skipSimulationBecauseApprovalNeeded = false;
+      if (
+        safeAddress &&
+        !this.isNativeToken(swapConfig.sourceToken.address, chain) &&
+        swapConfig.simulateFirst !== false
+      ) {
+        const spenderAddress = this.getApprovalSpenderAddress({
+          chain,
+          provider: effectiveProvider,
+          quote,
+          transactionTo: transaction.to,
+        });
+        const currentAllowance = await safeTransactionService.checkTokenAllowance(
+          swapConfig.sourceToken.address,
+          safeAddress,
+          spenderAddress,
+          chainId
+        );
+        const requiredAmount = BigInt(swapConfig.amount);
+        if (currentAllowance < requiredAmount) {
+          skipSimulationBecauseApprovalNeeded = true;
+          logger.info(
+            { safeAddress, token: swapConfig.sourceToken.symbol },
+            'Skipping swap simulation: Safe has not yet approved the spender; approval will be added before execution'
+          );
+        }
+      }
+
+      // Simulate transaction if enabled (default: true) and not skipped due to pending approval
+      if (swapConfig.simulateFirst !== false && !skipSimulationBecauseApprovalNeeded) {
         logger.debug('Simulating transaction...');
         const simulation = await swapProvider.simulateTransaction(chain, transaction);
 

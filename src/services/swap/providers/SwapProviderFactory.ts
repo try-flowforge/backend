@@ -1,6 +1,7 @@
 import { SwapProvider, SupportedChain } from '../../../types';
 import { ISwapProvider, ISwapProviderFactory } from '../interfaces/ISwapProvider';
 import { UniswapV4Provider } from './UniswapV4Provider';
+import { LiFiProvider } from './LiFiProvider';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -23,6 +24,7 @@ export class SwapProviderFactory implements ISwapProviderFactory {
 
     try {
       this.providers.set(SwapProvider.UNISWAP_V4, new UniswapV4Provider());
+      this.providers.set(SwapProvider.LIFI, new LiFiProvider());
 
       logger.info(
         { providerCount: this.providers.size },
