@@ -51,6 +51,8 @@ import * as migration047 from "./047_remove_unsupported_chains";
 import * as migration049 from "./049_remove_uniswap_v3_swap_provider";
 import * as migration048 from "./048_add_waiting_for_client_tx_status";
 import * as migration050 from "./050_db_optimization_indexes_and_fks";
+import * as migration051 from "./051_make_perps_executions_ids_nullable";
+
 
 // Load environment variables
 dotenv.config();
@@ -179,6 +181,7 @@ const resetDatabase = async (): Promise<void> => {
     await migration048.up(pool);
     await migration049.up(pool);
     await migration050.up(pool);
+    await migration051.up(pool);
 
     // Record migrations
     await pool.query(`
@@ -387,6 +390,10 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [50, "050_db_optimization_indexes_and_fks"],
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [51, "051_make_perps_executions_ids_nullable"],
     );
     logger.info("Database reset completed successfully");
   } catch (error) {
