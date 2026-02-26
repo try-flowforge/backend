@@ -451,9 +451,9 @@ export const updateOstiumOrder = async (req: Request, res: Response, next: NextF
       network: payload.network,
       payload: {
         ...payload,
-        triggerPrice: payload.triggerPrice !== undefined ? Number(payload.triggerPrice) : undefined,
-        slPrice: payload.slPrice !== undefined ? Number(payload.slPrice) : undefined,
-        tpPrice: payload.tpPrice !== undefined ? Number(payload.tpPrice) : undefined,
+        triggerPrice: payload.triggerPrice !== undefined ? String(payload.triggerPrice) : undefined,
+        slPrice: payload.slPrice !== undefined ? String(payload.slPrice) : undefined,
+        tpPrice: payload.tpPrice !== undefined ? String(payload.tpPrice) : undefined,
         traderAddress,
       },
       requestId: req.requestId || '',
