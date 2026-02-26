@@ -206,6 +206,12 @@ export const openOstiumPosition = async (req: Request, res: Response, next: Next
       network: payload.network,
       payload: {
         ...payload,
+        collateral: Number(payload.collateral),
+        leverage: Number(payload.leverage),
+        triggerPrice: payload.triggerPrice !== undefined ? Number(payload.triggerPrice) : undefined,
+        slippage: payload.slippage !== undefined ? Number(payload.slippage) : undefined,
+        slPrice: payload.slPrice !== undefined ? Number(payload.slPrice) : undefined,
+        tpPrice: payload.tpPrice !== undefined ? Number(payload.tpPrice) : undefined,
         traderAddress,
       },
       requestId: req.requestId || '',
@@ -242,7 +248,8 @@ export const closeOstiumPosition = async (req: Request, res: Response, next: Nex
         ...payload,
         pairId: Math.floor(payload.pairId),
         tradeIndex: Math.floor(payload.tradeIndex),
-        closePercentage: payload.closePercentage !== undefined ? Number(payload.closePercentage) : undefined,
+        // Fallback to integer 100 instead of null/undefined to avoid float defaults in service
+        closePercentage: payload.closePercentage !== undefined ? Math.floor(Number(payload.closePercentage)) : 100,
         traderAddress,
       },
       requestId: req.requestId || '',
@@ -443,6 +450,9 @@ export const updateOstiumOrder = async (req: Request, res: Response, next: NextF
       network: payload.network,
       payload: {
         ...payload,
+        triggerPrice: payload.triggerPrice !== undefined ? Number(payload.triggerPrice) : undefined,
+        slPrice: payload.slPrice !== undefined ? Number(payload.slPrice) : undefined,
+        tpPrice: payload.tpPrice !== undefined ? Number(payload.tpPrice) : undefined,
         traderAddress,
       },
       requestId: req.requestId || '',

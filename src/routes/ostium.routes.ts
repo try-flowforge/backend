@@ -103,7 +103,9 @@ router.use(ensureOstiumEnabled);
 // Market Routes
 router.post('/markets/list', validateBody(ostiumMarketsListSchema), listOstiumMarkets);
 router.post('/markets/funding-rate', validateBody(ostiumMarketFundingSchema), getOstiumMarketFunding);
+router.post('/markets/funding', validateBody(ostiumMarketFundingSchema), getOstiumMarketFunding); // Alias for frontend
 router.post('/markets/rollover-rate', validateBody(ostiumMarketFundingSchema), getOstiumMarketRollover);
+router.post('/markets/rollover', validateBody(ostiumMarketFundingSchema), getOstiumMarketRollover); // Alias for frontend
 router.post('/markets/details', validateBody(ostiumMarketDetailsSchema), getOstiumMarketDetails);
 router.post('/prices/get', validateBody(ostiumPriceSchema), getOstiumPrice);
 
@@ -112,6 +114,7 @@ router.post('/accounts/balance', validateBody(ostiumBalanceSchema), getOstiumBal
 router.post('/accounts/history', validateBody(ostiumHistorySchema), getOstiumAccountHistory);
 router.post('/history', validateBody(ostiumHistorySchema), getOstiumAccountHistory); // Alias for convenience
 router.post('/faucet/request', validateBody(ostiumFaucetSchema), requestOstiumFaucet);
+router.post('/faucet', validateBody(ostiumFaucetSchema), requestOstiumFaucet); // Alias for frontend
 
 // Positions
 router.post('/positions/list', validateBody(ostiumPositionsListSchema), listOstiumPositions);
