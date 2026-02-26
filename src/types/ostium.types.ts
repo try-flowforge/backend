@@ -24,39 +24,39 @@ export interface OstiumPositionOpenRequest {
   network: OstiumNetwork;
   market: string;
   side: 'long' | 'short';
-  collateral: number;
-  leverage: number;
+  collateral: string;
+  leverage: string;
   orderType?: 'market' | 'limit' | 'stop';
-  triggerPrice?: number;
-  slippage?: number;
-  slPrice?: number;
-  tpPrice?: number;
+  triggerPrice?: string;
+  slippage?: string;
+  slPrice?: string;
+  tpPrice?: string;
   traderAddress?: string;
   idempotencyKey?: string;
 }
 
 export interface OstiumPositionCloseRequest {
   network: OstiumNetwork;
-  pairId: number;
-  tradeIndex: number;
-  closePercentage?: number;
+  pairId: string | number;
+  tradeIndex: string | number;
+  closePercentage?: string | number;
   traderAddress?: string;
   idempotencyKey?: string;
 }
 
 export interface OstiumPositionUpdateSlRequest {
   network: OstiumNetwork;
-  pairId: number;
-  tradeIndex: number;
-  slPrice: number;
+  pairId: string | number;
+  tradeIndex: string | number;
+  slPrice: string;
   traderAddress?: string;
 }
 
 export interface OstiumPositionUpdateTpRequest {
   network: OstiumNetwork;
-  pairId: number;
-  tradeIndex: number;
-  tpPrice: number;
+  pairId: string | number;
+  tradeIndex: string | number;
+  tpPrice: string;
   traderAddress?: string;
 }
 
@@ -70,9 +70,9 @@ export interface OstiumOrderCancelRequest {
 export interface OstiumOrderUpdateRequest {
   network: OstiumNetwork;
   orderId: string;
-  triggerPrice?: number;
-  slPrice?: number;
-  tpPrice?: number;
+  triggerPrice?: string;
+  slPrice?: string;
+  tpPrice?: string;
   traderAddress?: string;
 }
 
@@ -84,13 +84,13 @@ export interface OstiumOrderTrackRequest {
 // Metrics & Account
 export interface OstiumPositionMetricsRequest {
   network: OstiumNetwork;
-  pairId: number;
-  tradeIndex: number;
+  pairId: string | number;
+  tradeIndex: string | number;
   traderAddress?: string;
 }
 
 export interface OstiumHistoryRequest extends OstiumPositionsListRequest {
-  limit?: number;
+  limit?: string | number;
 }
 
 export interface OstiumFaucetRequest {
@@ -101,13 +101,13 @@ export interface OstiumFaucetRequest {
 // Market Details
 export interface OstiumMarketFundingRequest {
   network: OstiumNetwork;
-  pairId: number;
+  pairId: string | number;
   periodHours?: number;
 }
 
 export interface OstiumMarketDetailsRequest {
   network: OstiumNetwork;
-  pairId: number;
+  pairId: string | number;
 }
 
 export interface OstiumServiceError {

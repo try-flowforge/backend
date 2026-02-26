@@ -100,13 +100,13 @@ export class PerpsNodeProcessor implements INodeProcessor {
               network: config.network,
               market: this.required(config.market, 'market is required for OPEN_POSITION'),
               side: this.required(config.side, 'side is required for OPEN_POSITION'),
-              collateral: this.required(config.collateral, 'collateral is required for OPEN_POSITION'),
-              leverage: this.required(config.leverage, 'leverage is required for OPEN_POSITION'),
+              collateral: String(this.required(config.collateral, 'collateral is required for OPEN_POSITION')),
+              leverage: String(this.required(config.leverage, 'leverage is required for OPEN_POSITION')),
               orderType: config.orderType,
-              triggerPrice: config.triggerPrice,
-              slippage: config.slippage,
-              slPrice: config.slPrice,
-              tpPrice: config.tpPrice,
+              triggerPrice: config.triggerPrice !== undefined ? String(config.triggerPrice) : undefined,
+              slippage: config.slippage !== undefined ? String(config.slippage) : undefined,
+              slPrice: config.slPrice !== undefined ? String(config.slPrice) : undefined,
+              tpPrice: config.tpPrice !== undefined ? String(config.tpPrice) : undefined,
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -123,9 +123,9 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.closePosition(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for CLOSE_POSITION'),
-              tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for CLOSE_POSITION'),
-              closePercentage: config.closePercentage,
+              pairId: String(this.required(config.pairId, 'pairId is required for CLOSE_POSITION')),
+              tradeIndex: String(this.required(config.tradeIndex, 'tradeIndex is required for CLOSE_POSITION')),
+              closePercentage: config.closePercentage !== undefined ? String(config.closePercentage) : undefined,
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -142,9 +142,9 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.updateStopLoss(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for UPDATE_SL'),
-              tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for UPDATE_SL'),
-              slPrice: this.required(config.slPrice, 'slPrice is required for UPDATE_SL'),
+              pairId: String(this.required(config.pairId, 'pairId is required for UPDATE_SL')),
+              tradeIndex: String(this.required(config.tradeIndex, 'tradeIndex is required for UPDATE_SL')),
+              slPrice: String(this.required(config.slPrice, 'slPrice is required for UPDATE_SL')),
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -160,9 +160,9 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.updateTakeProfit(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for UPDATE_TP'),
-              tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for UPDATE_TP'),
-              tpPrice: this.required(config.tpPrice, 'tpPrice is required for UPDATE_TP'),
+              pairId: String(this.required(config.pairId, 'pairId is required for UPDATE_TP')),
+              tradeIndex: String(this.required(config.tradeIndex, 'tradeIndex is required for UPDATE_TP')),
+              tpPrice: String(this.required(config.tpPrice, 'tpPrice is required for UPDATE_TP')),
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -205,9 +205,9 @@ export class PerpsNodeProcessor implements INodeProcessor {
             {
               network: config.network,
               orderId: this.required(config.orderId, 'orderId is required for UPDATE_ORDER'),
-              triggerPrice: config.triggerPrice,
-              slPrice: config.slPrice,
-              tpPrice: config.tpPrice,
+              triggerPrice: config.triggerPrice !== undefined ? String(config.triggerPrice) : undefined,
+              slPrice: config.slPrice !== undefined ? String(config.slPrice) : undefined,
+              tpPrice: config.tpPrice !== undefined ? String(config.tpPrice) : undefined,
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -230,8 +230,8 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.getPositionMetrics(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for POSITION_METRICS'),
-              tradeIndex: this.required(config.tradeIndex, 'tradeIndex is required for POSITION_METRICS'),
+              pairId: String(this.required(config.pairId, 'pairId is required for POSITION_METRICS')),
+              tradeIndex: String(this.required(config.tradeIndex, 'tradeIndex is required for POSITION_METRICS')),
               traderAddress: await this.resolveSafeAddress(
                 config.traderAddress,
                 input.executionContext.userId,
@@ -272,7 +272,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.getMarketDetails(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for MARKET_DETAILS'),
+              pairId: String(this.required(config.pairId, 'pairId is required for MARKET_DETAILS')),
             },
             nodeExecutionId,
           );
@@ -281,7 +281,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.getMarketFunding(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for MARKET_FUNDING'),
+              pairId: String(this.required(config.pairId, 'pairId is required for MARKET_FUNDING')),
               periodHours: config.periodHours,
             },
             nodeExecutionId,
@@ -291,7 +291,7 @@ export class PerpsNodeProcessor implements INodeProcessor {
           result = await ostiumServiceClient.getMarketRollover(
             {
               network: config.network,
-              pairId: this.required(config.pairId, 'pairId is required for MARKET_ROLLOVER'),
+              pairId: String(this.required(config.pairId, 'pairId is required for MARKET_ROLLOVER')),
               periodHours: config.periodHours,
             },
             nodeExecutionId,
