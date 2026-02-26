@@ -10,11 +10,13 @@ import { TelegramNodeProcessor } from './TelegramNodeProcessor';
 import { StartNodeProcessor } from './StartNodeProcessor';
 import { WalletNodeProcessor } from './WalletNodeProcessor';
 import { OracleNodeProcessor } from './OracleNodeProcessor';
+import { CREOracleNodeProcessor } from './CREOracleNodeProcessor';
 import { PythOracleNodeProcessor } from './PythOracleNodeProcessor';
 import { LlmTransformNodeProcessor } from './LlmTransformNodeProcessor';
 import { ApiNodeProcessor } from './ApiNodeProcessor';
 import { TimeBlockNodeProcessor } from './TimeBlockNodeProcessor';
 import { PerpsNodeProcessor } from './PerpsNodeProcessor';
+import { CRESwapNodeProcessor } from './CRESwapNodeProcessor';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -35,8 +37,13 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
     logger.info('Initializing node processors...');
 
     try {
-      // Register swap processor
-      this.registerProcessor(new SwapNodeProcessor());
+      // Register swap processor(s)
+      if (process.env.CRE_ENABLED === 'true') {
+        // Use CRE-backed swap for LI.FI provider; legacy processor remains for others
+        this.registerProcessor(new CRESwapNodeProcessor());
+      } else {
+        this.registerProcessor(new SwapNodeProcessor());
+      }
 
       // Register email processor
       this.registerProcessor(new EmailNodeProcessor());
@@ -62,8 +69,12 @@ export class NodeProcessorFactory implements INodeProcessorFactory {
       this.registerProcessor(new WalletNodeProcessor());
 
       // Register Chainlink Price Oracle processor
-      const oracleProcessor = new OracleNodeProcessor();
-      this.registerProcessor(oracleProcessor);
+      if (process.env.CRE_ENABLED === 'true') {
+        this.registerProcessor(new CREOracleNodeProcessor());
+      } else {
+        const oracleProcessor = new OracleNodeProcessor();
+        this.registerProcessor(oracleProcessor);
+      }
 
       // Register Pyth Price Oracle processor
       this.registerProcessor(new PythOracleNodeProcessor());
