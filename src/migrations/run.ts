@@ -67,6 +67,7 @@ const pool = new Pool({
 interface Migration {
   id: number;
   name: string;
+  tables: string[];
   up: (pool: Pool) => Promise<void>;
   down: (pool: Pool) => Promise<void>;
 }
@@ -75,306 +76,357 @@ const migrations: Migration[] = [
   {
     id: 1,
     name: "001_create_users_table",
+    tables: ["users"],
     up: migration001.up,
     down: migration001.down,
   },
   {
     id: 2,
     name: "002_create_slack_connections_table",
+    tables: ["slack_connections"],
     up: migration002.up,
     down: migration002.down,
   },
   {
     id: 3,
     name: "003_encrypt_existing_webhooks",
+    tables: ["slack_connections"],
     up: migration003.up,
     down: migration003.down,
   },
   {
     id: 4,
     name: "004_create_workflows_tables",
+    tables: ["workflows"],
     up: migration004.up,
     down: migration004.down,
   },
   {
     id: 5,
     name: "005_create_workflow_nodes_table",
+    tables: ["workflow_nodes"],
     up: migration005.up,
     down: migration005.down,
   },
   {
     id: 6,
     name: "006_create_workflow_edges_table",
+    tables: ["workflow_edges"],
     up: migration006.up,
     down: migration006.down,
   },
   {
     id: 7,
     name: "007_create_workflow_executions_table",
+    tables: ["workflow_executions"],
     up: migration007.up,
     down: migration007.down,
   },
   {
     id: 8,
     name: "008_create_node_executions_table",
+    tables: ["node_executions"],
     up: migration008.up,
     down: migration008.down,
   },
   {
     id: 9,
     name: "009_create_swap_executions_table",
+    tables: ["swap_executions"],
     up: migration009.up,
     down: migration009.down,
   },
   {
     id: 10,
     name: "010_create_managed_wallets_table",
+    tables: ["managed_wallets"],
     up: migration010.up,
     down: migration010.down,
   },
   {
     id: 11,
     name: "011_add_foreign_key_to_workflows",
+    tables: ["workflows"],
     up: migration011.up,
     down: migration011.down,
   },
   {
     id: 12,
     name: "012_add_slack_oauth_fields",
+    tables: ["slack_connections"],
     up: migration012.up,
     down: migration012.down,
   },
   {
     id: 13,
     name: "013_create_telegram_connections_table",
+    tables: ["telegram_connections"],
     up: migration013.up,
     down: migration013.down,
   },
   {
     id: 14,
     name: "014_add_edge_handles",
+    tables: ["workflow_edges"],
     up: migration014.up,
     down: migration014.down,
   },
   {
     id: 15,
     name: "015_add_safe_wallet_to_users",
+    tables: ["users"],
     up: migration015.up,
     down: migration015.down,
   },
   {
     id: 16,
     name: "016_update_node_type_constraint",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration016.up,
     down: migration016.down,
   },
   {
     id: 17,
     name: "017_create_telegram_verification_codes_table",
+    tables: ["telegram_verification_codes"],
     up: migration017.up,
     down: migration017.down,
   },
   {
     id: 18,
     name: "018_cleanup_demo_users",
+    tables: ["users", "workflow_executions", "node_executions", "workflows", "workflow_nodes", "workflow_edges"],
     up: migration018.up,
     down: migration018.down,
   },
   {
     id: 19,
     name: "019_create_lending_executions_table",
+    tables: ["lending_executions"],
     up: migration019.up,
     down: migration019.down,
   },
   {
     id: 20,
     name: "020_add_lending_node_type",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration020.up,
     down: migration020.down,
   },
   {
     id: 21,
     name: "021_add_aave_compound_node_types",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration021.up,
     down: migration021.down,
   },
   {
     id: 22,
     name: "022_add_llm_transform_node_type",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration022.up,
     down: migration022.down,
   },
   {
     id: 23,
     name: "023_add_workflow_visibility_fields",
+    tables: ["workflows"],
     up: migration023.up,
     down: migration023.down,
   },
   {
     id: 24,
     name: "024_add_workflow_versioning",
+    tables: ["workflows", "workflow_version_history", "workflow_executions"],
     up: migration024.up,
     down: migration024.down,
   },
   {
     id: 25,
     name: "025_add_lifi_node_type",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration025.up,
     down: migration025.down,
   },
   {
     id: 26,
     name: "026_add_lifi_swap_provider",
+    tables: ["swap_executions"],
     up: migration026.up,
     down: migration026.down,
   },
   {
     id: 27,
     name: "027_add_eth_sepolia_safe_wallet_and_chain_constraints",
+    tables: ["users", "swap_executions", "lending_executions", "managed_wallets"],
     up: migration027.up,
     down: migration027.down,
   },
   {
     id: 28,
     name: "028_add_uniswap_v4_swap_provider",
+    tables: ["swap_executions"],
     up: migration028.up,
     down: migration028.down,
   },
   {
     id: 29,
     name: "029_add_remaining_sponsored_txs_to_users",
+    tables: ["users"],
     up: migration029.up,
     down: migration029.down,
   },
   {
     id: 30,
     name: "030_create_user_ens_subdomains_table",
+    tables: ["user_ens_subdomains"],
     up: migration030.up,
     down: migration030.down,
   },
   {
     id: 31,
     name: "031_add_selected_chains_to_users",
+    tables: ["users"],
     up: migration031.up,
     down: migration031.down,
   },
   {
     id: 32,
     name: "032_migrate_safe_wallets_to_jsonb",
+    tables: ["users"],
     up: migration032.up,
     down: migration032.down,
   },
   {
     id: 33,
     name: "033_restore_remaining_sponsored_txs_to_users",
+    tables: ["users"],
     up: migration033.up,
     down: migration033.down,
   },
   {
     id: 34,
     name: "034_make_address_nullable_in_users",
+    tables: ["users"],
     up: migration034.up,
     down: migration034.down,
   },
   {
     id: 35,
     name: "035_add_price_oracle_and_api_node_types",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration035.up,
     down: migration035.down,
   },
   {
     id: 36,
     name: "036_create_transaction_intents_table",
+    tables: ["transaction_intents"],
     up: migration036.up,
     down: migration036.down,
   },
   {
     id: 37,
     name: "037_add_execution_paused_state",
+    tables: ["workflow_executions", "node_executions", "swap_executions", "lending_executions"],
     up: migration037.up,
     down: migration037.down,
   },
   {
     id: 38,
     name: "038_add_safe_tx_to_intents",
+    tables: ["transaction_intents"],
     up: migration038.up,
     down: migration038.down,
   },
   {
     id: 39,
     name: "039_add_time_block_trigger_type",
+    tables: ["workflow_executions"],
     up: migration039.up,
     down: migration039.down,
   },
   {
     id: 40,
     name: "040_create_time_blocks_table",
+    tables: ["time_blocks"],
     up: migration040.up,
     down: migration040.down,
   },
   {
     id: 41,
     name: "041_add_time_block_node_type",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration041.up,
     down: migration041.down,
   },
   {
     id: 42,
     name: "042_create_ostium_delegations_table",
+    tables: ["ostium_delegations"],
     up: migration042.up,
     down: migration042.down,
   },
   {
     id: 43,
     name: "043_create_perps_executions_table",
+    tables: ["perps_executions"],
     up: migration043.up,
     down: migration043.down,
   },
   {
     id: 44,
     name: "044_add_perps_node_type",
+    tables: ["workflow_nodes", "node_executions"],
     up: migration044.up,
     down: migration044.down,
   },
   {
     id: 45,
     name: "045_remove_relay_oneinch_swap_providers",
+    tables: ["swap_executions"],
     up: migration045.up,
     down: migration045.down,
   },
   {
     id: 46,
     name: "046_drop_user_ens_subdomains_table",
+    tables: ["user_ens_subdomains"],
     up: migration046.up,
     down: migration046.down,
   },
   {
     id: 47,
     name: "047_remove_unsupported_chains",
+    tables: ["swap_executions", "lending_executions", "managed_wallets"],
     up: migration047.up,
     down: migration047.down,
   },
   {
     id: 49,
     name: "049_remove_uniswap_v3_swap_provider",
+    tables: ["swap_executions"],
     up: migration049.up,
     down: migration049.down,
   },
   {
     id: 48,
     name: "048_add_waiting_for_client_tx_status",
+    tables: ["node_executions", "workflow_executions", "swap_executions", "lending_executions"],
     up: migration048.up,
     down: migration048.down,
   },
   {
     id: 50,
     name: "050_db_optimization_indexes_and_fks",
+    tables: ["workflow_executions", "node_executions", "workflow_version_history", "transaction_intents", "slack_connections"],
     up: migration050.up,
     down: migration050.down,
   },
   {
     id: 51,
     name: "051_create_agent_user_context_table",
+    tables: ["agent_user_context"],
     up: migration051.up,
     down: migration051.down,
   },
@@ -408,23 +460,16 @@ const removeMigration = async (id: number): Promise<void> => {
 
 const runMigrations = async (): Promise<void> => {
   try {
-    logger.info("Starting migrations...");
-
     await createMigrationsTable();
     const executedMigrations = await getExecutedMigrations();
 
     for (const migration of migrations) {
       if (!executedMigrations.includes(migration.id)) {
-        logger.info(`Executing migration: ${migration.name}`);
+        logger.info(`Running migration: ${migration.name} [${migration.tables.join(", ")}]`);
         await migration.up(pool);
         await recordMigration(migration.id, migration.name);
-        logger.info(`Migration completed: ${migration.name}`);
-      } else {
-        logger.info(`Migration already executed: ${migration.name}`);
       }
     }
-
-    logger.info("All migrations completed successfully");
   } catch (error) {
     logger.error({ error }, "Migration failed");
     throw error;
@@ -435,13 +480,10 @@ const runMigrations = async (): Promise<void> => {
 
 const rollbackLastMigration = async (): Promise<void> => {
   try {
-    logger.info("Rolling back last migration...");
-
     await createMigrationsTable();
     const executedMigrations = await getExecutedMigrations();
 
     if (executedMigrations.length === 0) {
-      logger.info("No migrations to rollback");
       return;
     }
 
@@ -453,10 +495,9 @@ const rollbackLastMigration = async (): Promise<void> => {
       return;
     }
 
-    logger.info(`Rolling back migration: ${migration.name}`);
+    logger.info(`Rolling back migration: ${migration.name} [${migration.tables.join(", ")}]`);
     await migration.down(pool);
     await removeMigration(migration.id);
-    logger.info(`Rollback completed: ${migration.name}`);
   } catch (error) {
     logger.error({ error }, "Rollback failed");
     throw error;
@@ -469,15 +510,19 @@ const rollbackLastMigration = async (): Promise<void> => {
 const command = process.argv[2];
 
 if (command === "up") {
-  runMigrations().catch((error) => {
-    logger.error({ error }, "Failed to run migrations");
-    process.exit(1);
-  });
+  runMigrations()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      logger.error({ error }, "Failed to run migrations");
+      process.exit(1);
+    });
 } else if (command === "down") {
-  rollbackLastMigration().catch((error) => {
-    logger.error({ error }, "Failed to rollback migration");
-    process.exit(1);
-  });
+  rollbackLastMigration()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      logger.error({ error }, "Failed to rollback migration");
+      process.exit(1);
+    });
 } else {
   logger.info("Usage: node run.js [up|down]");
   process.exit(1);

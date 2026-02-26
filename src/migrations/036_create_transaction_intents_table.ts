@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-    logger.info('Running migration: 036_create_transaction_intents_table');
-
     await pool.query(`
     CREATE TABLE IF NOT EXISTS transaction_intents (
       id VARCHAR(36) PRIMARY KEY,
@@ -38,17 +35,11 @@ export const up = async (pool: Pool): Promise<void> => {
     await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_transaction_intents_status ON transaction_intents(status);
   `);
-
-    logger.info('Migration completed: 036_create_transaction_intents_table');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-    logger.info('Rolling back migration: 036_create_transaction_intents_table');
-
     await pool.query(`DROP INDEX IF EXISTS idx_transaction_intents_status;`);
     await pool.query(`DROP INDEX IF EXISTS idx_transaction_intents_agent_user_id;`);
     await pool.query(`DROP INDEX IF EXISTS idx_transaction_intents_user_id;`);
     await pool.query(`DROP TABLE IF EXISTS transaction_intents;`);
-
-    logger.info('Rollback completed: 036_create_transaction_intents_table');
 };

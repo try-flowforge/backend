@@ -14,7 +14,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding LIFI to swap_executions valid_provider constraint...');
 
     // Drop and recreate constraint (idempotent)
     await client.query(`
@@ -29,7 +28,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('LIFI added to swap_executions valid_provider constraint');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to add LIFI swap provider constraint');
@@ -45,7 +43,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Removing LIFI from swap_executions valid_provider constraint...');
 
     // Ensure there are no LIFI rows before rollback
     const existing = await client.query(
@@ -78,4 +75,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

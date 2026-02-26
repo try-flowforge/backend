@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-    logger.info('Running migration: 013_create_telegram_connections_table');
-
     // Create telegram_connections table (simplified - no bot_token, uses central bot)
     await pool.query(`
     CREATE TABLE IF NOT EXISTS telegram_connections (
@@ -24,16 +21,11 @@ export const up = async (pool: Pool): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_telegram_connections_user_id 
     ON telegram_connections(user_id);
   `);
-
-    logger.info('Migration completed: 013_create_telegram_connections_table');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-    logger.info('Rolling back migration: 013_create_telegram_connections_table');
-
-    await pool.query(`
+  await pool.query(`
     DROP TABLE IF EXISTS telegram_connections CASCADE;
   `);
 
-    logger.info('Rollback completed: 013_create_telegram_connections_table');
-};
+  };

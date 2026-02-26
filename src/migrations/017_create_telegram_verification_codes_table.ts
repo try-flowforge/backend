@@ -1,9 +1,6 @@
 import { query } from '../config/database';
-import { logger } from '../utils/logger';
 
 export async function up(): Promise<void> {
-    logger.info('Running migration: Create telegram_verification_codes table');
-
     await query(`
         CREATE TABLE IF NOT EXISTS telegram_verification_codes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,13 +35,8 @@ export async function up(): Promise<void> {
         ON telegram_verification_codes(expires_at);
     `);
 
-    logger.info('Migration completed: telegram_verification_codes table created');
 }
 
 export async function down(): Promise<void> {
-    logger.info('Rolling back migration: Drop telegram_verification_codes table');
-
     await query('DROP TABLE IF EXISTS telegram_verification_codes CASCADE');
-
-    logger.info('Rollback completed: telegram_verification_codes table dropped');
 }

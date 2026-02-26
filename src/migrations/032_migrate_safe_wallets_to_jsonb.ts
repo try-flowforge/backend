@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-    logger.info('Running migration: 032_migrate_safe_wallets_to_jsonb');
-
     // 1. Add new JSONB column
     await pool.query(`
     ALTER TABLE users
@@ -28,13 +25,9 @@ export const up = async (pool: Pool): Promise<void> => {
     DROP COLUMN IF EXISTS safe_wallet_address_testnet,
     DROP COLUMN IF EXISTS safe_wallet_address_eth_sepolia;
   `);
-
-    logger.info('Migration completed: 032_migrate_safe_wallets_to_jsonb');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-    logger.info('Rolling back migration: 032_migrate_safe_wallets_to_jsonb');
-
     // 1. Restore old columns
     await pool.query(`
     ALTER TABLE users
@@ -57,6 +50,4 @@ export const down = async (pool: Pool): Promise<void> => {
     ALTER TABLE users
     DROP COLUMN IF EXISTS safe_wallets;
   `);
-
-    logger.info('Rollback completed: 032_migrate_safe_wallets_to_jsonb');
 };

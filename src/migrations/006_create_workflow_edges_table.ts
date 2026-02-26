@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating workflow_edges table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -30,9 +28,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT no_self_loop CHECK (source_node_id != target_node_id)
         );
       `);
-      logger.info('workflow_edges table created');
     } else {
-      logger.info('workflow_edges table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -41,8 +37,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_workflow_edges_source_node ON workflow_edges(source_node_id);
       CREATE INDEX IF NOT EXISTS idx_workflow_edges_target_node ON workflow_edges(target_node_id);
     `);
-
-    logger.info('workflow_edges table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -59,8 +53,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping workflow_edges table...');
     await client.query('DROP TABLE IF EXISTS workflow_edges CASCADE;');
 
     await client.query('COMMIT');
@@ -72,4 +64,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

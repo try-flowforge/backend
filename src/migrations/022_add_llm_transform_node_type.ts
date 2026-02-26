@@ -38,7 +38,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Adding LLM_TRANSFORM node type to constraints...');
 
         // Drop and recreate constraints (idempotent approach)
         // Drop the old constraint on workflow_nodes
@@ -67,7 +66,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-        logger.info('LLM_TRANSFORM node type added to constraints successfully');
 
         await client.query('COMMIT');
     } catch (error) {
@@ -89,7 +87,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Removing LLM_TRANSFORM node type from constraints...');
 
         // First, check if any LLM_TRANSFORM nodes exist
         const existingNodes = await client.query(`

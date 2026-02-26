@@ -13,8 +13,6 @@ export async function up(): Promise<void> {
   const client = await pool.connect();
 
   try {
-    logger.info('Running migration: Add source_handle and target_handle to workflow_edges');
-
     await client.query('BEGIN');
 
     // Add source_handle column (for IF node branching)
@@ -38,7 +36,6 @@ export async function up(): Promise<void> {
 
     await client.query('COMMIT');
 
-    logger.info('Migration completed: source_handle and target_handle added to workflow_edges');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Migration failed');
@@ -52,8 +49,6 @@ export async function down(): Promise<void> {
   const client = await pool.connect();
 
   try {
-    logger.info('Rolling back migration: Remove source_handle and target_handle from workflow_edges');
-
     await client.query('BEGIN');
 
     // Drop index
@@ -70,7 +65,6 @@ export async function down(): Promise<void> {
 
     await client.query('COMMIT');
 
-    logger.info('Migration rolled back: source_handle and target_handle removed');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Migration rollback failed');
@@ -79,4 +73,3 @@ export async function down(): Promise<void> {
     client.release();
   }
 }
-

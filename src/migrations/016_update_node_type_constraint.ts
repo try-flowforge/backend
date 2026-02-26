@@ -15,8 +15,6 @@ export async function up(): Promise<void> {
   const client = await pool.connect();
 
   try {
-    logger.info("Running migration: Update node type constraint");
-
     await client.query("BEGIN");
 
     // Drop the old constraint from workflow_nodes (idempotent)
@@ -91,7 +89,6 @@ export async function up(): Promise<void> {
 
     await client.query("COMMIT");
 
-    logger.info("Migration completed: Node type constraint updated");
   } catch (error) {
     await client.query("ROLLBACK");
     logger.error({ error }, "Migration failed");
@@ -105,8 +102,6 @@ export async function down(): Promise<void> {
   const client = await pool.connect();
 
   try {
-    logger.info("Rolling back migration: Revert node type constraint");
-
     await client.query("BEGIN");
 
     // Revert workflow_nodes constraint
@@ -135,7 +130,6 @@ export async function down(): Promise<void> {
 
     await client.query("COMMIT");
 
-    logger.info("Rollback completed: Node type constraint reverted");
   } catch (error) {
     await client.query("ROLLBACK");
     logger.error({ error }, "Rollback failed");
@@ -144,4 +138,3 @@ export async function down(): Promise<void> {
     client.release();
   }
 }
-

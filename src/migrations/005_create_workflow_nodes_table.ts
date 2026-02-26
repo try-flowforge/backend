@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating workflow_nodes table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -33,9 +31,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT valid_node_type CHECK (type IN ('TRIGGER', 'SWAP', 'CONDITION', 'WEBHOOK', 'DELAY'))
         );
       `);
-      logger.info('workflow_nodes table created');
     } else {
-      logger.info('workflow_nodes table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -43,8 +39,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_workflow_nodes_workflow_id ON workflow_nodes(workflow_id);
       CREATE INDEX IF NOT EXISTS idx_workflow_nodes_type ON workflow_nodes(type);
     `);
-
-    logger.info('workflow_nodes table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -61,8 +55,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping workflow_nodes table...');
     await client.query('DROP TABLE IF EXISTS workflow_nodes CASCADE;');
 
     await client.query('COMMIT');
@@ -74,4 +66,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

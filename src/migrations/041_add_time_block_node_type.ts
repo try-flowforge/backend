@@ -43,7 +43,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding TIME_BLOCK node type to constraints...');
 
     await client.query(`
       ALTER TABLE workflow_nodes
@@ -67,7 +66,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-    logger.info('TIME_BLOCK node type added to constraints successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -88,7 +86,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Removing TIME_BLOCK node type from constraints...');
 
     const existingNodes = await client.query(`
       SELECT COUNT(*) as count FROM workflow_nodes WHERE type = 'TIME_BLOCK'

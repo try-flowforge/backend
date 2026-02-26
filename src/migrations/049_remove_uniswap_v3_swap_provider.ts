@@ -2,7 +2,6 @@ import { Pool } from 'pg';
 import { logger } from '../utils/logger';
 
 export async function up(pool: Pool): Promise<void> {
-    logger.info('Running migration 048: Remove UNISWAP V2/V3 from swap provider constraints');
 
     const client = await pool.connect();
 
@@ -23,7 +22,6 @@ export async function up(pool: Pool): Promise<void> {
     `);
 
         await client.query('COMMIT');
-        logger.info('Successfully updated swap_executions provider constraints');
     } catch (error) {
         await client.query('ROLLBACK');
         logger.error({ error }, 'Error in migration 048:');
@@ -34,7 +32,6 @@ export async function up(pool: Pool): Promise<void> {
 }
 
 export async function down(pool: Pool): Promise<void> {
-    logger.info('Reverting migration 048: Add back UNISWAP provider constraints');
 
     const client = await pool.connect();
 
@@ -55,7 +52,6 @@ export async function down(pool: Pool): Promise<void> {
     `);
 
         await client.query('COMMIT');
-        logger.info('Successfully reverted swap_executions provider constraints');
     } catch (error) {
         await client.query('ROLLBACK');
         logger.error({ error }, 'Error reverting migration 048:');

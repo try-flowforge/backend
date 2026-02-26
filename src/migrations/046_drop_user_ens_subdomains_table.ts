@@ -6,14 +6,12 @@ export async function up(pool: Pool): Promise<void> {
     try {
         await client.query("BEGIN");
 
-        logger.info("Dropping user_ens_subdomains table...");
 
         await client.query(`
       DROP TABLE IF EXISTS user_ens_subdomains;
     `);
 
         await client.query("COMMIT");
-        logger.info("user_ens_subdomains table dropped successfully");
     } catch (error) {
         await client.query("ROLLBACK");
         logger.error({ error }, "Failed to drop user_ens_subdomains table");
@@ -28,7 +26,6 @@ export async function down(pool: Pool): Promise<void> {
     try {
         await client.query("BEGIN");
 
-        logger.info("Recreating user_ens_subdomains table...");
 
         await client.query(`
       CREATE TABLE IF NOT EXISTS user_ens_subdomains (
@@ -48,7 +45,6 @@ export async function down(pool: Pool): Promise<void> {
     `);
 
         await client.query("COMMIT");
-        logger.info("user_ens_subdomains table recreated successfully");
     } catch (error) {
         await client.query("ROLLBACK");
         logger.error({ error }, "Failed to recreate user_ens_subdomains table");

@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating lending_executions table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -47,9 +45,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT valid_lending_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'))
         );
       `);
-      logger.info('lending_executions table created');
     } else {
-      logger.info('lending_executions table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -63,8 +59,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_lending_executions_created_at ON lending_executions(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_lending_executions_wallet_operation ON lending_executions(wallet_address, operation);
     `);
-
-    logger.info('lending_executions table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -81,8 +75,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping lending_executions table...');
     await client.query('DROP TABLE IF EXISTS lending_executions CASCADE;');
 
     await client.query('COMMIT');
@@ -94,4 +86,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

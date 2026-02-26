@@ -6,7 +6,6 @@ export const up = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-    logger.info('Running migration: 037_add_execution_paused_state');
 
     // 1. Update status CHECK constraints for all execution tables
     // PostgreSQL doesn't allow direct ALTER CONSTRAINT to change the check expression easily,
@@ -40,7 +39,6 @@ export const up = async (pool: Pool): Promise<void> => {
         `);
 
     await client.query('COMMIT');
-    logger.info('Migration completed: 037_add_execution_paused_state');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Migration failed: 037_add_execution_paused_state');
@@ -55,7 +53,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-    logger.info('Rolling back migration: 037_add_execution_paused_state');
 
     const oldStatusValues = "'PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'";
 
@@ -84,7 +81,6 @@ export const down = async (pool: Pool): Promise<void> => {
         `);
 
     await client.query('COMMIT');
-    logger.info('Rollback completed: 037_add_execution_paused_state');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Rollback failed: 037_add_execution_paused_state');

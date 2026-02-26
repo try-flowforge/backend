@@ -16,7 +16,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Adding workflow versioning support...');
 
         // 1. Add version columns to workflows table
         const versionColumnExists = await client.query(`
@@ -31,9 +30,7 @@ export const up = async (pool: Pool): Promise<void> => {
         ALTER TABLE workflows 
         ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
       `);
-            logger.info('Added version column to workflows table');
         } else {
-            logger.info('Version column already exists in workflows table');
         }
 
         // Add version_created_at column
@@ -49,7 +46,6 @@ export const up = async (pool: Pool): Promise<void> => {
         ALTER TABLE workflows 
         ADD COLUMN version_created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
       `);
-            logger.info('Added version_created_at column to workflows table');
         }
 
         // 2. Create workflow_version_history table
@@ -75,7 +71,6 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT unique_workflow_version UNIQUE(workflow_id, version_number)
         );
       `);
-            logger.info('Created workflow_version_history table');
 
             // Create indexes
             await client.query(`
@@ -86,9 +81,7 @@ export const up = async (pool: Pool): Promise<void> => {
         CREATE INDEX idx_version_history_created_at 
         ON workflow_version_history(created_at DESC);
       `);
-            logger.info('Created indexes for workflow_version_history');
         } else {
-            logger.info('workflow_version_history table already exists');
         }
 
         // 3. Add version_number to workflow_executions
@@ -104,20 +97,16 @@ export const up = async (pool: Pool): Promise<void> => {
         ALTER TABLE workflow_executions 
         ADD COLUMN version_number INTEGER DEFAULT 1;
       `);
-            logger.info('Added version_number column to workflow_executions table');
 
             // Create index for version-based queries
             await client.query(`
         CREATE INDEX idx_workflow_executions_version 
         ON workflow_executions(workflow_id, version_number);
       `);
-            logger.info('Created index for workflow_executions version_number');
         } else {
-            logger.info('version_number column already exists in workflow_executions');
         }
 
         await client.query('COMMIT');
-        logger.info('Workflow versioning migration completed successfully');
     } catch (error) {
         await client.query('ROLLBACK');
         logger.error({ error }, 'Failed to run workflow versioning migration');
@@ -133,7 +122,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Rolling back workflow versioning migration...');
 
         // Remove version_number from workflow_executions
         await client.query(`
@@ -154,7 +142,6 @@ export const down = async (pool: Pool): Promise<void> => {
     `);
 
         await client.query('COMMIT');
-        logger.info('Workflow versioning migration rolled back successfully');
     } catch (error) {
         await client.query('ROLLBACK');
         logger.error({ error }, 'Failed to rollback workflow versioning migration');

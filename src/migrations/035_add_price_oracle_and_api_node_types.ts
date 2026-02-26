@@ -43,7 +43,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Adding PRICE_ORACLE and API node types to constraints...');
 
         // Drop and recreate constraints on workflow_nodes
         await client.query(`
@@ -69,7 +68,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-        logger.info('PRICE_ORACLE and API node types added to constraints successfully');
 
         await client.query('COMMIT');
     } catch (error) {
@@ -91,7 +89,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Removing PRICE_ORACLE and API node types from constraints...');
 
         // Check if any nodes exist with these types
         const existingNodes = await client.query(`

@@ -33,8 +33,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding LENDING node type to constraints...');
-
     // Drop and recreate constraints (idempotent approach)
     // Drop the old constraint on workflow_nodes
     await client.query(`
@@ -62,7 +60,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-    logger.info('LENDING node type added to constraints successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -84,7 +81,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Removing LENDING node type from constraints...');
 
     // First, check if any LENDING nodes exist
     const lendingNodes = await client.query(`
@@ -128,4 +124,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

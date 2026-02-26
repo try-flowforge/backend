@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Running migration: 042_create_ostium_delegations_table');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ostium_delegations (
@@ -49,7 +48,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('Migration completed: 042_create_ostium_delegations_table');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed migration: 042_create_ostium_delegations_table');
@@ -65,7 +63,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Rolling back migration: 042_create_ostium_delegations_table');
 
     await client.query('DROP INDEX IF EXISTS idx_ostium_delegations_safe_address;');
     await client.query('DROP INDEX IF EXISTS idx_ostium_delegations_status;');
@@ -73,7 +70,6 @@ export const down = async (pool: Pool): Promise<void> => {
     await client.query('DROP TABLE IF EXISTS ostium_delegations;');
 
     await client.query('COMMIT');
-    logger.info('Rollback completed: 042_create_ostium_delegations_table');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed rollback: 042_create_ostium_delegations_table');

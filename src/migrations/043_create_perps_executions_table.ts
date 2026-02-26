@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Running migration: 043_create_perps_executions_table');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS perps_executions (
@@ -52,7 +51,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('Migration completed: 043_create_perps_executions_table');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed migration: 043_create_perps_executions_table');
@@ -68,7 +66,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Rolling back migration: 043_create_perps_executions_table');
 
     await client.query('DROP INDEX IF EXISTS idx_perps_executions_status;');
     await client.query('DROP INDEX IF EXISTS idx_perps_executions_user_id_created_at;');
@@ -77,7 +74,6 @@ export const down = async (pool: Pool): Promise<void> => {
     await client.query('DROP TABLE IF EXISTS perps_executions;');
 
     await client.query('COMMIT');
-    logger.info('Rollback completed: 043_create_perps_executions_table');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed rollback: 043_create_perps_executions_table');

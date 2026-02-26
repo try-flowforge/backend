@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding visibility fields to workflows table...');
 
     // Check if columns already exist
     const columnsExist = await client.query(`
@@ -24,9 +23,7 @@ export const up = async (pool: Pool): Promise<void> => {
         ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT false,
         ADD COLUMN published_at TIMESTAMP WITH TIME ZONE;
       `);
-      logger.info('Added is_public and published_at columns');
     } else {
-      logger.info('Visibility columns already exist, skipping column creation');
     }
 
     // Create index for public workflows (partial index for better performance)
@@ -56,7 +53,6 @@ export const up = async (pool: Pool): Promise<void> => {
       WHERE is_public = true;
     `);
 
-    logger.info('Workflow visibility indexes created successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -74,7 +70,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Removing workflow visibility fields...');
 
     // Drop indexes
     await client.query('DROP INDEX IF EXISTS idx_workflows_is_public;');
@@ -89,7 +84,6 @@ export const down = async (pool: Pool): Promise<void> => {
       DROP COLUMN IF EXISTS published_at;
     `);
 
-    logger.info('Workflow visibility fields removed');
 
     await client.query('COMMIT');
   } catch (error) {

@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-  logger.info('Running migration: 012_add_slack_oauth_fields');
-
   // Add connection_type enum (skip if already exists)
   await pool.query(`
     DO $$
@@ -77,12 +74,9 @@ export const up = async (pool: Pool): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_slack_connections_team_id ON slack_connections(team_id);
   `);
 
-  logger.info('Migration completed: 012_add_slack_oauth_fields');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-  logger.info('Rolling back migration: 012_add_slack_oauth_fields');
-
   // Drop constraint
   await pool.query(`
     ALTER TABLE slack_connections
@@ -117,6 +111,4 @@ export const down = async (pool: Pool): Promise<void> => {
     DROP TYPE IF EXISTS slack_connection_type;
   `);
 
-  logger.info('Rollback completed: 012_add_slack_oauth_fields');
 };
-

@@ -37,7 +37,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Adding AAVE, COMPOUND, CHAINLINK_PRICE_ORACLE, and PYTH_PRICE_ORACLE node types to constraints...');
 
         // Drop and recreate constraints (idempotent approach)
         // Drop the old constraint on workflow_nodes
@@ -66,7 +65,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-        logger.info('AAVE, COMPOUND, CHAINLINK_PRICE_ORACLE, and PYTH_PRICE_ORACLE node types added to constraints successfully');
 
         await client.query('COMMIT');
     } catch (error) {
@@ -88,7 +86,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Removing AAVE, COMPOUND, CHAINLINK_PRICE_ORACLE, and PYTH_PRICE_ORACLE node types from constraints...');
 
         // First, check if any AAVE, COMPOUND, CHAINLINK_PRICE_ORACLE, or PYTH_PRICE_ORACLE nodes exist
         const existingNodes = await client.query(`

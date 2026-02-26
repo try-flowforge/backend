@@ -11,7 +11,6 @@ export const up = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-    logger.info('Running migration: 050_db_optimization_indexes_and_fks');
 
     // 1. workflow_executions: (workflow_id, user_id, started_at DESC) for getExecutionHistory
     await client.query(`
@@ -68,7 +67,6 @@ export const up = async (pool: Pool): Promise<void> => {
     }
 
     await client.query('COMMIT');
-    logger.info('Migration completed: 050_db_optimization_indexes_and_fks');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Migration failed: 050_db_optimization_indexes_and_fks');
@@ -83,7 +81,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-    logger.info('Rolling back migration: 050_db_optimization_indexes_and_fks');
 
     await client.query(`ALTER TABLE transaction_intents DROP CONSTRAINT IF EXISTS fk_transaction_intents_user;`);
     await client.query(`ALTER TABLE slack_connections DROP CONSTRAINT IF EXISTS fk_slack_connections_user;`);
@@ -95,7 +92,6 @@ export const down = async (pool: Pool): Promise<void> => {
     await client.query(`DROP INDEX IF EXISTS idx_workflow_executions_workflow_user_started;`);
 
     await client.query('COMMIT');
-    logger.info('Rollback completed: 050_db_optimization_indexes_and_fks');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Rollback failed: 050_db_optimization_indexes_and_fks');

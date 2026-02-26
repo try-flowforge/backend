@@ -10,7 +10,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding UNISWAP_V4 to swap_executions valid_provider constraint...');
 
     await client.query(`
       ALTER TABLE swap_executions
@@ -24,7 +23,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('UNISWAP_V4 added to swap_executions valid_provider constraint');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to add UNISWAP_V4 swap provider constraint');

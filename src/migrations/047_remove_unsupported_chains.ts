@@ -1,7 +1,4 @@
 import { Pool } from 'pg';
-import pino from 'pino';
-
-const logger = pino({ name: 'Migration_047_remove_unsupported_chains' });
 
 /**
  * Migration 047: Remove unneeded chains from database constraints
@@ -9,7 +6,6 @@ const logger = pino({ name: 'Migration_047_remove_unsupported_chains' });
  * allow 'ARBITRUM' and 'ARBITRUM_SEPOLIA'.
  */
 export async function up(pool: Pool): Promise<void> {
-    logger.info('Running migration: 047_remove_unsupported_chains');
 
     const client = await pool.connect();
 
@@ -39,7 +35,6 @@ export async function up(pool: Pool): Promise<void> {
     `);
 
         await client.query('COMMIT');
-        logger.info('Migration completed: 047_remove_unsupported_chains');
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -49,7 +44,6 @@ export async function up(pool: Pool): Promise<void> {
 }
 
 export async function down(pool: Pool): Promise<void> {
-    logger.info('Rolling back migration: 047_remove_unsupported_chains');
 
     const client = await pool.connect();
     try {
@@ -76,7 +70,6 @@ export async function down(pool: Pool): Promise<void> {
     `);
 
         await client.query('COMMIT');
-        logger.info('Rollback completed: 047_remove_unsupported_chains');
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;

@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating managed_wallets table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -33,9 +31,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT unique_user_address_chain UNIQUE (user_id, address, chain)
         );
       `);
-      logger.info('managed_wallets table created');
     } else {
-      logger.info('managed_wallets table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -45,8 +41,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_managed_wallets_chain ON managed_wallets(chain);
       CREATE INDEX IF NOT EXISTS idx_managed_wallets_is_active ON managed_wallets(is_active);
     `);
-
-    logger.info('managed_wallets table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -63,8 +57,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping managed_wallets table...');
     await client.query('DROP TABLE IF EXISTS managed_wallets CASCADE;');
 
     await client.query('COMMIT');
@@ -76,4 +68,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

@@ -39,7 +39,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Adding PERPS node type to constraints...');
 
     await client.query(`
       ALTER TABLE workflow_nodes
@@ -64,7 +63,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('PERPS node type added to constraints successfully');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to add PERPS node type');
@@ -83,7 +81,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Removing PERPS node type from constraints...');
 
     const existingNodes = await client.query(`
       SELECT COUNT(*) as count FROM workflow_nodes WHERE type = 'PERPS'

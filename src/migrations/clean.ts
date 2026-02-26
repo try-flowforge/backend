@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { createClient } from "redis";
 import * as dotenv from "dotenv";
 import { logger } from "../utils/logger";
 import * as migration001 from "./001_create_users_table";
@@ -69,8 +70,6 @@ const pool = new Pool({
  */
 const truncateAll = async (): Promise<void> => {
   try {
-    logger.info("Starting database truncate...");
-
     // Get all table names
     const tablesResult = await pool.query(`
       SELECT tablename 
@@ -82,18 +81,13 @@ const truncateAll = async (): Promise<void> => {
     const tables = tablesResult.rows.map((row) => row.tablename);
 
     if (tables.length === 0) {
-      logger.info("No tables found to truncate");
       return;
     }
 
-    // Disable foreign key checks temporarily (PostgreSQL doesn't have this, but we can use TRUNCATE CASCADE)
-    // Truncate all tables
     for (const table of tables) {
-      logger.info(`Truncating table: ${table}`);
       await pool.query(`TRUNCATE TABLE "${table}" CASCADE;`);
     }
 
-    logger.info("Database truncate completed successfully");
   } catch (error) {
     logger.error({ error }, "Database truncate failed");
     throw error;
@@ -103,84 +97,307 @@ const truncateAll = async (): Promise<void> => {
 };
 
 /**
+ * Flush all Redis keys (no schema, just data)
+ */
+const flushRedis = async (): Promise<void> => {
+  const host = process.env.REDIS_HOST || "localhost";
+  const port = parseInt(process.env.REDIS_PORT || "6379", 10);
+  const password = process.env.REDIS_PASSWORD;
+  const client = createClient({
+    socket: { host, port },
+    password: password || undefined,
+  });
+  await client.connect();
+  await client.flushAll();
+  await client.quit();
+};
+
+/**
+ * Clear all data: truncate Postgres tables + flush Redis. No schema changes.
+ */
+const clearAll = async (): Promise<void> => {
+  await truncateAll();
+  await flushRedis();
+};
+
+/**
  * Reset database (drops all tables and re-runs migrations)
  */
+const resetMigrations: { name: string; tables: string[]; up: (p: Pool) => Promise<void> }[] = [
+  {
+    name: "001_create_users_table",
+    tables: ["users"],
+    up: migration001.up,
+  },
+  {
+    name: "002_create_slack_connections_table",
+    tables: ["slack_connections"],
+    up: migration002.up,
+  },
+  {
+    name: "003_encrypt_existing_webhooks",
+    tables: ["slack_connections"],
+    up: migration003.up,
+  },
+  {
+    name: "004_create_workflows_tables",
+    tables: ["workflows"],
+    up: migration004.up,
+  },
+  {
+    name: "005_create_workflow_nodes_table",
+    tables: ["workflow_nodes"],
+    up: migration005.up,
+  },
+  {
+    name: "006_create_workflow_edges_table",
+    tables: ["workflow_edges"],
+    up: migration006.up,
+  },
+  {
+    name: "007_create_workflow_executions_table",
+    tables: ["workflow_executions"],
+    up: migration007.up,
+  },
+  {
+    name: "008_create_node_executions_table",
+    tables: ["node_executions"],
+    up: migration008.up,
+  },
+  {
+    name: "009_create_swap_executions_table",
+    tables: ["swap_executions"],
+    up: migration009.up,
+  },
+  {
+    name: "010_create_managed_wallets_table",
+    tables: ["managed_wallets"],
+    up: migration010.up,
+  },
+  {
+    name: "011_add_foreign_key_to_workflows",
+    tables: ["workflows"],
+    up: migration011.up,
+  },
+  {
+    name: "012_add_slack_oauth_fields",
+    tables: ["slack_connections"],
+    up: migration012.up,
+  },
+  {
+    name: "013_create_telegram_connections_table",
+    tables: ["telegram_connections"],
+    up: migration013.up,
+  },
+  {
+    name: "014_add_edge_handles",
+    tables: ["workflow_edges"],
+    up: migration014.up,
+  },
+  {
+    name: "015_add_safe_wallet_to_users",
+    tables: ["users"],
+    up: migration015.up,
+  },
+  {
+    name: "016_update_node_type_constraint",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration016.up,
+  },
+  {
+    name: "017_create_telegram_verification_codes_table",
+    tables: ["telegram_verification_codes"],
+    up: migration017.up,
+  },
+  {
+    name: "018_cleanup_demo_users",
+    tables: ["users", "workflow_executions", "node_executions", "workflows", "workflow_nodes", "workflow_edges"],
+    up: migration018.up,
+  },
+  {
+    name: "019_create_lending_executions_table",
+    tables: ["lending_executions"],
+    up: migration019.up,
+  },
+  {
+    name: "020_add_lending_node_type",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration020.up,
+  },
+  {
+    name: "021_add_aave_compound_node_types",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration021.up,
+  },
+  {
+    name: "022_add_llm_transform_node_type",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration022.up,
+  },
+  {
+    name: "023_add_workflow_visibility_fields",
+    tables: ["workflows"],
+    up: migration023.up,
+  },
+  {
+    name: "024_add_workflow_versioning",
+    tables: ["workflows", "workflow_version_history", "workflow_executions"],
+    up: migration024.up,
+  },
+  {
+    name: "025_add_lifi_node_type",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration025.up,
+  },
+  {
+    name: "026_add_lifi_swap_provider",
+    tables: ["swap_executions"],
+    up: migration026.up,
+  },
+  {
+    name: "027_add_eth_sepolia_safe_wallet_and_chain_constraints",
+    tables: ["users", "swap_executions", "lending_executions", "managed_wallets"],
+    up: migration027.up,
+  },
+  {
+    name: "028_add_uniswap_v4_swap_provider",
+    tables: ["swap_executions"],
+    up: migration028.up,
+  },
+  {
+    name: "029_add_remaining_sponsored_txs_to_users",
+    tables: ["users"],
+    up: migration029.up,
+  },
+  {
+    name: "030_create_user_ens_subdomains_table",
+    tables: ["user_ens_subdomains"],
+    up: migration030.up,
+  },
+  {
+    name: "031_add_selected_chains_to_users",
+    tables: ["users"],
+    up: migration031.up,
+  },
+  {
+    name: "032_migrate_safe_wallets_to_jsonb",
+    tables: ["users"],
+    up: migration032.up,
+  },
+  {
+    name: "033_restore_remaining_sponsored_txs_to_users",
+    tables: ["users"],
+    up: migration033.up,
+  },
+  {
+    name: "034_make_address_nullable_in_users",
+    tables: ["users"],
+    up: migration034.up,
+  },
+  {
+    name: "035_add_price_oracle_and_api_node_types",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration035.up,
+  },
+  {
+    name: "036_create_transaction_intents_table",
+    tables: ["transaction_intents"],
+    up: migration036.up,
+  },
+  {
+    name: "037_add_execution_paused_state",
+    tables: ["workflow_executions", "node_executions", "swap_executions", "lending_executions"],
+    up: migration037.up,
+  },
+  {
+    name: "038_add_safe_tx_to_intents",
+    tables: ["transaction_intents"],
+    up: migration038.up,
+  },
+  {
+    name: "039_add_time_block_trigger_type",
+    tables: ["workflow_executions"],
+    up: migration039.up,
+  },
+  {
+    name: "040_create_time_blocks_table",
+    tables: ["time_blocks"],
+    up: migration040.up,
+  },
+  {
+    name: "041_add_time_block_node_type",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration041.up,
+  },
+  {
+    name: "042_create_ostium_delegations_table",
+    tables: ["ostium_delegations"],
+    up: migration042.up,
+  },
+  {
+    name: "043_create_perps_executions_table",
+    tables: ["perps_executions"],
+    up: migration043.up,
+  },
+  {
+    name: "044_add_perps_node_type",
+    tables: ["workflow_nodes", "node_executions"],
+    up: migration044.up,
+  },
+  {
+    name: "045_remove_relay_oneinch_swap_providers",
+    tables: ["swap_executions"],
+    up: migration045.up,
+  },
+  {
+    name: "046_drop_user_ens_subdomains_table",
+    tables: ["user_ens_subdomains"],
+    up: migration046.up,
+  },
+  {
+    name: "047_remove_unsupported_chains",
+    tables: ["swap_executions", "lending_executions", "managed_wallets"],
+    up: migration047.up,
+  },
+  {
+    name: "048_add_waiting_for_client_tx_status",
+    tables: ["node_executions", "workflow_executions", "swap_executions", "lending_executions"],
+    up: migration048.up,
+  },
+  {
+    name: "049_remove_uniswap_v3_swap_provider",
+    tables: ["swap_executions"],
+    up: migration049.up,
+  },
+  {
+    name: "050_db_optimization_indexes_and_fks",
+    tables: ["workflow_executions", "node_executions", "workflow_version_history", "transaction_intents", "slack_connections"],
+    up: migration050.up,
+  },
+  {
+    name: "051_create_agent_user_context_table",
+    tables: ["agent_user_context"],
+    up: migration051.up,
+  },
+];
+
 const resetDatabase = async (): Promise<void> => {
   try {
-    logger.info("Starting database reset...");
-
-    // Get all table names
     const tablesResult = await pool.query(`
       SELECT tablename 
       FROM pg_tables 
       WHERE schemaname = 'public'
       ORDER BY tablename;
     `);
-
-    const tables = tablesResult.rows.map((row) => row.tablename);
-
-    if (tables.length > 0) {
-      // Drop all tables
-      logger.info("Dropping all tables...");
-      for (const table of tables) {
-        logger.info(`Dropping table: ${table}`);
-        await pool.query(`DROP TABLE IF EXISTS "${table}" CASCADE;`);
-      }
+    const tableNames = tablesResult.rows.map((row) => row.tablename);
+    for (const table of tableNames) {
+      await pool.query(`DROP TABLE IF EXISTS "${table}" CASCADE;`);
     }
 
-    // Re-run migrations
-    logger.info("Re-running migrations...");
-    await migration001.up(pool);
-    await migration002.up(pool);
-    await migration003.up(pool);
-    await migration004.up(pool);
-    await migration005.up(pool);
-    await migration006.up(pool);
-    await migration007.up(pool);
-    await migration008.up(pool);
-    await migration009.up(pool);
-    await migration010.up(pool);
-    await migration011.up(pool);
-    await migration012.up(pool);
-    await migration013.up(pool);
-    await migration014.up();
-    await migration015.up(pool);
-    await migration016.up();
-    await migration017.up();
-    await migration018.up();
-    await migration019.up(pool);
-    await migration020.up(pool);
-    await migration021.up(pool);
-    await migration022.up(pool);
-    await migration023.up(pool);
-    await migration024.up(pool);
-    await migration025.up(pool);
-    await migration026.up(pool);
-    await migration027.up(pool);
-    await migration028.up(pool);
-    await migration029.up(pool);
-    await migration030.up(pool);
-    await migration031.up(pool);
-    await migration032.up(pool);
-    await migration033.up(pool);
-    await migration034.up(pool);
-    await migration035.up(pool);
-    await migration036.up(pool);
-    await migration037.up(pool);
-    await migration038.up(pool);
-    await migration039.up(pool);
-    await migration040.up(pool);
-    await migration041.up(pool);
-    await migration042.up(pool);
-    await migration043.up(pool);
-    await migration044.up(pool);
-    await migration045.up(pool);
-    await migration046.up(pool);
-    await migration047.up(pool);
-    await migration048.up(pool);
-    await migration049.up(pool);
-    await migration050.up(pool);
-    await migration051.up(pool);
+    for (const m of resetMigrations) {
+      logger.info(`Running migration: ${m.name} [${m.tables.join(", ")}]`);
+      await m.up(pool);
+    }
 
     // Record migrations
     await pool.query(`
@@ -394,7 +611,6 @@ const resetDatabase = async (): Promise<void> => {
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [51, "051_create_agent_user_context_table"],
     );
-    logger.info("Database reset completed successfully");
   } catch (error) {
     logger.error({ error }, "Database reset failed");
     throw error;
@@ -406,19 +622,23 @@ const resetDatabase = async (): Promise<void> => {
 // CLI interface
 const command = process.argv[2];
 
-if (command === "truncate") {
-  truncateAll().catch((error) => {
-    logger.error({ error }, "Failed to truncate database");
-    process.exit(1);
-  });
+if (command === "clear") {
+  clearAll()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      logger.error({ error }, "Failed to clear data");
+      process.exit(1);
+    });
 } else if (command === "reset") {
-  resetDatabase().catch((error) => {
-    logger.error({ error }, "Failed to reset database");
-    process.exit(1);
-  });
+  resetDatabase()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      logger.error({ error }, "Failed to reset database");
+      process.exit(1);
+    });
 } else {
-  logger.info("Usage: node clean.js [truncate|reset]");
-  logger.info("  truncate - Clears all data but keeps schema");
-  logger.info("  reset    - Drops all tables and re-runs migrations");
+  logger.info("Usage: node clean.js [clear|reset]");
+  logger.info("  clear - Clears all data (Postgres truncate + Redis flush), keeps schema");
+  logger.info("  reset - Drops all tables and re-runs migrations (data + schema reset)");
   process.exit(1);
 }

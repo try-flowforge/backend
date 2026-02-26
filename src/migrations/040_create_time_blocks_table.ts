@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating time_blocks table...');
 
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -46,9 +45,7 @@ export const up = async (pool: Pool): Promise<void> => {
         );
       `);
 
-      logger.info('time_blocks table created');
     } else {
-      logger.info('time_blocks table already exists, skipping creation');
     }
 
     await client.query(`
@@ -60,7 +57,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('time_blocks table setup completed');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to create time_blocks table');
@@ -75,7 +71,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-    logger.info('Dropping time_blocks table...');
     await client.query('DROP TABLE IF EXISTS time_blocks CASCADE;');
     await client.query('COMMIT');
   } catch (error) {
@@ -86,4 +81,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

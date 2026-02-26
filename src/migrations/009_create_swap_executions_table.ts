@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating swap_executions table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -44,9 +42,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT valid_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'))
         );
       `);
-      logger.info('swap_executions table created');
     } else {
-      logger.info('swap_executions table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -58,8 +54,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_swap_executions_provider_chain ON swap_executions(provider, chain);
       CREATE INDEX IF NOT EXISTS idx_swap_executions_created_at ON swap_executions(created_at DESC);
     `);
-
-    logger.info('swap_executions table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -76,8 +70,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping swap_executions table...');
     await client.query('DROP TABLE IF EXISTS swap_executions CASCADE;');
 
     await client.query('COMMIT');
@@ -89,4 +81,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

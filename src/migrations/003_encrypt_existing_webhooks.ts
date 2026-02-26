@@ -7,14 +7,11 @@ import { encrypt, isEncrypted } from '../utils/encryption';
  * This migration checks each webhook_url and encrypts it if it's not already encrypted
  */
 export const up = async (pool: Pool): Promise<void> => {
-  logger.info('Running migration: 003_encrypt_existing_webhooks');
-
   try {
     // Get all slack connections
     const result = await pool.query('SELECT id, webhook_url FROM slack_connections');
     
     if (result.rows.length === 0) {
-      logger.info('No existing webhooks to encrypt');
       return;
     }
 
@@ -27,7 +24,6 @@ export const up = async (pool: Pool): Promise<void> => {
       // Check if already encrypted
       if (isEncrypted(webhook_url)) {
         alreadyEncryptedCount++;
-        logger.debug({ id }, 'Webhook already encrypted, skipping');
         continue;
       }
 
@@ -41,21 +37,12 @@ export const up = async (pool: Pool): Promise<void> => {
         );
         
         encryptedCount++;
-        logger.debug({ id }, 'Webhook encrypted successfully');
       } catch (error) {
         logger.error({ error, id }, 'Failed to encrypt webhook');
         throw error;
       }
     }
 
-    logger.info(
-      {
-        total: result.rows.length,
-        encrypted: encryptedCount,
-        alreadyEncrypted: alreadyEncryptedCount,
-      },
-      'Migration completed: 003_encrypt_existing_webhooks'
-    );
   } catch (error) {
     logger.error({ error }, 'Migration failed: 003_encrypt_existing_webhooks');
     throw error;

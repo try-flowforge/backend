@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Updating swap_executions table constraints to remove RELAY and ONEINCH...');
 
         await client.query(`
       ALTER TABLE swap_executions 
@@ -20,7 +19,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (provider IN ('UNISWAP', 'UNISWAP_V4', 'LIFI'));
     `);
 
-        logger.info('swap_executions constraints updated successfully');
 
         await client.query('COMMIT');
     } catch (error) {
@@ -38,7 +36,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Reverting swap_executions table constraints...');
 
         await client.query(`
       ALTER TABLE swap_executions 
@@ -51,7 +48,6 @@ export const down = async (pool: Pool): Promise<void> => {
       CHECK (provider IN ('UNISWAP', 'UNISWAP_V4', 'RELAY', 'ONEINCH', 'LIFI'));
     `);
 
-        logger.info('swap_executions constraints reverted successfully');
 
         await client.query('COMMIT');
     } catch (error) {

@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-  logger.info('Running migration: 002_create_slack_connections_table');
-
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slack_connections (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -18,15 +15,9 @@ export const up = async (pool: Pool): Promise<void> => {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_slack_connections_user_id ON slack_connections(user_id);
   `);
-
-  logger.info('Migration completed: 002_create_slack_connections_table');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-  logger.info('Rolling back migration: 002_create_slack_connections_table');
-
   await pool.query(`DROP INDEX IF EXISTS idx_slack_connections_user_id;`);
   await pool.query(`DROP TABLE IF EXISTS slack_connections;`);
-
-  logger.info('Rollback completed: 002_create_slack_connections_table');
 };

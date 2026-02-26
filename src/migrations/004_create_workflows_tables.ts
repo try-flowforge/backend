@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating workflows table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -40,9 +38,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT timeout_positive CHECK (timeout IS NULL OR timeout > 0)
         );
       `);
-      logger.info('Workflows table created');
     } else {
-      logger.info('Workflows table already exists, ensuring constraints...');
 
       // Ensure constraints exist (idempotent)
       await client.query(`
@@ -78,8 +74,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_workflows_last_executed_at ON workflows(last_executed_at);
     `);
 
-    logger.info('Workflows table setup completed successfully');
-
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -95,8 +89,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping workflows table...');
     await client.query('DROP TABLE IF EXISTS workflows CASCADE;');
 
     await client.query('COMMIT');
@@ -108,4 +100,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

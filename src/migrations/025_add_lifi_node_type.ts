@@ -39,7 +39,6 @@ export const up = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Adding LIFI node type to constraints...');
 
         // Drop and recreate constraints (idempotent approach)
         // Drop the old constraint on workflow_nodes
@@ -68,7 +67,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CHECK (node_type IN (${NODE_TYPES_SQL}));
     `);
 
-        logger.info('LIFI node type added to constraints successfully');
 
         await client.query('COMMIT');
     } catch (error) {
@@ -90,7 +88,6 @@ export const down = async (pool: Pool): Promise<void> => {
     try {
         await client.query('BEGIN');
 
-        logger.info('Removing LIFI node type from constraints...');
 
         // First, check if any LIFI nodes exist
         const existingNodes = await client.query(`

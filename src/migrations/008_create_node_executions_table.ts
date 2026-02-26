@@ -7,8 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Creating node_executions table...');
-
     // Check if table exists
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -36,9 +34,7 @@ export const up = async (pool: Pool): Promise<void> => {
           CONSTRAINT valid_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'RETRYING'))
         );
       `);
-      logger.info('node_executions table created');
     } else {
-      logger.info('node_executions table already exists, skipping creation');
     }
 
     // Create indexes (idempotent)
@@ -48,8 +44,6 @@ export const up = async (pool: Pool): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_node_executions_status ON node_executions(status);
       CREATE INDEX IF NOT EXISTS idx_node_executions_started_at ON node_executions(started_at DESC);
     `);
-
-    logger.info('node_executions table setup completed successfully');
 
     await client.query('COMMIT');
   } catch (error) {
@@ -66,8 +60,6 @@ export const down = async (pool: Pool): Promise<void> => {
 
   try {
     await client.query('BEGIN');
-
-    logger.info('Dropping node_executions table...');
     await client.query('DROP TABLE IF EXISTS node_executions CASCADE;');
 
     await client.query('COMMIT');
@@ -79,4 +71,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-

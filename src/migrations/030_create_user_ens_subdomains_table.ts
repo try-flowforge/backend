@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
-import { logger } from '../utils/logger';
 
 export const up = async (pool: Pool): Promise<void> => {
-  logger.info('Running migration: 030_create_user_ens_subdomains_table');
-
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_ens_subdomains (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,14 +16,8 @@ export const up = async (pool: Pool): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_user_ens_subdomains_expiry ON user_ens_subdomains(expiry);
     CREATE INDEX IF NOT EXISTS idx_user_ens_subdomains_owner ON user_ens_subdomains(owner_address);
   `);
-
-  logger.info('Migration completed: 030_create_user_ens_subdomains_table');
 };
 
 export const down = async (pool: Pool): Promise<void> => {
-  logger.info('Rolling back migration: 030_create_user_ens_subdomains_table');
-
   await pool.query(`DROP TABLE IF EXISTS user_ens_subdomains;`);
-
-  logger.info('Rollback completed: 030_create_user_ens_subdomains_table');
 };

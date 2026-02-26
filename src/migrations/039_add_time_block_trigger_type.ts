@@ -7,7 +7,6 @@ export const up = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Updating workflow_executions triggered_by constraint to add TIME_BLOCK...');
 
     // Drop and recreate constraint (idempotent)
     await client.query(`
@@ -22,7 +21,6 @@ export const up = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('workflow_executions triggered_by constraint updated');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to update workflow_executions constraint');
@@ -38,7 +36,6 @@ export const down = async (pool: Pool): Promise<void> => {
   try {
     await client.query('BEGIN');
 
-    logger.info('Reverting workflow_executions triggered_by constraint (remove TIME_BLOCK)...');
 
     await client.query(`
       ALTER TABLE workflow_executions
@@ -52,7 +49,6 @@ export const down = async (pool: Pool): Promise<void> => {
     `);
 
     await client.query('COMMIT');
-    logger.info('workflow_executions triggered_by constraint reverted');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error({ error }, 'Failed to revert workflow_executions constraint');
@@ -61,4 +57,3 @@ export const down = async (pool: Pool): Promise<void> => {
     client.release();
   }
 };
-
