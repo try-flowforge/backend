@@ -25,6 +25,7 @@ import {
 import { ostiumServiceClient, OstiumServiceClientError } from '../services/ostium/ostium-service-client';
 import { ostiumDelegationService } from '../services/ostium/ostium-delegation.service';
 import { ostiumSetupService } from '../services/ostium/ostium-setup.service';
+import { enqueueOstiumExecution } from '../config/queues';
 import { logger } from '../utils/logger';
 
 function sendSuccess(res: Response, data: any): void {
@@ -199,14 +200,17 @@ export const openOstiumPosition = async (req: Request, res: Response, next: Next
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.openPosition(
-      {
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'open',
+      network: payload.network,
+      payload: {
         ...payload,
         traderAddress,
       },
-      req.requestId,
-    );
-    sendSuccess(res, data);
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Open position execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -230,14 +234,17 @@ export const closeOstiumPosition = async (req: Request, res: Response, next: Nex
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.closePosition(
-      {
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'close',
+      network: payload.network,
+      payload: {
         ...payload,
         traderAddress,
       },
-      req.requestId,
-    );
-    sendSuccess(res, data);
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Close position execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -261,14 +268,17 @@ export const updateOstiumStopLoss = async (req: Request, res: Response, next: Ne
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.updateStopLoss(
-      {
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'update_sl',
+      network: payload.network,
+      payload: {
         ...payload,
         traderAddress,
       },
-      req.requestId,
-    );
-    sendSuccess(res, data);
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Update SL execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -292,14 +302,17 @@ export const updateOstiumTakeProfit = async (req: Request, res: Response, next: 
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.updateTakeProfit(
-      {
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'update_tp',
+      network: payload.network,
+      payload: {
         ...payload,
         traderAddress,
       },
-      req.requestId,
-    );
-    sendSuccess(res, data);
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Update TP execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -375,8 +388,17 @@ export const cancelOstiumOrder = async (req: Request, res: Response, next: NextF
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.cancelOrder({ ...payload, traderAddress }, req.requestId);
-    sendSuccess(res, data);
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'cancel_order',
+      network: payload.network,
+      payload: {
+        ...payload,
+        traderAddress,
+      },
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Cancel order execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -400,8 +422,17 @@ export const updateOstiumOrder = async (req: Request, res: Response, next: NextF
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.updateOrder({ ...payload, traderAddress }, req.requestId);
-    sendSuccess(res, data);
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'update_order',
+      network: payload.network,
+      payload: {
+        ...payload,
+        traderAddress,
+      },
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Update order execution enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);
@@ -464,8 +495,17 @@ export const requestOstiumFaucet = async (req: Request, res: Response, next: Nex
       payload.traderAddress,
       'traderAddress',
     );
-    const data = await ostiumServiceClient.requestFaucet({ ...payload, traderAddress }, req.requestId);
-    sendSuccess(res, data);
+    const job = await enqueueOstiumExecution({
+      userId,
+      action: 'faucet',
+      network: payload.network,
+      payload: {
+        ...payload,
+        traderAddress,
+      },
+      requestId: req.requestId || '',
+    });
+    sendSuccess(res, { jobId: job.id, message: 'Faucet request enqueued' });
   } catch (error) {
     if (error instanceof Error && !(error instanceof OstiumServiceClientError)) {
       sendGenericError(res, 400, 'OSTIUM_ADDRESS_VALIDATION_FAILED', error.message);

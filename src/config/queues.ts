@@ -9,6 +9,7 @@ export enum QueueName {
   SWAP_EXECUTION = 'swap-execution',
   WORKFLOW_TRIGGER = 'workflow-trigger',
   LLM = 'llm', // LLM execution queue
+  OSTIUM_EXECUTION = 'ostium-execution',
 }
 
 // Job Data Types
@@ -53,6 +54,14 @@ export interface LLMExecutionJobData {
   requestId: string;
 }
 
+export interface OstiumExecutionJobData {
+  userId: string;
+  action: 'open' | 'close' | 'update_sl' | 'update_tp' | 'cancel_order' | 'update_order' | 'faucet';
+  network: 'testnet' | 'mainnet';
+  payload: any;
+  requestId: string;
+}
+
 // Queue Configuration - using centralized constants
 const defaultQueueOptions: QueueOptions = {
   connection: {
@@ -86,12 +95,14 @@ let nodeExecutionQueue: Queue<NodeExecutionJobData>;
 let swapExecutionQueue: Queue<SwapExecutionJobData>;
 let workflowTriggerQueue: Queue<WorkflowExecutionJobData>;
 let llmQueue: Queue<LLMExecutionJobData>;
+let ostiumExecutionQueue: Queue<OstiumExecutionJobData>;
 
 // Queue Events
 let workflowExecutionEvents: QueueEvents;
 let nodeExecutionEvents: QueueEvents;
 let swapExecutionEvents: QueueEvents;
 let llmEvents: QueueEvents;
+let ostiumExecutionEvents: QueueEvents;
 
 /**
  * Initialize all queues
@@ -154,6 +165,18 @@ export const initializeQueues = async (): Promise<void> => {
       }
     ) as any;
 
+    // Ostium Execution Queue
+    ostiumExecutionQueue = new Queue(
+      QueueName.OSTIUM_EXECUTION,
+      {
+        ...defaultQueueOptions,
+        defaultJobOptions: {
+          ...defaultQueueOptions.defaultJobOptions,
+          attempts: 2,
+        },
+      }
+    ) as any;
+
     // Initialize Queue Events
     workflowExecutionEvents = new QueueEvents(QueueName.WORKFLOW_EXECUTION, {
       connection: defaultQueueOptions.connection,
@@ -168,6 +191,10 @@ export const initializeQueues = async (): Promise<void> => {
     });
 
     llmEvents = new QueueEvents(QueueName.LLM, {
+      connection: defaultQueueOptions.connection,
+    });
+
+    ostiumExecutionEvents = new QueueEvents(QueueName.OSTIUM_EXECUTION, {
       connection: defaultQueueOptions.connection,
     });
 
@@ -232,6 +259,18 @@ const setupQueueEventListeners = () => {
       'LLM request failed'
     );
   });
+
+  // Ostium Execution Events
+  ostiumExecutionEvents.on('completed', ({ jobId }) => {
+    logger.info({ jobId, queue: QueueName.OSTIUM_EXECUTION }, 'Ostium job completed');
+  });
+
+  ostiumExecutionEvents.on('failed', ({ jobId, failedReason }) => {
+    logger.error(
+      { jobId, queue: QueueName.OSTIUM_EXECUTION, failedReason },
+      'Ostium job failed'
+    );
+  });
 };
 
 /**
@@ -249,6 +288,8 @@ export const getQueue = <T = any>(queueName: QueueName): Queue<T> => {
       return workflowTriggerQueue as unknown as Queue<T>;
     case QueueName.LLM:
       return llmQueue as unknown as Queue<T>;
+    case QueueName.OSTIUM_EXECUTION:
+      return ostiumExecutionQueue as unknown as Queue<T>;
     default:
       throw new Error(`Unknown queue: ${queueName}`);
   }
@@ -269,6 +310,8 @@ export const getQueueEvents = (queueName: QueueName): QueueEvents => {
       throw new Error('Workflow trigger queue does not have events');
     case QueueName.LLM:
       return llmEvents;
+    case QueueName.OSTIUM_EXECUTION:
+      return ostiumExecutionEvents;
     default:
       throw new Error(`Unknown queue: ${queueName}`);
   }
@@ -356,6 +399,31 @@ export const enqueueLLMExecution = async (
     data,
     {
       jobId: data.requestId,
+    }
+  );
+};
+
+/**
+ * Add job to ostium execution queue
+ */
+export const enqueueOstiumExecution = async (
+  data: OstiumExecutionJobData
+): Promise<Job<OstiumExecutionJobData>> => {
+  logger.info(
+    { action: data.action, network: data.network, userId: data.userId },
+    'Enqueueing Ostium execution'
+  );
+
+  return await ostiumExecutionQueue.add(
+    `ostium:${data.action}:${Date.now()}`,
+    data,
+    {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+      jobId: data.requestId || `ostium-${data.action}-${Date.now()}`,
     }
   );
 };
@@ -500,6 +568,8 @@ export const closeQueues = async (): Promise<void> => {
       nodeExecutionEvents?.close(),
       swapExecutionEvents?.close(),
       llmEvents?.close(),
+      ostiumExecutionQueue?.close(),
+      ostiumExecutionEvents?.close(),
     ]);
 
     logger.info('BullMQ queues closed successfully');

@@ -2,8 +2,8 @@ import { query } from '../../config/database';
 import { ExecutionStatus } from '../../types';
 
 export interface PerpsExecutionRecordInput {
-  nodeExecutionId: string;
-  workflowExecutionId: string;
+  nodeExecutionId?: string;
+  workflowExecutionId?: string;
   userId: string;
   network: 'testnet' | 'mainnet';
   action: string;
@@ -27,8 +27,8 @@ export class PerpsExecutionService {
       RETURNING id;
       `,
       [
-        input.nodeExecutionId,
-        input.workflowExecutionId,
+        input.nodeExecutionId || null,
+        input.workflowExecutionId || null,
         input.userId,
         input.network,
         input.action,

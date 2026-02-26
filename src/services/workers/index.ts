@@ -16,6 +16,9 @@ import { logger } from '../../utils/logger';
 import { ExecutionStatus, TriggerType } from '../../types';
 import { pool } from '../../config/database';
 import { TimeBlockStatus } from '../../types/timeblock.types';
+import { OstiumExecutionJobData } from '../../config/queues';
+import { ostiumServiceClient } from '../ostium/ostium-service-client';
+import { perpsExecutionService } from '../ostium/perps-execution.service';
 
 // Worker Configuration
 const redisConnection = {
@@ -388,6 +391,129 @@ export class LLMExecutionWorker {
 }
 
 /**
+ * Ostium Execution Worker
+ * Processes Ostium trading actions (Open, Close, Update, etc.)
+ */
+export class OstiumExecutionWorker {
+  private worker: Worker<OstiumExecutionJobData>;
+
+  constructor() {
+    this.worker = new Worker<OstiumExecutionJobData>(
+      QueueName.OSTIUM_EXECUTION,
+      async (job: Job<OstiumExecutionJobData>) => {
+        return await this.processJob(job);
+      },
+      {
+        ...defaultWorkerOptions,
+        connection: redisConnection,
+        concurrency: parseInt(process.env.OSTIUM_WORKER_CONCURRENCY || '5', 10),
+      }
+    );
+
+    this.setupEventListeners();
+  }
+
+  private async processJob(job: Job<OstiumExecutionJobData>): Promise<any> {
+    const { userId, action, network, payload, requestId } = job.data;
+
+    logger.info(
+      { jobId: job.id, userId, action, network, requestId },
+      'Processing Ostium execution job'
+    );
+
+    // 1. Create execution record
+    const executionId = await perpsExecutionService.create({
+      userId,
+      network,
+      action,
+      requestPayload: payload,
+    });
+
+    try {
+      let data: any;
+
+      // 2. Call the appropriate service client method
+      switch (action) {
+        case 'open':
+          data = await ostiumServiceClient.openPosition(payload, requestId);
+          break;
+        case 'close':
+          data = await ostiumServiceClient.closePosition(payload, requestId);
+          break;
+        case 'update_sl':
+          data = await ostiumServiceClient.updateStopLoss(payload, requestId);
+          break;
+        case 'update_tp':
+          data = await ostiumServiceClient.updateTakeProfit(payload, requestId);
+          break;
+        case 'cancel_order':
+          data = await ostiumServiceClient.cancelOrder(payload, requestId);
+          break;
+        case 'update_order':
+          data = await ostiumServiceClient.updateOrder(payload, requestId);
+          break;
+        case 'faucet':
+          data = await ostiumServiceClient.requestFaucet(payload, requestId);
+          break;
+        default:
+          throw new Error(`Unsupported Ostium action: ${action}`);
+      }
+
+      // 3. Mark as success
+      await perpsExecutionService.complete(executionId, {
+        success: true,
+        responsePayload: data,
+        txHash: (data as any)?.txHash,
+      });
+
+      return data;
+    } catch (error: any) {
+      logger.error(
+        { error, jobId: job.id, action, userId },
+        'Ostium execution job failed'
+      );
+
+      // 4. Mark as failed
+      await perpsExecutionService.complete(executionId, {
+        success: false,
+        errorCode: error.code || 'OSTIUM_EXECUTION_FAILED',
+        errorMessage: error.message,
+      });
+
+      throw error;
+    }
+  }
+
+  private setupEventListeners(): void {
+    this.worker.on('completed', (job) => {
+      logger.info(
+        { jobId: job.id, action: job.data.action },
+        'Ostium execution completed'
+      );
+    });
+
+    this.worker.on('failed', (job, error) => {
+      logger.error(
+        {
+          jobId: job?.id,
+          action: job?.data.action,
+          error,
+        },
+        'Ostium execution failed'
+      );
+    });
+
+    this.worker.on('error', (error) => {
+      logger.error({ error }, 'Ostium execution worker error');
+    });
+  }
+
+  async close(): Promise<void> {
+    await this.worker.close();
+  }
+}
+
+/**
  * Workflow Trigger Worker
  * Consumes scheduled trigger jobs (cron/time-block) and enqueues workflow executions
  */
@@ -516,7 +642,8 @@ export const initializeWorkers = (): {
   workflowWorker: WorkflowExecutionWorker;
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
-  llmWorker: LLMExecutionWorker;  
+  llmWorker: LLMExecutionWorker;
+  ostiumWorker: OstiumExecutionWorker;
   triggerWorker: WorkflowTriggerWorker;
 } => {
   logger.info('Initializing BullMQ workers...');
@@ -525,6 +652,7 @@ export const initializeWorkers = (): {
   const nodeWorker = new NodeExecutionWorker();
   const swapWorker = new SwapExecutionWorker();
   const llmWorker = new LLMExecutionWorker();
+  const ostiumWorker = new OstiumExecutionWorker();
   const triggerWorker = new WorkflowTriggerWorker();
   logger.info('BullMQ workers initialized');
 
@@ -533,6 +661,7 @@ export const initializeWorkers = (): {
     nodeWorker,
     swapWorker,
     llmWorker,
+    ostiumWorker,
     triggerWorker,
   };
 };
@@ -545,6 +674,7 @@ export const closeWorkers = async (workers: {
   nodeWorker: NodeExecutionWorker;
   swapWorker: SwapExecutionWorker;
   llmWorker: LLMExecutionWorker;
+  ostiumWorker: OstiumExecutionWorker;
   triggerWorker: WorkflowTriggerWorker;
 }): Promise<void> => {
   logger.info('Closing BullMQ workers...');
@@ -554,6 +684,7 @@ export const closeWorkers = async (workers: {
     workers.nodeWorker.close(),
     workers.swapWorker.close(),
     workers.llmWorker.close(),
+    workers.ostiumWorker.close(),
     workers.triggerWorker.close(),
   ]);
 
