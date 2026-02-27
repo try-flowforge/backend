@@ -12,6 +12,7 @@ import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { logger } from '../../../utils/logger';
 import { getProvider } from '../../../config/providers';
 import { Contract, formatUnits, isAddress } from 'ethers';
+import { simulateOracleCli } from '../../cre/creCliRunner';
 
 const AGGREGATOR_V3_ABI = [
   'function decimals() view returns (uint8)',
@@ -38,6 +39,69 @@ export class OracleNodeProcessor implements INodeProcessor {
       const validation = await this.validate(config);
       if (!validation.valid) {
         throw new Error(`Invalid oracle configuration: ${validation.errors?.join(', ')}`);
+      }
+
+      if (process.env.CRE_CLI_MODE === 'true') {
+        const chainlinkConfig = config as ChainlinkOracleConfig;
+        if (chainlinkConfig.provider !== OracleProvider.CHAINLINK) {
+          throw new Error(`CRE_CLI_MODE only supports CHAINLINK provider`);
+        }
+
+        const results = await simulateOracleCli(
+          chainlinkConfig,
+          input.executionContext.executionId,
+        );
+
+        if (!results || results.length === 0) {
+          throw new Error('CRE CLI oracle simulation returned no results');
+        }
+
+        const primary = results[0];
+
+        const output: ChainlinkPriceOutput = {
+          provider: OracleProvider.CHAINLINK,
+          chain: chainlinkConfig.chain,
+          aggregatorAddress: chainlinkConfig.aggregatorAddress,
+          description: primary.description,
+          decimals: primary.decimals,
+          roundId: primary.roundId,
+          answeredInRound: primary.answeredInRound,
+          startedAt: primary.startedAt,
+          updatedAt: primary.updatedAt,
+          answer: primary.answer,
+          formattedAnswer: primary.formattedAnswer,
+        };
+
+        let finalOutput: any = output;
+        if (chainlinkConfig.outputMapping) {
+          finalOutput = this.applyOutputMapping(output, chainlinkConfig.outputMapping);
+        }
+
+        const endTime = new Date();
+
+        logger.info(
+          {
+            nodeId: input.nodeId,
+            chain: chainlinkConfig.chain,
+            aggregatorAddress: chainlinkConfig.aggregatorAddress,
+            description: output.description,
+            price: output.formattedAnswer,
+            decimals: output.decimals,
+            updatedAt: new Date(output.updatedAt * 1000).toISOString(),
+          },
+          'CRE CLI Chainlink Price Oracle result',
+        );
+
+        return {
+          nodeId: input.nodeId,
+          success: true,
+          output: finalOutput,
+          metadata: {
+            startedAt: startTime,
+            completedAt: endTime,
+            duration: endTime.getTime() - startTime.getTime(),
+          },
+        };
       }
 
       // Type guard: ensure this is a Chainlink config
@@ -144,7 +208,9 @@ export class OracleNodeProcessor implements INodeProcessor {
         output: null,
         error: {
           message: (error as Error).message,
-          code: 'CHAINLINK_PRICE_ORACLE_NODE_ERROR',
+          code: process.env.CRE_CLI_MODE === 'true'
+            ? 'CRE_CLI_CHAINLINK_PRICE_ORACLE_NODE_ERROR'
+            : 'CHAINLINK_PRICE_ORACLE_NODE_ERROR',
           details: error,
         },
         metadata: {

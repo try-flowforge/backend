@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "provider": "CHAINLINK",
+      "chain": "ethereum-mainnet-arbitrum-1",
+      "aggregatorAddress": "0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6",
+      "description": "ARB / USD",
+      "decimals": 8,
+      "roundId": "18446744073710804487",
+      "answeredInRound": "18446744073710804487",
+      "startedAt": 1772189346,
+      "updatedAt": 1772189346,
+      "answer": "10987385",
+      "formattedAnswer": "0.10987385"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "executionId": "6fc45161-0f7e-4b1b-8a02-0be3bf7664df",
+  "chainName": "ethereum-mainnet-arbitrum-1",
+  "feeds": [
+    {
+      "name": "price",
+      "address": "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"
+    }
+  ],
+  "staleAfterSeconds": 3600
+}

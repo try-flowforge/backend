@@ -36,3 +36,9 @@ coverage/
 
 # Docker
 docker-compose.override.yml
+
+# CRE
+src/services/cre/workflows/*/workflow/node_modules
+src/services/cre/workflows/*/workflow/.cre_build_tmp.js
+src/services/cre/workflows/*/workflow/result-*.json
+src/services/cre/workflows/*/workflow/payload-*.json

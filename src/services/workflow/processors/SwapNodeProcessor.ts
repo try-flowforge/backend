@@ -10,6 +10,7 @@ import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { swapExecutionService } from '../../swap/SwapExecutionService';
 import { logger } from '../../../utils/logger';
 import { pool } from '../../../config/database';
+import { simulateLifiSwapCli } from '../../cre/creCliRunner';
 
 /**
  * Swap Node Processor
@@ -39,8 +40,57 @@ export class SwapNodeProcessor implements INodeProcessor {
         input.nodeId
       );
 
-      // Execute the swap via Safe wallet
-      // Pass userId to lookup Safe wallet address. Include toChain for LiFi cross-chain.
+      if (process.env.CRE_CLI_MODE === 'true' && config.provider === SwapProvider.LIFI) {
+        const result = await simulateLifiSwapCli(
+          config,
+          input.executionContext.executionId,
+        );
+
+        const endTime = new Date();
+
+        if (!result.success) {
+          return {
+            nodeId: input.nodeId,
+            success: false,
+            output: result,
+            error: {
+              message: result.error || 'CRE CLI LI.FI swap failed',
+              code: 'CRE_CLI_LIFI_SWAP_FAILED',
+            },
+            metadata: {
+              startedAt: startTime,
+              completedAt: endTime,
+              duration: endTime.getTime() - startTime.getTime(),
+            },
+          };
+        }
+
+        const output = {
+          provider: SwapProvider.LIFI,
+          chain: config.chain,
+          txHash: result.txHash,
+          amountIn: result.amountIn,
+          amountOut: result.amountOut,
+        };
+
+        logger.info(
+          { nodeId: input.nodeId, txHash: result.txHash },
+          'CRE CLI LI.FI swap executed successfully',
+        );
+
+        return {
+          nodeId: input.nodeId,
+          success: true,
+          output,
+          metadata: {
+            startedAt: startTime,
+            completedAt: endTime,
+            duration: endTime.getTime() - startTime.getTime(),
+          },
+        };
+      }
+
+      // Execute the swap via Safe wallet (default path)
       const inputConfigWithToChain = {
         ...config.inputConfig,
         ...(config.toChain != null && { toChain: config.toChain }),
@@ -132,7 +182,9 @@ export class SwapNodeProcessor implements INodeProcessor {
         output: null,
         error: {
           message: (error as Error).message,
-          code: 'SWAP_NODE_ERROR',
+          code: process.env.CRE_CLI_MODE === 'true'
+            ? 'CRE_CLI_SWAP_NODE_ERROR'
+            : 'SWAP_NODE_ERROR',
           details: error,
         },
         metadata: {

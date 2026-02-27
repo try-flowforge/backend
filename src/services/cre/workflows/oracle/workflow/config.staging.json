@@ -1,0 +1,7 @@
+{
+  "schedule": "0 */5 * * * *",
+  "chainName": "ethereum-mainnet-arbitrum-1",
+  "feeds": [
+  ]
+}
+
