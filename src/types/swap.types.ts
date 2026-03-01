@@ -102,6 +102,27 @@ export interface SwapInputConfig {
   toChain?: SupportedChain;
 }
 
+/**
+ * Result of CRE LI.FI quote-only workflow (no on-chain write).
+ * Used when CRE_CLI_MODE is enabled: workflow fetches quote, backend builds Safe tx for user to sign.
+ */
+export interface LifiQuoteResult {
+  success: boolean;
+  transactionRequest?: {
+    to: string;
+    data: string;
+    value: string;
+    gasLimit?: string;
+  };
+  estimate?: {
+    fromAmount: string;
+    toAmount: string;
+    toAmountMin: string;
+    approvalAddress?: string;
+  };
+  error?: string;
+}
+
 // Swap Quote Response
 export interface SwapQuote {
   provider: SwapProvider;

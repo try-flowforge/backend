@@ -10,7 +10,10 @@ import { INodeProcessor } from '../interfaces/INodeProcessor';
 import { swapExecutionService } from '../../swap/SwapExecutionService';
 import { logger } from '../../../utils/logger';
 import { pool } from '../../../config/database';
-import { simulateLifiSwapCli } from '../../cre/creCliRunner';
+import { simulateLifiQuoteCli } from '../../cre/creCliRunner';
+import { getSafeTransactionService } from '../../safe-transaction.service';
+import { UserModel } from '../../../models/users/user.model';
+import { NUMERIC_CHAIN_IDS } from '../../../config/chain-registry';
 
 /**
  * Swap Node Processor
@@ -41,21 +44,159 @@ export class SwapNodeProcessor implements INodeProcessor {
       );
 
       if (process.env.CRE_CLI_MODE === 'true' && config.provider === SwapProvider.LIFI) {
-        const result = await simulateLifiSwapCli(
-          config,
-          input.executionContext.executionId,
+        const safeTransactionService = getSafeTransactionService();
+        const userId = input.executionContext.userId;
+        const chainId =
+          config.chain === SupportedChain.ARBITRUM
+            ? NUMERIC_CHAIN_IDS.ARBITRUM
+            : NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA;
+
+        const userSignature = input.inputData?.__signature as string | undefined;
+        const safeTxHash = input.inputData?.__safeTxHash as string | undefined;
+        const safeTxData = input.inputData?.__safeTxData as
+          | { to: string; value: string; data: string; operation: number }
+          | undefined;
+
+        if (!userSignature || !safeTxHash || !safeTxData) {
+          // Phase 1: Get quote from CRE, build Safe tx, pause for user signature
+          const quoteResult = await simulateLifiQuoteCli(
+            config,
+            input.executionContext.executionId,
+          );
+
+          const endTime = new Date();
+
+          if (!quoteResult.success || !quoteResult.transactionRequest) {
+            return {
+              nodeId: input.nodeId,
+              success: false,
+              output: quoteResult,
+              error: {
+                message: quoteResult.error || 'CRE CLI LI.FI quote failed',
+                code: 'CRE_CLI_LIFI_QUOTE_FAILED',
+              },
+              metadata: {
+                startedAt: startTime,
+                completedAt: endTime,
+                duration: endTime.getTime() - startTime.getTime(),
+              },
+            };
+          }
+
+          const safeAddress = await UserModel.getSafeAddressByChain(userId, chainId);
+          if (!safeAddress) {
+            return {
+              nodeId: input.nodeId,
+              success: false,
+              output: null,
+              error: {
+                message: `Safe wallet not found for user on ${config.chain}. Create Safe first via /api/v1/relay/create-safe`,
+                code: 'CRE_CLI_SAFE_NOT_FOUND',
+              },
+              metadata: {
+                startedAt: startTime,
+                completedAt: endTime,
+                duration: endTime.getTime() - startTime.getTime(),
+              },
+            };
+          }
+
+          const { safeTxHash: hash, safeTxData: txData } =
+            await safeTransactionService.buildSafeTransactionFromRawTx(
+              safeAddress,
+              chainId,
+              quoteResult.transactionRequest,
+            );
+
+          logger.info(
+            { nodeId: input.nodeId, safeTxHash: hash },
+            'CRE LI.FI quote received; pausing for user signature',
+          );
+
+          return {
+            nodeId: input.nodeId,
+            success: false,
+            output: {
+              requiresSignature: true,
+              safeTxHash: hash,
+              safeTxData: txData,
+              quoteEstimate: quoteResult.estimate,
+            },
+            metadata: {
+              startedAt: startTime,
+              completedAt: endTime,
+              duration: endTime.getTime() - startTime.getTime(),
+            },
+          };
+        }
+
+        // Phase 2: Execute with user's signature
+        const safeAddress = await UserModel.getSafeAddressByChain(userId, chainId);
+        if (!safeAddress) {
+          const endTime = new Date();
+          return {
+            nodeId: input.nodeId,
+            success: false,
+            output: null,
+            error: {
+              message: `Safe wallet not found for user on ${config.chain}`,
+              code: 'CRE_CLI_SAFE_NOT_FOUND',
+            },
+            metadata: {
+              startedAt: startTime,
+              completedAt: endTime,
+              duration: endTime.getTime() - startTime.getTime(),
+            },
+          };
+        }
+
+        const execResult = await safeTransactionService.executeWithSignatures(
+          safeAddress,
+          chainId,
+          safeTxData.to,
+          BigInt(safeTxData.value),
+          safeTxData.data,
+          safeTxData.operation,
+          userSignature,
+          safeTxHash,
         );
 
         const endTime = new Date();
 
-        if (!result.success) {
+        if ('submitOnClient' in execResult && execResult.submitOnClient) {
+          const output = {
+            submitOnClient: true,
+            payload: {
+              chainId: execResult.chainId,
+              to: execResult.to,
+              data: execResult.data,
+              value: '0x' + execResult.value.toString(16),
+            },
+            swapExecutionId: null,
+            nodeExecutionId,
+            chain: config.chain,
+          };
+          logger.info({ nodeId: input.nodeId, submitOnClient: true }, 'CRE LI.FI swap returning payload for client submission');
+          return {
+            nodeId: input.nodeId,
+            success: true,
+            output,
+            metadata: {
+              startedAt: startTime,
+              completedAt: endTime,
+              duration: endTime.getTime() - startTime.getTime(),
+            },
+          };
+        }
+
+        if (!('txHash' in execResult)) {
           return {
             nodeId: input.nodeId,
             success: false,
-            output: result,
+            output: null,
             error: {
-              message: result.error || 'CRE CLI LI.FI swap failed',
-              code: 'CRE_CLI_LIFI_SWAP_FAILED',
+              message: 'CRE LI.FI swap execution did not return txHash',
+              code: 'CRE_CLI_LIFI_SWAP_EXEC_FAILED',
             },
             metadata: {
               startedAt: startTime,
@@ -68,14 +209,14 @@ export class SwapNodeProcessor implements INodeProcessor {
         const output = {
           provider: SwapProvider.LIFI,
           chain: config.chain,
-          txHash: result.txHash,
-          amountIn: result.amountIn,
-          amountOut: result.amountOut,
+          txHash: execResult.txHash,
+          amountIn: config.inputConfig.amount,
+          amountOut: undefined,
         };
 
         logger.info(
-          { nodeId: input.nodeId, txHash: result.txHash },
-          'CRE CLI LI.FI swap executed successfully',
+          { nodeId: input.nodeId, txHash: execResult.txHash },
+          'CRE CLI LI.FI swap executed successfully with user signature',
         );
 
         return {

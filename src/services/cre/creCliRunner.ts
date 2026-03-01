@@ -5,6 +5,8 @@ import * as fs from 'fs/promises';
 import {
   ChainlinkPriceOutput,
   ChainlinkOracleConfig,
+  LifiQuoteResult,
+  SwapNodeConfig,
 } from '../../types';
 import { logger } from '../../utils/logger';
 
@@ -14,6 +16,13 @@ function getOracleWorkflowDir(): string {
   return path.resolve(
     process.cwd(),
     'src/services/cre/workflows/oracle',
+  );
+}
+
+function getLifiSwapWorkflowDir(): string {
+  return path.resolve(
+    process.cwd(),
+    'src/services/cre/workflows/lifi-swap/workflow',
   );
 }
 
@@ -92,4 +101,57 @@ export async function simulateOracleCli(
   );
 
   return resultWrapper.results;
+}
+
+export async function simulateLifiQuoteCli(
+  config: SwapNodeConfig,
+  executionId: string,
+): Promise<LifiQuoteResult> {
+  const workflowDir = getLifiSwapWorkflowDir();
+
+  const payload = {
+    executionId,
+    chain: config.chain,
+    chainSelectorName:
+      config.chain === 'ARBITRUM'
+        ? 'ethereum-mainnet-arbitrum-1'
+        : 'ethereum-testnet-sepolia-arbitrum-1',
+    provider: 'LIFI',
+    inputConfig: config.inputConfig,
+  };
+
+  const payloadPath = path.join(workflowDir, `payload-${executionId}.json`);
+  await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
+
+  const cmd = `cre workflow simulate ./workflow --target staging-settings --non-interactive --trigger-index 1 --http-payload @${payloadPath}`;
+
+  logger.info(
+    { executionId, cmd, cwd: workflowDir },
+    'Running CRE LI.FI quote CLI simulation',
+  );
+
+  const { stdout, stderr } = await execAsync(cmd, { cwd: workflowDir });
+
+  if (stderr && stderr.trim().length > 0) {
+    logger.warn({ executionId, stderr }, 'CRE LI.FI quote simulation stderr');
+  }
+
+  const result = await parseSimulationResult<LifiQuoteResult>(stdout);
+
+  const outputFile = path.join(workflowDir, `result-${executionId}.json`);
+  await fs.writeFile(outputFile, JSON.stringify(result, null, 2), 'utf8');
+
+  // Also write a stable workflow-level result file for debugging
+  const workflowResultFile = path.join(
+    workflowDir,
+    'workflow',
+    'result-workflow.json',
+  );
+  await fs.writeFile(
+    workflowResultFile,
+    JSON.stringify(result, null, 2),
+    'utf8',
+  );
+
+  return result;
 }

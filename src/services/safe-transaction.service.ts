@@ -797,6 +797,38 @@ export class SafeTransactionService {
       0 // CALL operation
     );
   }
+
+  /**
+   * Build a Safe transaction hash from raw transaction data (e.g. LiFi transactionRequest).
+   * Used by CRE quote-only flow: workflow returns quote, backend builds Safe tx for user to sign.
+   */
+  async buildSafeTransactionFromRawTx(
+    safeAddress: string,
+    chainId: NumericChainId,
+    txData: { to: string; data: string; value: string }
+  ): Promise<{
+    safeTxHash: string;
+    safeTxData: { to: string; value: string; data: string; operation: number };
+  }> {
+    const value = BigInt(txData.value || '0');
+    const safeTxHash = await this.buildSafeTransactionHash(
+      safeAddress,
+      chainId,
+      txData.to,
+      value,
+      txData.data,
+      0 // CALL
+    );
+    return {
+      safeTxHash,
+      safeTxData: {
+        to: txData.to,
+        value: txData.value || '0',
+        data: txData.data,
+        operation: 0,
+      },
+    };
+  }
 }
 
 // Export singleton instance

@@ -1,0 +1,25 @@
+{
+  "schedule": "0 */5 * * * *",
+  "chain": "ARBITRUM",
+  "chainSelectorName": "ethereum-mainnet-arbitrum-1",
+  "provider": "LIFI",
+  "swapReceiverAddress": "",
+  "gasLimit": "1500000",
+  "inputConfig": {
+    "sourceToken": {
+      "address": "",
+      "symbol": "USDC",
+      "decimals": 6
+    },
+    "destinationToken": {
+      "address": "",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "amount": "0",
+    "swapType": "EXACT_INPUT",
+    "walletAddress": "",
+    "slippageTolerance": 0.5
+  }
+}
+
