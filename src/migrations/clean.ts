@@ -53,6 +53,7 @@ import * as migration049 from "./049_remove_uniswap_v3_swap_provider";
 import * as migration048 from "./048_add_waiting_for_client_tx_status";
 import * as migration050 from "./050_db_optimization_indexes_and_fks";
 import * as migration051 from "./051_create_agent_user_context_table";
+import * as migration052 from "./052_create_spending_policies_tables";
 
 // Load environment variables
 dotenv.config();
@@ -379,6 +380,11 @@ const resetMigrations: { name: string; tables: string[]; up: (p: Pool) => Promis
     tables: ["agent_user_context"],
     up: migration051.up,
   },
+  {
+    name: "052_create_spending_policies_tables",
+    tables: ["spending_policies", "spending_ledger"],
+    up: migration052.up,
+  },
 ];
 
 const resetDatabase = async (): Promise<void> => {
@@ -610,6 +616,10 @@ const resetDatabase = async (): Promise<void> => {
     await pool.query(
       "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [51, "051_create_agent_user_context_table"],
+    );
+    await pool.query(
+      "INSERT INTO migrations (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+      [52, "052_create_spending_policies_tables"],
     );
   } catch (error) {
     logger.error({ error }, "Database reset failed");

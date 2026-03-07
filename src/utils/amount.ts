@@ -1,5 +1,16 @@
 import { ethers } from 'ethers';
 
+/** USD value uses 8 decimals on-chain (e.g. 100_00000000 = 100 USD). */
+const USD_DECIMALS = 8;
+
+/**
+ * Convert a USD amount (e.g. 100.50) to 8-decimal bigint for contracts.
+ */
+export function usdTo8Decimals(usd: number): bigint {
+  if (!Number.isFinite(usd) || usd < 0) return 0n;
+  return BigInt(Math.round(usd * 10 ** USD_DECIMALS));
+}
+
 /**
  * Parses an amount string into its base units (Wei/smallest unit).
  * If the input string contains a comma or a decimal point, it's treated as a human-readable amount

@@ -119,10 +119,21 @@ export const encryptionConfig = {
 } as const;
 
 /**
- * Relayer Configuration
+ * Executor (relayer) Configuration
+ * Same key as contracts EXECUTOR_ADDRESS: this EOA can call createSafeWallet and execTask.
+ * Prefer EXECUTOR_PRIVATE_KEY; RELAYER_PRIVATE_KEY is supported for backwards compatibility.
  */
+function getExecutorPrivateKey(): string {
+  const v = process.env.EXECUTOR_PRIVATE_KEY ?? process.env.RELAYER_PRIVATE_KEY;
+  if (!v) {
+    throw new Error(
+      "Required environment variable EXECUTOR_PRIVATE_KEY is not set (RELAYER_PRIVATE_KEY is deprecated)"
+    );
+  }
+  return v;
+}
 export const relayerConfig = {
-  relayerPrivateKey: getRequiredEnv("RELAYER_PRIVATE_KEY"),
+  executorPrivateKey: getExecutorPrivateKey(),
 } as const;
 
 /**
@@ -163,13 +174,13 @@ export const config = {
  * Validate configuration on module load
  */
 export function validateConfig(): void {
-  if (!relayerConfig.relayerPrivateKey.startsWith("0x")) {
-    throw new Error("RELAYER_PRIVATE_KEY must start with 0x");
+  if (!relayerConfig.executorPrivateKey.startsWith("0x")) {
+    throw new Error("EXECUTOR_PRIVATE_KEY must start with 0x");
   }
 
-  if (relayerConfig.relayerPrivateKey.length !== 66) {
+  if (relayerConfig.executorPrivateKey.length !== 66) {
     throw new Error(
-      "RELAYER_PRIVATE_KEY must be 66 characters (0x + 64 hex chars)"
+      "EXECUTOR_PRIVATE_KEY must be 66 characters (0x + 64 hex chars)"
     );
   }
 

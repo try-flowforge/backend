@@ -24,6 +24,7 @@ import { getSafeTransactionService } from '../safe-transaction.service';
 import { UserModel } from '../../models/users/user.model';
 import { ethers } from 'ethers';
 import { PERMIT2_ABI } from './abis/permit2';
+import { getSpendingPolicyService } from '../spending-policy.service';
 
 /**
  * Swap Execution Service
@@ -724,6 +725,8 @@ export class SwapExecutionService {
     const chainId = CHAIN_CONFIGS[chain].chainId as NumericChainId;
     const relayerService = getRelayerService();
     const safeTransactionService = getSafeTransactionService();
+    const spendingPolicyService = getSpendingPolicyService();
+    const network = spendingPolicyService.networkForChainId(chainId);
 
     logger.info(
       {
@@ -740,6 +743,7 @@ export class SwapExecutionService {
 
     const startTime = Date.now();
     let swapExecutionId: string | null = null;
+    let spendRecord: { policyId: string; amountUsd: number } | null = null;
 
     try {
       // Get user's Safe wallet address
@@ -982,9 +986,61 @@ export class SwapExecutionService {
           };
         }
 
+        const amountUsd = await spendingPolicyService.getSwapUsdValue(
+          quote,
+          swapConfig.sourceToken,
+          chain
+        );
+        const allowance = userId && amountUsd
+          ? await spendingPolicyService.checkSpendingAllowance(
+              userId,
+              network,
+              chainId,
+              amountUsd
+            )
+          : {
+              allowed: false,
+              reason: amountUsd
+                ? 'No user context available for spending policy check'
+                : 'Unable to determine USD value for this swap',
+            };
+
+        if (allowance.allowed && allowance.policy && amountUsd !== null) {
+          logger.info(
+            {
+              userId,
+              safeAddress,
+              chainId,
+              amountUsd,
+              policyId: allowance.policy.id,
+            },
+            'Spending policy allows module execution, skipping signature flow'
+          );
+
+          const moduleResult = await safeTransactionService.executeViaModule(
+            safeAddress,
+            chainId,
+            safeTxData.to,
+            safeTxData.value,
+            safeTxData.data,
+            safeTxOperation,
+            amountUsd
+          );
+          txHash = moduleResult.txHash;
+          spendRecord = { policyId: allowance.policy.id, amountUsd };
+        } else {
+          logger.info(
+            {
+              userId,
+              safeAddress,
+              chainId,
+              reason: allowance.reason,
+            },
+            'Falling back to signature path for Safe swap execution'
+          );
+
         // No signature path – build hash for user to sign and cache the
         // exact Safe tx payload so the resume step can reuse it.
-        {
           const safeTxHash = await safeTransactionService.buildSafeTransactionHash(
             safeAddress,
             chainId,
@@ -1104,6 +1160,15 @@ export class SwapExecutionService {
 
       // Update rate limiting (use Safe address if available, otherwise wallet address)
       await this.recordSwapExecution(safeAddress || config.walletAddress);
+
+      if (spendRecord && swapExecutionId) {
+        await spendingPolicyService.recordSpend(
+          spendRecord.policyId,
+          swapExecutionId,
+          spendRecord.amountUsd,
+          receipt.hash
+        );
+      }
 
       logger.info(
         {

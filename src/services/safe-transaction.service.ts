@@ -9,6 +9,7 @@ import {
   type NumericChainId,
 } from "../config/chain-registry";
 import { SupportedChain } from "../types";
+import { usdTo8Decimals } from "../utils/amount";
 
 /**
  * Result of executeWithSignatures: either relayer sent (testnet) or client must submit (mainnet).
@@ -186,7 +187,8 @@ export class SafeTransactionService {
 
   /**
    * Execute a Safe transaction via module (for autonomous agents)
-   * This requires the module to be enabled on the Safe
+   * This requires the module to be enabled on the Safe.
+   * @param declaredUsdValue USD value of the action (for spending policy limits). Use 0 when not applicable.
    */
   async executeViaModule(
     safeAddress: string,
@@ -194,7 +196,8 @@ export class SafeTransactionService {
     to: string,
     value: bigint,
     data: string,
-    operation: number = 0
+    operation: number = 0,
+    declaredUsdValue: number = 0
   ): Promise<{ txHash: string; receipt: ethers.TransactionReceipt }> {
     const chainConfig = getChainOrThrow(chainId);
     const moduleAddress = chainConfig.safeModuleAddress;
@@ -205,6 +208,8 @@ export class SafeTransactionService {
     }
     const relayerService = getRelayerService();
 
+    const declaredUsdValue8 = usdTo8Decimals(declaredUsdValue);
+
     logger.info(
       {
         safeAddress,
@@ -212,6 +217,7 @@ export class SafeTransactionService {
         to,
         value: value.toString(),
         operation,
+        declaredUsdValue,
       },
       "Executing Safe transaction via module"
     );
@@ -229,23 +235,25 @@ export class SafeTransactionService {
       );
     }
 
-    // Encode execTransactionFromModule call
-    const SAFE_ABI = [
-      "function execTransactionFromModule(address to, uint256 value, bytes data, uint8 operation) returns (bool success)",
+    // Encode module execTask call (module performs hook checks, then calls Safe.execTransactionFromModule)
+    const MODULE_ABI = [
+      "function execTask(address safeAddress, address actionTarget, uint256 actionValue, bytes actionData, uint8 operation, uint256 declaredUsdValue) returns (bool success)",
     ];
 
-    const iface = new ethers.Interface(SAFE_ABI);
-    const moduleData = iface.encodeFunctionData("execTransactionFromModule", [
+    const iface = new ethers.Interface(MODULE_ABI);
+    const moduleData = iface.encodeFunctionData("execTask", [
+      safeAddress,
       to,
       value,
       data,
       operation,
+      declaredUsdValue8,
     ]);
 
-    // Execute via relayer (relayer calls the Safe's execTransactionFromModule)
+    // Execute via relayer (relayer calls the module contract)
     const { txHash, receipt } = await relayerService.sendTransaction(
       chainId,
-      safeAddress,
+      moduleAddress,
       moduleData,
       0n
     );

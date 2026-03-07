@@ -1,6 +1,6 @@
 # CRE project settings for LI.FI swap workflow (hackathon only)
 
-staging:
+staging-settings:
   rpcs:
     - chain-name: ethereum-mainnet-arbitrum-1
       url: https://arb1.arbitrum.io/rpc

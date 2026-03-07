@@ -52,6 +52,7 @@ import * as migration049 from "./049_remove_uniswap_v3_swap_provider";
 import * as migration048 from "./048_add_waiting_for_client_tx_status";
 import * as migration050 from "./050_db_optimization_indexes_and_fks";
 import * as migration051 from "./051_create_agent_user_context_table";
+import * as migration052 from "./052_create_spending_policies_tables";
 
 // Load environment variables
 dotenv.config();
@@ -429,6 +430,13 @@ const migrations: Migration[] = [
     tables: ["agent_user_context"],
     up: migration051.up,
     down: migration051.down,
+  },
+  {
+    id: 52,
+    name: "052_create_spending_policies_tables",
+    tables: ["spending_policies", "spending_ledger"],
+    up: migration052.up,
+    down: migration052.down,
   },
 ];
 

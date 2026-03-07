@@ -93,6 +93,8 @@ export interface ChainRegistryEntry {
     safeFactoryAddress: string;
     /** Safe module address (for relay / onboarding) */
     safeModuleAddress: string;
+    /** Spending policy hook address (for spending-policy setup flows) */
+    spendingPolicyAddress: string;
 }
 
 function env(key: string, fallback = ""): string {
@@ -112,6 +114,15 @@ function safeModule(numericId: number): string {
         process.env[`SAFE_MODULE_ADDRESS_${numericId}`] ||
         process.env.SAFE_MODULE_ADDRESS ||
         ""
+    );
+}
+
+function spendingPolicy(numericId: number): string {
+    return (
+        (process.env[`SPENDING_POLICY_ADDRESS_${numericId}`] ||
+            process.env.SPENDING_POLICY_ADDRESS ||
+            ""
+        ).trim()
     );
 }
 
@@ -138,6 +149,7 @@ export const CHAIN_REGISTRY: ChainRegistryEntry[] = [
         },
         safeFactoryAddress: safeFactory(NUMERIC_CHAIN_IDS.ARBITRUM),
         safeModuleAddress: safeModule(NUMERIC_CHAIN_IDS.ARBITRUM),
+        spendingPolicyAddress: spendingPolicy(NUMERIC_CHAIN_IDS.ARBITRUM),
     },
     {
         id: Chains.ARBITRUM_SEPOLIA,
@@ -161,6 +173,7 @@ export const CHAIN_REGISTRY: ChainRegistryEntry[] = [
         },
         safeFactoryAddress: safeFactory(NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA),
         safeModuleAddress: safeModule(NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA),
+        spendingPolicyAddress: spendingPolicy(NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA),
     },
 ];
 

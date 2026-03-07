@@ -59,8 +59,13 @@ export class SwapNodeProcessor implements INodeProcessor {
 
         if (!userSignature || !safeTxHash || !safeTxData) {
           // Phase 1: Get quote from CRE, build Safe tx, pause for user signature
+          const safeAddr = await UserModel.getSafeAddressByChain(userId, chainId);
+          const quoteConfig = safeAddr
+            ? { ...config, inputConfig: { ...config.inputConfig, walletAddress: safeAddr } }
+            : config;
+
           const quoteResult = await simulateLifiQuoteCli(
-            config,
+            quoteConfig,
             input.executionContext.executionId,
           );
 

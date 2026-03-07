@@ -17,13 +17,14 @@ export const validateBody = (schema: Joi.ObjectSchema) => {
         field: detail.path.join('.'),
         message: detail.message,
       }));
+      const firstMessage = errors[0]?.message ?? 'Validation failed';
 
       logger.warn({ errors, body: req.body }, 'Validation error in request body');
 
       res.status(400).json({
         success: false,
         error: {
-          message: 'Validation failed',
+          message: firstMessage,
           code: 'VALIDATION_ERROR',
           details: errors,
         },
@@ -63,13 +64,14 @@ export const validateParams = (schema: Joi.ObjectSchema) => {
         field: detail.path.join('.'),
         message: detail.message,
       }));
+      const firstMessage = errors[0]?.message ?? 'Validation failed';
 
       logger.warn({ errors, params: req.params }, 'Validation error in request params');
 
       res.status(400).json({
         success: false,
         error: {
-          message: 'Validation failed',
+          message: firstMessage,
           code: 'VALIDATION_ERROR',
           details: errors,
         },
@@ -109,13 +111,14 @@ export const validateQuery = (schema: Joi.ObjectSchema) => {
         field: detail.path.join('.'),
         message: detail.message,
       }));
+      const firstMessage = errors[0]?.message ?? 'Validation failed';
 
       logger.warn({ errors, query: req.query }, 'Validation error in request query');
 
       res.status(400).json({
         success: false,
         error: {
-          message: 'Validation failed',
+          message: firstMessage,
           code: 'VALIDATION_ERROR',
           details: errors,
         },

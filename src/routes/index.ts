@@ -14,6 +14,7 @@ import executionSignRoutes from './execution/execution-sign.routes';
 import agentRoutes from './agent.routes';
 import timeBlockRoutes from './timeblock.routes';
 import ostiumRoutes from './ostium.routes';
+import spendingPolicyRoutes from './spending-policy.routes';
 
 import { pool } from '../config/database';
 import { redisClient } from '../config/redis';
@@ -136,6 +137,7 @@ router.use('/lending', lendingRoutes);
 router.use('/meta', metaRoutes);
 router.use('/oracle', oracleRoutes);
 router.use('/ostium', ostiumRoutes);
+router.use('/spending-policy', spendingPolicyRoutes);
 router.use('/intents', intentRoutes);
 router.use('/executions', executionSignRoutes);
 router.use('/agent', agentRoutes);

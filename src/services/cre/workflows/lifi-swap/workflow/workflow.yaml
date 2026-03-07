@@ -1,6 +1,6 @@
 # CRE workflow settings for LI.FI swap workflow
 
-staging:
+staging-settings:
   user-workflow:
     workflow-name: "flowforge-lifi-swap-staging"
   workflow-artifacts:

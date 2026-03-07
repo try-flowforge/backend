@@ -909,3 +909,57 @@ export const ostiumAllowanceExecuteSchema = Joi.object({
         operation: Joi.number().valid(0, 1).required(),
     }).required(),
 });
+
+// ===========================================
+// SPENDING POLICY SCHEMAS
+// ===========================================
+
+const spendingPolicyNetworkSchema = Joi.string().valid(...OSTIUM_NETWORKS).required().messages({
+    'any.only': `network must be one of: ${OSTIUM_NETWORKS.join(', ')}`,
+});
+
+export const spendingPolicyGetParamsSchema = Joi.object({
+    network: spendingPolicyNetworkSchema,
+    chainId: Joi.number().valid(...SAFE_RELAY_CHAIN_IDS).required(),
+});
+
+export const spendingPolicyRevokeParamsSchema = Joi.object({
+    network: spendingPolicyNetworkSchema,
+    chainId: Joi.number().valid(...SAFE_RELAY_CHAIN_IDS).required(),
+});
+
+export const spendingPolicyUpsertSchema = Joi.object({
+    network: spendingPolicyNetworkSchema,
+    chainId: Joi.number().valid(...SAFE_RELAY_CHAIN_IDS).required(),
+    spendLimitUsd: Joi.number().min(0).required(),
+    dailyLimitUsd: Joi.number().min(0).required(),
+    deadline: Joi.date().iso().required(),
+    policyTxHash: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).optional(),
+});
+
+export const spendingPolicyPrepareSchema = Joi.object({
+    chainId: Joi.number().valid(...SAFE_RELAY_CHAIN_IDS).required(),
+    deadline: Joi.date().iso().required(),
+});
+
+export const executeSpendingPolicySchema = Joi.object({
+    network: spendingPolicyNetworkSchema,
+    chainId: Joi.number().valid(...SAFE_RELAY_CHAIN_IDS).required(),
+    signature: Joi.string().min(10).required(),
+    spendLimitUsd: Joi.number().min(0).required(),
+    dailyLimitUsd: Joi.number().min(0).required(),
+    deadline: Joi.date().iso().required(),
+    safeTxHash: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+    safeTxData: Joi.object({
+        to: Joi.string()
+            .pattern(/^0x[a-fA-F0-9]{40}$/)
+            .required()
+            .messages({
+                'string.pattern.base': 'Invalid parameters: must provide an Ethereum address.',
+                'any.required': 'Invalid parameters: must provide an Ethereum address.',
+            }),
+        value: Joi.string().pattern(/^\d+$/).required(),
+        data: Joi.string().pattern(/^0x[a-fA-F0-9]*$/).required(),
+        operation: Joi.number().valid(0, 1).required(),
+    }).required(),
+});

@@ -8,8 +8,9 @@ import {
 } from "../config/chain-registry";
 
 /**
- * Direct EOA relayer service
- * Supports multiple chains with separate providers and wallets per chain
+ * Executor (relayer) service: EOA that sends txs for createSafeWallet and execTask.
+ * Uses EXECUTOR_PRIVATE_KEY; address must match contracts EXECUTOR_ADDRESS.
+ * Supports multiple chains with separate providers and wallets per chain.
  */
 export class RelayerService {
   private providers: Map<NumericChainId, ethers.JsonRpcProvider> = new Map();
@@ -17,7 +18,7 @@ export class RelayerService {
   private privateKey: string;
 
   constructor() {
-    this.privateKey = config.relayer.relayerPrivateKey;
+    this.privateKey = config.relayer.executorPrivateKey;
 
     // Initialize providers and wallets for all configured chains.
     // Pass network explicitly to avoid JsonRpcProvider's network-detect call (which can timeout on slow RPCs).
@@ -31,11 +32,11 @@ export class RelayerService {
 
       logger.info(
         {
-          relayerAddress: wallet.address,
+          executorAddress: wallet.address,
           chainId: chainConfig.chainId,
           chainName: chainConfig.name,
         },
-        "Relayer service initialized for chain"
+        "Executor (relayer) service initialized for chain"
       );
     }
   }

@@ -141,12 +141,7 @@ export async function simulateLifiQuoteCli(
   const outputFile = path.join(workflowDir, `result-${executionId}.json`);
   await fs.writeFile(outputFile, JSON.stringify(result, null, 2), 'utf8');
 
-  // Also write a stable workflow-level result file for debugging
-  const workflowResultFile = path.join(
-    workflowDir,
-    'workflow',
-    'result-workflow.json',
-  );
+  const workflowResultFile = path.join(workflowDir, 'result-workflow.json');
   await fs.writeFile(
     workflowResultFile,
     JSON.stringify(result, null, 2),
