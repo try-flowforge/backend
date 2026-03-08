@@ -2,7 +2,8 @@ import { ethers } from "ethers";
 import { getRelayerService } from "./relayer.service";
 import { logger } from "../utils/logger";
 import {
-    NUMERIC_CHAIN_IDS,
+    getChain,
+    getSafeRelayChainIds,
     getSafeRelayChainOrThrow,
     type SafeRelayNumericChainId,
 } from "../config/chain-registry";
@@ -190,40 +191,37 @@ export class SafeWalletService {
     }
 
     /**
-     * Create Safe wallets for a user on both testnet and mainnet
-     * Continues even if one chain fails
+     * Create Safe wallets for a user on all Safe-relay-supported chains.
+     * Uses getSafeRelayChainIds() (e.g. only Arbitrum One when restricted).
+     * Continues even if one chain fails.
      */
     static async createSafesForUserOnAllChains(
         userAddress: string
     ): Promise<MultiChainSafeResult> {
         const results: MultiChainSafeResult = {};
+        const chainIds = getSafeRelayChainIds();
 
-        // Create on testnet (Arbitrum Sepolia)
-        try {
-            results.testnet = await this.createSafeForUser(
-                userAddress,
-                NUMERIC_CHAIN_IDS.ARBITRUM_SEPOLIA
-            );
-        } catch (error) {
-            logger.error(
-                {
-                    error: error instanceof Error ? error.message : String(error),
-                    userAddress,
-                    chain: "testnet",
-                },
-                "Failed to create testnet Safe wallet"
-            );
-            results.testnet = {
-                success: false,
-                error: error instanceof Error ? error.message : "Unknown error",
-            };
+        for (const chainId of chainIds) {
+            const chain = getChain(chainId);
+            const key = chain?.isTestnet ? "testnet" : "mainnet";
+            try {
+                results[key] = await this.createSafeForUser(userAddress, chainId);
+            } catch (error) {
+                logger.error(
+                    {
+                        error: error instanceof Error ? error.message : String(error),
+                        userAddress,
+                        chainId,
+                        chainName: chain?.name,
+                    },
+                    "Failed to create Safe wallet on chain"
+                );
+                results[key] = {
+                    success: false,
+                    error: error instanceof Error ? error.message : "Unknown error",
+                };
+            }
         }
-
-
-
-        // Mainnet Safes are not created on user creation (cost control).
-        // They are created on-demand when the user switches to mainnet and
-        // requests a Safe via POST /relay/create-safe.
 
         return results;
     }

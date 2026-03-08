@@ -6,4 +6,5 @@ staging-settings:
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.staging.json"
+    secrets-path: "../secrets.yaml"
 

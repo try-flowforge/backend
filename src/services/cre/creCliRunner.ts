@@ -6,23 +6,50 @@ import {
   ChainlinkPriceOutput,
   ChainlinkOracleConfig,
   LifiQuoteResult,
+  LifiSwapWorkflowResult,
   SwapNodeConfig,
 } from '../../types';
 import { logger } from '../../utils/logger';
 
 const execAsync = promisify(exec);
 
-function getOracleWorkflowDir(): string {
+function getOracleWorkflowRootDir(): string {
   return path.resolve(
     process.cwd(),
     'src/services/cre/workflows/oracle',
   );
 }
 
-function getLifiSwapWorkflowDir(): string {
+function getLifiSwapWorkflowRootDir(): string {
   return path.resolve(
     process.cwd(),
-    'src/services/cre/workflows/lifi-swap/workflow',
+    'src/services/cre/workflows/lifi-swap',
+  );
+}
+
+function getWorkflowArtifactsDir(workflowRootDir: string): string {
+  return path.join(workflowRootDir, 'workflow');
+}
+
+function buildCreSimulateCmd(payloadPath: string, broadcast = false): string {
+  const base = `cre workflow simulate ./workflow --target staging-settings --non-interactive`;
+  const broadcastFlag = broadcast ? ' --broadcast' : '';
+  return `${base}${broadcastFlag} --trigger-index 1 --http-payload @${payloadPath}`;
+}
+
+async function writeWorkflowArtifacts<T>(
+  artifactsDir: string,
+  executionId: string,
+  result: T,
+): Promise<void> {
+  const outputFile = path.join(artifactsDir, `result-${executionId}.json`);
+  await fs.writeFile(outputFile, JSON.stringify(result, null, 2), 'utf8');
+
+  const workflowResultFile = path.join(artifactsDir, 'result-workflow.json');
+  await fs.writeFile(
+    workflowResultFile,
+    JSON.stringify(result, null, 2),
+    'utf8',
   );
 }
 
@@ -47,7 +74,8 @@ export async function simulateOracleCli(
   config: ChainlinkOracleConfig,
   executionId: string,
 ): Promise<ChainlinkPriceOutput[]> {
-  const workflowDir = getOracleWorkflowDir();
+  const workflowRootDir = getOracleWorkflowRootDir();
+  const artifactsDir = getWorkflowArtifactsDir(workflowRootDir);
 
   const payload = {
     executionId,
@@ -61,17 +89,17 @@ export async function simulateOracleCli(
     staleAfterSeconds: config.staleAfterSeconds,
   };
 
-  const payloadPath = path.join(workflowDir, `payload-${executionId}.json`);
+  const payloadPath = path.join(artifactsDir, `payload-${executionId}.json`);
   await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
 
-  const cmd = `cre workflow simulate ./workflow --target staging-settings --non-interactive --trigger-index 1 --http-payload @${payloadPath}`;
+  const cmd = buildCreSimulateCmd(payloadPath);
 
   logger.info(
-    { executionId, cmd, cwd: workflowDir },
+    { executionId, cmd, cwd: workflowRootDir },
     'Running CRE oracle CLI simulation',
   );
 
-  const { stdout, stderr } = await execAsync(cmd, { cwd: workflowDir });
+  const { stdout, stderr } = await execAsync(cmd, { cwd: workflowRootDir });
 
   if (stderr && stderr.trim().length > 0) {
     logger.warn({ executionId, stderr }, 'CRE oracle simulation stderr');
@@ -81,24 +109,7 @@ export async function simulateOracleCli(
     stdout,
   );
 
-  const outputFile = path.join(workflowDir, `result-${executionId}.json`);
-  await fs.writeFile(
-    outputFile,
-    JSON.stringify(resultWrapper, null, 2),
-    'utf8',
-  );
-
-  // Also write a stable workflow-level result file for debugging
-  const workflowResultFile = path.join(
-    workflowDir,
-    'workflow',
-    'result-workflow.json',
-  );
-  await fs.writeFile(
-    workflowResultFile,
-    JSON.stringify(resultWrapper, null, 2),
-    'utf8',
-  );
+  await writeWorkflowArtifacts(artifactsDir, executionId, resultWrapper);
 
   return resultWrapper.results;
 }
@@ -107,7 +118,8 @@ export async function simulateLifiQuoteCli(
   config: SwapNodeConfig,
   executionId: string,
 ): Promise<LifiQuoteResult> {
-  const workflowDir = getLifiSwapWorkflowDir();
+  const workflowRootDir = getLifiSwapWorkflowRootDir();
+  const artifactsDir = getWorkflowArtifactsDir(workflowRootDir);
 
   const payload = {
     executionId,
@@ -120,17 +132,17 @@ export async function simulateLifiQuoteCli(
     inputConfig: config.inputConfig,
   };
 
-  const payloadPath = path.join(workflowDir, `payload-${executionId}.json`);
+  const payloadPath = path.join(artifactsDir, `payload-${executionId}.json`);
   await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
 
-  const cmd = `cre workflow simulate ./workflow --target staging-settings --non-interactive --trigger-index 1 --http-payload @${payloadPath}`;
+  const cmd = buildCreSimulateCmd(payloadPath);
 
   logger.info(
-    { executionId, cmd, cwd: workflowDir },
+    { executionId, cmd, cwd: workflowRootDir },
     'Running CRE LI.FI quote CLI simulation',
   );
 
-  const { stdout, stderr } = await execAsync(cmd, { cwd: workflowDir });
+  const { stdout, stderr } = await execAsync(cmd, { cwd: workflowRootDir });
 
   if (stderr && stderr.trim().length > 0) {
     logger.warn({ executionId, stderr }, 'CRE LI.FI quote simulation stderr');
@@ -138,15 +150,86 @@ export async function simulateLifiQuoteCli(
 
   const result = await parseSimulationResult<LifiQuoteResult>(stdout);
 
-  const outputFile = path.join(workflowDir, `result-${executionId}.json`);
-  await fs.writeFile(outputFile, JSON.stringify(result, null, 2), 'utf8');
+  await writeWorkflowArtifacts(artifactsDir, executionId, result);
 
-  const workflowResultFile = path.join(workflowDir, 'result-workflow.json');
-  await fs.writeFile(
-    workflowResultFile,
-    JSON.stringify(result, null, 2),
-    'utf8',
+  return result;
+}
+
+export async function executeLifiSwapCli(
+  config: SwapNodeConfig & {
+    safeModuleAddress: string;
+    rpcUrl?: string;
+  },
+  executionId: string,
+): Promise<LifiSwapWorkflowResult> {
+  const workflowRootDir = getLifiSwapWorkflowRootDir();
+  const artifactsDir = getWorkflowArtifactsDir(workflowRootDir);
+
+  const payload = {
+    executionId,
+    chain: config.chain,
+    chainSelectorName:
+      config.chain === 'ARBITRUM'
+        ? 'ethereum-mainnet-arbitrum-1'
+        : 'ethereum-testnet-sepolia-arbitrum-1',
+    provider: 'LIFI',
+    safeModuleAddress: config.safeModuleAddress,
+    rpcUrl: config.rpcUrl,
+    inputConfig: config.inputConfig,
+  };
+
+  const payloadPath = path.join(artifactsDir, `payload-${executionId}.json`);
+  await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
+
+  const cmd = buildCreSimulateCmd(payloadPath, true);
+
+  logger.info(
+    { executionId, cmd, cwd: workflowRootDir },
+    'Running CRE LI.FI swap CLI execution',
   );
+
+  const CRE_SWAP_EXEC_TIMEOUT_MS = 60_000;
+  let stdout: string;
+  let stderr: string;
+  try {
+    const result = await execAsync(cmd, {
+      cwd: workflowRootDir,
+      env: process.env,
+      timeout: CRE_SWAP_EXEC_TIMEOUT_MS,
+    });
+    stdout = result.stdout;
+    stderr = result.stderr;
+  } catch (err: unknown) {
+    const errorWithOutput = err as { stdout?: string; stderr?: string; killed?: boolean; message?: string };
+    const timeoutStdout = errorWithOutput.stdout?.trim();
+    const timeoutStderr = errorWithOutput.stderr?.trim();
+    const isTimeout =
+      err instanceof Error &&
+      ((err as { killed?: boolean }).killed === true || /timeout|ETIMEDOUT|timed out/i.test(err.message));
+    if (isTimeout) {
+      logger.warn(
+        {
+          executionId,
+          timeoutMs: CRE_SWAP_EXEC_TIMEOUT_MS,
+          stdoutTail: timeoutStdout ? timeoutStdout.slice(-4000) : undefined,
+          stderrTail: timeoutStderr ? timeoutStderr.slice(-4000) : undefined,
+        },
+        'CRE LI.FI swap execution timed out',
+      );
+      throw new Error(
+        `CRE LI.FI swap execution timed out after ${CRE_SWAP_EXEC_TIMEOUT_MS / 1000}s. Check RPC and chain congestion.`,
+      );
+    }
+    throw err;
+  }
+
+  if (stderr && stderr.trim().length > 0) {
+    logger.warn({ executionId, stderr }, 'CRE LI.FI swap execution stderr');
+  }
+
+  const result = await parseSimulationResult<LifiSwapWorkflowResult>(stdout);
+
+  await writeWorkflowArtifacts(artifactsDir, executionId, result);
 
   return result;
 }

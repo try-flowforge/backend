@@ -9,7 +9,6 @@ import { config } from "../config/config";
 import {
   getSafeRelayChainLabels,
   getSafeRelayChainOrThrow,
-  isMainnetChain,
   isSafeRelayChainId,
   type SafeRelayNumericChainId,
 } from "../config/chain-registry";
@@ -265,9 +264,24 @@ export const createSafe = async (
     // Get factory address for the chain
     const factoryAddress = chainConfig.safeFactoryAddress;
 
-    // Check if user already has a Safe wallet (idempotency check)
     const relayerService = getRelayerService();
     const provider = relayerService.getProvider(supportedChainId);
+
+    // Fail fast if factory has no code on this chain (wrong address or wrong chain in .env)
+    const factoryCode = await provider.getCode(factoryAddress);
+    if (!factoryCode || factoryCode === "0x" || factoryCode.length <= 2) {
+      logger.error(
+        { factoryAddress, chainId: supportedChainId, chainName: chainConfig.name },
+        "Safe factory has no code on this chain - check SAFE_WALLET_FACTORY_ADDRESS and per-chain SAFE_WALLET_FACTORY_ADDRESS_<chainId>"
+      );
+      res.status(500).json({
+        success: false,
+        error: `Safe factory is not deployed on ${chainConfig.name} (chain ${supportedChainId}). Set SAFE_WALLET_FACTORY_ADDRESS_${supportedChainId} in backend .env to the FlowForgeSafeFactory address for this chain.`,
+      });
+      return;
+    }
+
+    // Check if user already has a Safe wallet (idempotency check)
     const factoryContract = new ethers.Contract(
       factoryAddress,
       [
@@ -386,30 +400,40 @@ export const createSafe = async (
       "createSafeWallet transaction"
     );
 
-    // Mainnet: return payload for client submission (user pays gas)
-    if (isMainnetChain(supportedChainId)) {
-      await releaseLock(lockKey, lockValue!);
-      res.json({
-        success: true,
-        data: {
-          submitOnClient: true,
-          payload: {
-            chainId: supportedChainId,
-            to: factoryAddress,
-            data,
-            value: "0x0",
-          },
-        },
+    // Send via relayer. The factory's createSafeWallet is onlyOwnerOrExecutor, so only
+    // the relayer (executor) can call it; client-submitted txs would revert with
+    // NotOwnerOrExecutor and no SafeWalletCreated event would be emitted.
+    // Relayer pays gas; works for all supported chains (e.g. Arbitrum One).
+    let txHash: string;
+    let receipt: ethers.TransactionReceipt;
+    try {
+      const result = await relayerService.sendTransaction(
+        supportedChainId,
+        factoryAddress,
+        data
+      );
+      txHash = result.txHash;
+      receipt = result.receipt;
+    } catch (sendErr) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+      if (lockKey && lockValue) await releaseLock(lockKey, lockValue);
+
+      logger.error(
+        { error: errMsg, userId: req.userId, chainId: req.body?.chainId },
+        "Failed to create Safe wallet"
+      );
+      let clientError = errMsg || "Failed to create Safe wallet";
+      if (clientError.includes("Create2 call failed")) {
+        clientError =
+          `Safe creation reverted: Create2 call failed (chain ${req.body?.chainId ?? "this chain"}). ` +
+          "A Safe may already exist for this address; if the problem persists, check factory deployment and Safe ProxyFactory/Singleton for this chain.";
+      }
+      res.status(500).json({
+        success: false,
+        error: clientError,
       });
       return;
     }
-
-    // Send via relayer (testnet)
-    const { txHash, receipt } = await relayerService.sendTransaction(
-      supportedChainId,
-      factoryAddress,
-      data
-    );
 
     // Parse SafeWalletCreated event to get Safe address
     const eventTopic = ethers.id("SafeWalletCreated(address,address,uint256)");
@@ -540,7 +564,31 @@ export const syncSafeFromTx = async (
       });
       return;
     }
-    const safeAddress = ethers.getAddress("0x" + log.topics[2].slice(-40));
+    const topicSafe = log.topics[2];
+    const rawAddress =
+      typeof topicSafe === "string"
+        ? topicSafe.startsWith("0x")
+          ? topicSafe.slice(-40)
+          : topicSafe.slice(-40)
+        : "";
+    const safeAddressCandidate = rawAddress ? "0x" + rawAddress : "";
+    let safeAddress: string;
+    try {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(safeAddressCandidate)) {
+        throw new Error("Invalid address from event");
+      }
+      safeAddress = ethers.getAddress(safeAddressCandidate);
+    } catch (parseErr) {
+      logger.warn(
+        { topicSafe: topicSafe?.toString?.(), parseErr },
+        "Failed to parse Safe address from SafeWalletCreated event"
+      );
+      res.status(400).json({
+        success: false,
+        error: "Could not read Safe address from transaction. The transaction may not be a valid create-safe tx.",
+      });
+      return;
+    }
     await ensureUserExistsAndUpdateSafe(userId, userAddress, safeAddress, supportedChainId);
     res.json({
       success: true,
@@ -725,28 +773,8 @@ export const enableModule = async (
       signatures,
     ]);
 
-    // Mainnet: return payload for client submission (user pays gas)
-    if (isMainnetChain(supportedChainId)) {
-      logger.info(
-        { userId, safeAddress, chainId: supportedChainId, chainName: chainConfig.name },
-        "Module enable: returning payload for client submission"
-      );
-      res.json({
-        success: true,
-        data: {
-          submitOnClient: true,
-          payload: {
-            chainId: supportedChainId,
-            to: safeAddress,
-            data: execTxData,
-            value: "0x0",
-          },
-        },
-      });
-      return;
-    }
-
-    // Step 5: Send via relayer (testnet)
+    // Step 5: Send via relayer (all chains — demo/recording: user wallet has no gas)
+    // Previously mainnet returned submitOnClient so user paid gas; now relayer pays for all.
     const relayerService = getRelayerService();
     const { txHash } = await relayerService.sendTransaction(
       supportedChainId,

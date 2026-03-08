@@ -3,7 +3,8 @@
   "chain": "ARBITRUM",
   "chainSelectorName": "ethereum-mainnet-arbitrum-1",
   "provider": "LIFI",
-  "swapReceiverAddress": "",
+  "safeModuleAddress": "0x0788BF39d7d2E64528a899142bE37f2fA31d3993",
+  "rpcUrl": "",
   "gasLimit": "1500000",
   "inputConfig": {
     "sourceToken": {

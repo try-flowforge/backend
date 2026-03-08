@@ -121,6 +121,22 @@ export interface LifiQuoteResult {
     approvalAddress?: string;
   };
   error?: string;
+  errorCode?: string;
+}
+
+/**
+ * Result of CRE LI.FI swap workflow execution (quote + module tx).
+ * Used in CRE_CLI_MODE where workflow directly submits module transaction.
+ */
+export interface LifiSwapWorkflowResult {
+  success: boolean;
+  txHash?: string;
+  amountIn?: string;
+  amountOut?: string;
+  declaredUsdValue8?: string;
+  explorerLink?: string;
+  error?: string;
+  errorCode?: string;
 }
 
 // Swap Quote Response
